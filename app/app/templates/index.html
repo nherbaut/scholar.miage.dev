@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Scpus Hack</title>
+
+    <script>
+
+    function onLoaded(evt){
+
+        document.getElementById("querybox").value = window.localStorage.getItem("query");
+    }
+
+
+    function textAreaChange(){
+        updateQueryStorage(document.getElementById("querybox").value);
+    }
+
+    function updateQueryStorage(str){
+        window.localStorage.setItem("query", str);
+    }
+
+
+ window.onload = onLoaded;
+
+
+</script>
+</head>
+<body>
+<h1>Scpus Hack: Get a list of DOIs that match your search queries</h1>
+<h2>How to</h2>
+<ol>
+    <li>Type your query by following the <a
+            href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a> e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
+    <li>Click "count results" to get the number of results</li>
+    <li>Once you have a number, click Fetch to show the dois as bibtex</li>
+    <li>save the content in a .bib file</li>
+    <li>import it in mendeley Desktop</li>
+    <li>Select all the (untitled) entries and right click > update details</li>
+    <li>Wait for mendeley to populate each entry</li>
+    <li>In mendeley, select all entires and export as a bib file</li>
+    <li>Inport your results in <a href="parsif.al">parsif.al</a></li>
+</ol>
+
+
+<form action="query" method="POST">
+    <p>Query:</p>
+    <fieldset>
+
+
+
+
+    {% if count %}
+        <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+
+
+            </fieldset>
+        <input type="submit" value="Fetch {{ count }} results (up to 1000)">
+    {% else %}
+        <textarea id="querybox" name="query" onkeyup="textAreaChange()"></textarea>
+        <input type="hidden" name="count" value="true">
+
+            </fieldset>
+        <input type="submit" value="Count Results">
+    {% endif %}
+
+
+
+
+</form>
+<form action="/home" method="GET">
+    <input type="submit" value="Reset" />
+</form>
+
+</body>
+
+
+</html>

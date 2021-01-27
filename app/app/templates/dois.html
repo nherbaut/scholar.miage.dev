@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>dois</title>
+</head>
+<body>
+{% for d in dois %}
+    @article{article{{loop.index}},
+	doi = { {{d}} },
+}
+{% endfor %}
+</body>
+</html>
