@@ -1,8 +1,10 @@
-#FROM tiangolo/meinheld-gunicorn-flask:python3.8
-FROM tiangolo/uwsgi-nginx-flask:python3.8
+FROM python:3.8
 
 COPY ./requirements.txt /tmp
-RUN pip install -r /tmp/requirements.txt
-COPY ./app /app
+RUN pip3 install -r /tmp/requirements.txt
+COPY ./app/app /app
+WORKDIR /app
+ENV FLASK_APP=app.main
+CMD ["python","main.py"] 
 
 

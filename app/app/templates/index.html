@@ -1,46 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <meta charset="UTF-8">
     <title>Scpus Hack</title>
+    <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
 
     <script>
 
-    function onLoaded(evt){
 
-        document.getElementById("querybox").value = window.localStorage.getItem("query");
-    }
+        var bag_of_doi = "";
+        var item_info = new Array();
+
+        function download(filename, text) {
+            var element = document.createElement('a');
+            element.setAttribute('href', 'data:application/x-bibtex;charset=utf-8,' + encodeURIComponent(text));
+            element.setAttribute('download', filename);
+
+            element.style.display = 'none';
+            document.body.appendChild(element);
+
+            element.click();
+
+            document.body.removeChild(element);
+        }
+
+        function onLoaded(evt) {
+
+            document.getElementById("querybox").value = window.localStorage.getItem("query");
+        }
 
 
-    function textAreaChange(){
-        updateQueryStorage(document.getElementById("querybox").value);
-    }
+        function textAreaChange() {
+            updateQueryStorage(document.getElementById("querybox").value);
+        }
 
-    function updateQueryStorage(str){
-        window.localStorage.setItem("query", str);
-    }
-
-
- window.onload = onLoaded;
+        function updateQueryStorage(str) {
+            window.localStorage.setItem("query", str);
+        }
 
 
-</script>
+        window.onload = onLoaded;
+
+        const socket = io();
+
+        socket.on('connect', function () {
+            socket.emit('my event', {data: 'I\'m connected!'});
+        });
+
+        socket.on('count', (count) => {
+            console.log(count);
+            document.getElementById("main_button").value = "fetch " + count + " results ";
+            handle_submit = sendDoisRequest;
+        });
+
+        socket.on('dois', (data) => {
+            console.log(data);
+
+        });
+
+        socket.on('doi_export_done', (data) => {
+            document.getElementById("dlresults").removeAttribute("hidden");
+        })
+
+        socket.on('doi_update', (data) => {
+
+            document.getElementById("pb_success").setAttribute("max", data["total"]);
+            document.getElementById("pb_success").setAttribute("value", data["done"]);
+            document.getElementById("pb_success_count").innerHTML = data["done"] + "/" + data["total"];
+            document.getElementById("pb_failure").setAttribute("max", data["total"]);
+            document.getElementById("pb_failure").setAttribute("value", data["failed"]);
+            document.getElementById("pb_failure_count").innerHTML = data["failed"] + "/" + data["total"];
+
+
+        });
+
+        socket.on('doi_results', (data) => {
+            for (let doi_item of data) {
+                doi = doi_item["doi"];
+                item_info.push(doi_item);
+                add_item_to_table(doi_item);
+                bag_of_doi += "@article{article1, \n\tdoi = { " + doi + "}\n },\n"
+            }
+
+
+        });
+
+        function add_item_to_table(doi_item) {
+            var row = document.getElementById("doi_table").insertRow()
+            if (doi_item["doi"] != "") {
+                row.innerHTML = "<th scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["title"] + "</td><td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\">Download</a></td>";
+            }
+
+
+        }
+
+
+        function sendCountRequest() {
+            socket.emit('count', {query: document.getElementById("querybox").value});
+        }
+
+        function sendDoisRequest() {
+            socket.emit('get_dois', {query: document.getElementById("querybox").value});
+            document.getElementById("main_button").disabled = true;
+        }
+
+
+        handle_submit = sendCountRequest;
+
+        function resetAll() {
+            bag_of_doi = "";
+            handle_submit = sendCountRequest;
+            document.getElementById("main_button").value = "Count Results";
+            document.getElementById("dlresults").setAttribute("hidden", "true");
+            document.getElementById("querybox").value = "";
+            document.getElementById("pb_success").setAttribute("max", 0);
+            document.getElementById("pb_success").setAttribute("value", 0);
+            document.getElementById("pb_failure").setAttribute("max", 0);
+            document.getElementById("pb_failure").setAttribute("value", 0);
+            document.getElementById("pb_failure_count").innerHTML = "";
+            document.getElementById("pb_success_count").innerHTML = "";
+            document.getElementById("doi_table").innerHTML = "";
+            document.getElementById("main_button").disabled = false;
+        }
+
+        function downloadResults() {
+            download("results.bib", bag_of_doi)
+        }
+
+    </script>
 </head>
 <body>
-<h1>Scpus Hack: Get a list of DOIs that match your search queries</h1>
-<h2>How to</h2>
-<ol>
-    <li>Type your query by following the <a
-            href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a> e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
-    <li>Click "count results" to get the number of results</li>
-    <li>Once you have a number, click Fetch to show the dois as bibtex</li>
-    <li>save the content in a .bib file</li>
-    <li>import it in mendeley Desktop</li>
-    <li>Select all the (untitled) entries and right click > update details</li>
-    <li>Wait for mendeley to populate each entry</li>
-    <li>In mendeley, select all entires and export as a bib file</li>
-    <li>Inport your results in <a href="parsif.al">parsif.al</a></li>
-</ol>
+<div class="jumbotron">
+    <h1 class="display-4">Scpus Hack</h1>
+    <p class="lead">Get a list of DOIs that match your search queries</p>
+    <hr class="my-4">
+    <ol>
+        <li>Type your query by following the <a
+                href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a> e.g. <i>TITLE-ABS-KEY(blockchain)
+            AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
+        <li>Click "count results" to get the number of results</li>
+        <li>Once you have a number, click Fetch to resolve DOIs</li>
+        <li>Once the resolving is down, a button allows you to download a bibtex file</li>
+        <li>import it in <a href="mendeley.com/">mendeley Desktop</a></li>
+        <li>Select all the (yet untitled) entries and right click > update details</li>
+        <li>Wait for mendeley to populate each entry</li>
+        <li>In mendeley, select all entires and export as a bib file</li>
+        <li>Inport your results in <a href="https://parsif.al/">parsif.al</a></li>
+    </ol>
+
+</div>
 
 
 <form action="query" method="POST">
@@ -48,29 +158,55 @@
     <fieldset>
 
 
-
-
-    {% if count %}
-        <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+        {% if count %}
+            <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
 
 
             </fieldset>
-        <input type="submit" value="Fetch {{ count }} results (up to 1000)">
-    {% else %}
-        <textarea id="querybox" name="query" onkeyup="textAreaChange()"></textarea>
-        <input type="hidden" name="count" value="true">
+            <input type="submit" value="Fetch {{ count }} results (up to 1000)">
+        {% else %}
+            <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%"></textarea>
+
+
 
             </fieldset>
-        <input type="submit" value="Count Results">
-    {% endif %}
-
-
+            <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
+                   onclick="handle_submit()">
+        {% endif %}
 
 
 </form>
-<form action="/home" method="GET">
-    <input type="submit" value="Reset" />
-</form>
+
+
+<input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
+<input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex" onclick="downloadResults()"
+       hidden/>
+<div>
+    <div>
+        <label for="file">Resolved DOIs:</label>
+        <progress id="pb_success" max="0" value="0"></progress>
+        <span id="pb_success_count"></span>
+    </div>
+    <div>
+        <label for="file">Entry without DOIs:</label>
+        <progress id="pb_failure" max="0" value="0"></progress>
+        <span id="pb_failure_count"></span>
+    </div>
+</div>
+</div>
+<table class="table">
+    <thead>
+    <td>DOI</td>
+    <td>Title</td>
+    <td>Sci-Hb link</td>
+
+    </thead>
+    <tbody id="doi_table">
+
+
+    </tbody>
+
+</table>
 
 </body>
 

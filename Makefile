@@ -3,9 +3,7 @@ build:
 push:
 	docker push nherbaut/scpushack
 run:
-	docker run -d -p 8106:80 -e API_KEY=${API_KEY} --name "scpushack" nherbaut/scpushack
-	sleep 2
-	echo Go to localhost:8106 to visit the website
+	docker run -d -p 8106:5000 -e API_KEY=${API_KEY} --name "scpushack" nherbaut/scpushack
 stop:
 	docker rm -f scpushack
 
