@@ -13,6 +13,12 @@ API_KEY = os.environ["API_KEY"]
 SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
 
 
+@app.route("/robots.txt")
+def block_robots():
+    return """User-agent: *    
+Disallow: /"""
+
+
 @app.route('/')
 @app.route('/home')
 @app.route('/query', methods=["GET"])
@@ -90,4 +96,4 @@ def handle_get_dois(json_data):
 if __name__ == '__main__':
     app.config['SECRET_KEY'] = 'secret!'
     print(f"Using API_KEY={API_KEY}")
-    socketio.run(app,host="0.0.0.0")
+    socketio.run(app, host="0.0.0.0")
