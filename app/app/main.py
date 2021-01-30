@@ -4,6 +4,7 @@ import itertools
 import os
 import urllib
 from flask_socketio import SocketIO, emit, send
+import re
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -55,7 +56,13 @@ def get_results_for_query(count, query):
                 success += 1
             else:
                 failed += 1
-            bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "???")});
+
+            year = aa.get('prism:coverDisplayDate', "")
+            if year != "":
+                rematch = re.findall("[0-9]{4}", year)
+                if len(rematch) > 0:
+                    year = rematch[0]
+            bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,"pubtitle":aa.get('prism:publicationName',"")});
             emit('doi_update', {"total": count, "done": success, "failed": failed})
         emit('doi_results', bucket)
         dois = dois + bucket

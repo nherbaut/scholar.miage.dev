@@ -78,10 +78,15 @@
 
         socket.on('doi_results', (data) => {
             for (let doi_item of data) {
-                doi = doi_item["doi"];
-                item_info.push(doi_item);
+                var doi = doi_item["doi"];
+                var title = doi_item["title"];
+                var year = doi_item["year"]
                 add_item_to_table(doi_item);
-                bag_of_doi += "@article{article1, \n\tdoi = { " + doi + "}\n },\n"
+                if(doi!="") {
+                    item_info.push(doi_item);
+
+                    bag_of_doi += "@article{article1, \n\tdoi = { " + doi + "}\n },\n"
+                }
             }
 
 
@@ -89,9 +94,18 @@
 
         function add_item_to_table(doi_item) {
             var row = document.getElementById("doi_table").insertRow()
+
             if (doi_item["doi"] != "") {
-                row.innerHTML = "<th scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["title"] + "</td><td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\">Download</a></td>";
+                row.classList.add("table-success");
+
+                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\">Download</a></td>";
             }
+            else {
+                row.classList.add("table-dark");
+                row.innerHTML = "<th  scope=\"row\">None</th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td>-</td>";
+            }
+
+
 
 
         }
@@ -131,7 +145,7 @@
 
     </script>
 </head>
-<body>
+<body >
 <div class="jumbotron">
     <h1 class="display-4">Scpus Hack</h1>
     <p class="lead">Get a list of DOIs that match your search queries</p>
@@ -194,10 +208,12 @@
     </div>
 </div>
 </div>
-<table class="table">
+<table class="table table-bordered table-hover">
     <thead>
     <td>DOI</td>
+    <td>Date</td>
     <td>Title</td>
+    <td>Publication Title</td>
     <td>Sci-Hb link</td>
 
     </thead>
