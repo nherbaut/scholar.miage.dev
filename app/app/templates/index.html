@@ -98,7 +98,7 @@
             if (doi_item["doi"] != "") {
                 row.classList.add("table-success");
 
-                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\">Download</a></td>";
+                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\" target=\"_blank\">Download</a></td>";
             }
             else {
                 row.classList.add("table-dark");
