@@ -22,24 +22,15 @@ Disallow: /"""
 
 @app.route('/')
 @app.route('/home')
-@app.route('/query', methods=["GET"])
 def hello_world():
     return render_template('index.html')
 
 
-@app.route('/query', methods=["POST"])
+@app.route('/snowball', methods=["GET"])
 def query():
-    the_query = request.form.get("query")
+    title = request.args.get('title')
 
-    count, is_count, p = count_results_for_query(the_query)
-
-    print(f"fetching {count} results")
-    if is_count:
-        return render_template('index.html', query=the_query, count=count)
-    else:
-        refs = get_results_for_query(count, the_query)
-        dois = [r.get("prism:doi") for r in refs if "prism:doi" in r]
-        return render_template('dois.html', dois=dois)
+    return render_template('index.html', query=f"REFTITLE(\"{title}\")")
 
 
 def get_results_for_query(count, query):
@@ -62,7 +53,8 @@ def get_results_for_query(count, query):
                 rematch = re.findall("[0-9]{4}", year)
                 if len(rematch) > 0:
                     year = rematch[0]
-            bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,"pubtitle":aa.get('prism:publicationName',"")});
+            bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,
+                           "pubtitle": aa.get('prism:publicationName', "")});
             emit('doi_update', {"total": count, "done": success, "failed": failed})
         emit('doi_results', bucket)
         dois = dois + bucket

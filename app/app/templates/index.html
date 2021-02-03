@@ -27,8 +27,13 @@
         }
 
         function onLoaded(evt) {
-
-            document.getElementById("querybox").value = window.localStorage.getItem("query");
+            if(document.getElementById("querybox").value=="") {
+                document.getElementById("querybox").value = window.localStorage.getItem("query");
+            }
+            else{
+                //we already have a query, just fetch the results
+                handle_submit();
+            }
         }
 
 
@@ -97,13 +102,17 @@
 
             if (doi_item["doi"] != "") {
                 row.classList.add("table-success");
-
-                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + doi_item["doi"] + "\" target=\"_blank\">Download</a></td>";
+                //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
+                full_doi=doi_item["doi"].split("_")[0]
+                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>";
+                row.innerHTML += "<td><a href=\"/snowball?title="+encodeURIComponent(doi_item["title"])+"\" target=\"_blank\"\">Snowball</td>"
             }
             else {
                 row.classList.add("table-dark");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td>-</td>";
+                row.innerHTML = "<th  scope=\"row\">None</th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td>-</td><td>-</td>";
             }
+
+
 
 
 
@@ -179,7 +188,7 @@
             </fieldset>
             <input type="submit" value="Fetch {{ count }} results (up to 1000)">
         {% else %}
-            <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%"></textarea>
+            <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%">{{ query }}</textarea>
 
 
 
@@ -215,6 +224,7 @@
     <td>Title</td>
     <td>Publication Title</td>
     <td>Sci-Hb link</td>
+    <td>Snowball Link</td>
 
     </thead>
     <tbody id="doi_table">
