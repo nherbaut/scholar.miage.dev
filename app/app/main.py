@@ -5,13 +5,44 @@ import os
 import urllib
 from flask_socketio import SocketIO, emit, send
 import re
+import datetime
+
+from flask_sqlalchemy import SQLAlchemy
+
+
+class Config(object):
+    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI", "sqlite:///:memory")
+    DEVELOPMENT = False
+    DEBUG = False  # some Flask specific configs
+    SECRET_KEY = 'EMNS2606!'
+    SQLALCHEMY_ECHO = False
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+
 
 app = Flask(__name__)
+API_KEY = os.environ["API_KEY"]
+SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
+db = None
+app.config.from_object(Config())
 socketio = SocketIO(app)
 socketio.init_app(app, cors_allowed_origins="*")
-API_KEY = os.environ["API_KEY"]
+socketio.run(app, host="0.0.0.0")
+db = SQLAlchemy(app)
+app.config['SECRET_KEY'] = 'secret!'
+print(f"Using API_KEY={API_KEY}")
 
-SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
+
+class ScpusRequest(db.Model):
+    __tablename = "history"
+    id = db.Column(db.Integer, primary_key=True)
+    query = db.Column(db.String(2048))
+    ip = db.Column(db.String(64), default="0.0.0.0")
+    count = db.Column(db.Integer, default=-1)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    fetched = db.Column(db.Boolean)
+
+
+db.create_all()
 
 
 @app.route("/robots.txt")
@@ -22,8 +53,14 @@ Disallow: /"""
 
 @app.route('/')
 @app.route('/home')
-def hello_world():
+def home():
     return render_template('index.html')
+
+
+@app.route('/history',methods=["GET"])
+def history():
+    queries=db.session.query(ScpusRequest).limit(100)
+    return render_template('history.html',queries=queries)
 
 
 @app.route('/snowball', methods=["GET"])
@@ -80,7 +117,14 @@ def handle_message(data):
 
 @socketio.on('count')
 def handle_count(json_data):
-    emit("count", count_results_for_query(json_data["query"]))
+    count = count_results_for_query(json_data["query"])
+
+    n = ScpusRequest(query=json_data["query"], ip="0.0.0.0", count=count, fetched=False)
+
+    db.session.add(n)
+    db.session.commit()
+
+    emit("count", count)
 
 
 @socketio.on('get_dois')
@@ -93,6 +137,4 @@ def handle_get_dois(json_data):
 
 
 if __name__ == '__main__':
-    app.config['SECRET_KEY'] = 'secret!'
-    print(f"Using API_KEY={API_KEY}")
-    socketio.run(app, host="0.0.0.0")
+    pass

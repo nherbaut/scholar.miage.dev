@@ -121,12 +121,15 @@
 
 
         function sendCountRequest() {
+            document.getElementById("querybox").disabled = true;
             socket.emit('count', {query: document.getElementById("querybox").value});
         }
 
         function sendDoisRequest() {
-            socket.emit('get_dois', {query: document.getElementById("querybox").value});
+
             document.getElementById("main_button").disabled = true;
+            socket.emit('get_dois', {query: document.getElementById("querybox").value});
+
         }
 
 
@@ -146,6 +149,7 @@
             document.getElementById("pb_success_count").innerHTML = "";
             document.getElementById("doi_table").innerHTML = "";
             document.getElementById("main_button").disabled = false;
+            document.getElementById("querybox").disabled = false;
         }
 
         function downloadResults() {
@@ -181,29 +185,30 @@
     <fieldset>
 
 
+
         {% if count %}
             <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
 
 
             </fieldset>
-            <input type="submit" value="Fetch {{ count }} results (up to 1000)">
+            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/><input type="submit" value="Fetch {{ count }} results (up to 1000)">
         {% else %}
             <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%">{{ query }}</textarea>
 
 
 
             </fieldset>
-            <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
+            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/><input class="btn btn-primary" id="main_button" type="button" value="Count Results"
                    onclick="handle_submit()">
         {% endif %}
 
+<input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex" onclick="downloadResults()"
+       hidden/>
 
 </form>
 
 
-<input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
-<input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex" onclick="downloadResults()"
-       hidden/>
+
 <div>
     <div>
         <label for="file">Resolved DOIs:</label>
