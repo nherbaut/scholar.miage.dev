@@ -27,10 +27,9 @@
         }
 
         function onLoaded(evt) {
-            if(document.getElementById("querybox").value=="") {
+            if (document.getElementById("querybox").value == "") {
                 document.getElementById("querybox").value = window.localStorage.getItem("query");
-            }
-            else{
+            } else {
                 //we already have a query, just fetch the results
                 handle_submit();
             }
@@ -65,8 +64,16 @@
 
         });
 
+         socket.on('feed_generated', (data) => {
+            console.log(data);
+            window.open("/feed/"+data["feed_id"]+".rss", '_blank');
+
+        });
+
+
         socket.on('doi_export_done', (data) => {
             document.getElementById("dlresults").removeAttribute("hidden");
+            document.getElementById("rss").removeAttribute("hidden");
         })
 
         socket.on('doi_update', (data) => {
@@ -87,7 +94,7 @@
                 var title = doi_item["title"];
                 var year = doi_item["year"]
                 add_item_to_table(doi_item);
-                if(doi!="") {
+                if (doi != "") {
                     item_info.push(doi_item);
 
                     bag_of_doi += "@article{article1, \n\tdoi = { " + doi + "}\n },\n"
@@ -103,18 +110,13 @@
             if (doi_item["doi"] != "") {
                 row.classList.add("table-success");
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
-                full_doi=doi_item["doi"].split("_")[0]
-                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>";
-                row.innerHTML += "<td><a href=\"/snowball?title="+encodeURIComponent(doi_item["title"])+"\" target=\"_blank\"\">Snowball</td>"
-            }
-            else {
+                full_doi = doi_item["doi"].split("_")[0]
+                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>" + "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>";
+                row.innerHTML += "<td><a href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
+            } else {
                 row.classList.add("table-dark");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>"+doi_item["year"]+"</td><td>" + doi_item["title"] + "</td>"+"<td>"+doi_item["pubtitle"]+"</td>"+"<td>-</td><td>-</td>";
+                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>" + "<td>-</td><td>-</td>";
             }
-
-
-
-
 
 
         }
@@ -140,6 +142,7 @@
             handle_submit = sendCountRequest;
             document.getElementById("main_button").value = "Count Results";
             document.getElementById("dlresults").setAttribute("hidden", "true");
+            document.getElementById("rss").setAttribute("hidden", "true");
             document.getElementById("querybox").value = "";
             document.getElementById("pb_success").setAttribute("max", 0);
             document.getElementById("pb_success").setAttribute("value", 0);
@@ -156,9 +159,13 @@
             download("results.bib", bag_of_doi)
         }
 
+        function createRssLink(){
+            socket.emit('create_feed', {query: document.getElementById("querybox").value});
+        }
+
     </script>
 </head>
-<body >
+<body>
 <div class="jumbotron">
     <h1 class="display-4">Scpus Hack</h1>
     <p class="lead">Get a list of DOIs that match your search queries</p>
@@ -169,13 +176,19 @@
             AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
         <li>Click "count results" to get the number of results</li>
         <li>Once you have a number, click Fetch to resolve DOIs</li>
-        <li>Once the resolving is down, a button allows you to download a bibtex file</li>
+        <li>Once the resolving is done, a button allows you to download a bibtex file</li>
         <li>import it in <a href="mendeley.com/">mendeley Desktop</a></li>
         <li>Select all the (yet untitled) entries and right click > update details</li>
         <li>Wait for mendeley to populate each entry</li>
         <li>In mendeley, select all entires and export as a bib file</li>
-        <li>Inport your results in <a href="https://parsif.al/">parsif.al</a></li>
+        <li>Import your results in <a href="https://parsif.al/">parsif.al</a></li>
     </ol>
+    <hr class="my-4">
+    <h2>Release note</h2>
+    <ul>
+        <li>Added RSS Support</li>
+        <li>Added History</li>
+    </ul>
 
 </div>
 
@@ -185,28 +198,32 @@
     <fieldset>
 
 
-
         {% if count %}
             <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
 
 
             </fieldset>
-            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/><input type="submit" value="Fetch {{ count }} results (up to 1000)">
+            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
+            <input type="submit" value="Fetch {{ count }} results (up to 1000)">
         {% else %}
             <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%">{{ query }}</textarea>
 
 
 
             </fieldset>
-            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/><input class="btn btn-primary" id="main_button" type="button" value="Count Results"
+            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
+            <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
                    onclick="handle_submit()">
         {% endif %}
 
-<input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex" onclick="downloadResults()"
-       hidden/>
+    <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
+           onclick="downloadResults()"
+           hidden/>
+    <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
+           onclick="createRssLink()"
+           hidden/>
 
 </form>
-
 
 
 <div>

@@ -3,3 +3,6 @@ requests==2.25.1
 Flask-SocketIO==5.0.1
 mysqlclient==2.0.3
 Flask-SQLAlchemy==2.5.1
+feedgen==0.9.0
+dateparser==1.0.0
+pytz==2020.5
