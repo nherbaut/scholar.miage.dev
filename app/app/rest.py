@@ -2,6 +2,7 @@ from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
 from flask import abort, Response, render_template, request
+
 import pickle
 
 
@@ -9,6 +10,18 @@ import pickle
 def block_robots():
     return """User-agent: *    
 Disallow: /"""
+
+
+@app.route("/feed/<id>.rss/items", methods=["DELETE"])
+def purge_items(id):
+    try:
+        feed = db.session.query(ScpusFeed).filter(ScpusFeed.id == id).one()
+    except db.orm.exc.NoResultFound as e:
+        return abort(404, description="No feed with this id")
+    feed.feed_content = None
+    feed.count = -1
+    db.session.commit()
+    return "DELETED", 204
 
 
 @app.route("/feed/<id>.rss")

@@ -7,10 +7,11 @@ from app.config import Config
 
 app = Flask(__name__)
 API_KEY = os.environ["API_KEY"]
+ROOT_URL = os.environ.get("ROOT_URL","https://scpushack.nextnet.top")
 SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
 db = None
 app.config.from_object(Config())
-
+SCPUS_BACKEND
 db = SQLAlchemy(app)
 
 if Config().IN_MEMORY:
