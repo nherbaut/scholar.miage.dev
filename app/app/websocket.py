@@ -24,11 +24,10 @@ def handle_message(data):
 
 
 @socketio.on('count')
-def handle_count(json_data):
+def handle_count(json_data,log_query=False):
     count = count_results_for_query(json_data["query"])
 
     n = ScpusRequest(query=json_data["query"], ip="0.0.0.0", count=count, fetched=False)
-
     db.session.add(n)
     db.session.commit()
 

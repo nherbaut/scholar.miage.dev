@@ -61,7 +61,7 @@ def home():
 
 @app.route('/history', methods=["GET"])
 def history():
-    queries = db.session.query(ScpusRequest).limit(100)
+    queries = db.session.query(ScpusRequest).all()
     return render_template('history.html', queries=queries)
 
 
