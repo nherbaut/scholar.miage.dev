@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary
 from sqlalchemy.orm import scoped_session, sessionmaker
+
 from app.config import Config
 from sqlalchemy.orm import declarative_base
 import datetime
