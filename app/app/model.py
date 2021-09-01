@@ -26,11 +26,11 @@ class ScpusRequest(Base):
 class ScpusFeed(Base):
     __tablename__ = "feed"
     id = Column(Integer, primary_key=True)
-    feed_content = Column(LargeBinary(length=(2**32)-1), default=None)
+    feed_content = Column(LargeBinary(length=(2 ** 32) - 1), default=None)
     count = Column(Integer)
     query = Column(String(2048))
     lastBuildDate = Column(DateTime, default=datetime.datetime.utcnow)
+    hit = Column(Integer, default=0)
 
 
 Base.metadata.create_all(bind=engine)
-

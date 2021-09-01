@@ -44,6 +44,7 @@ def get_feed(id):
     update_feed(dois, feed_content)
     feed.count = count
     feed.feed_content = pickle.dumps(feed_content)
+    feed.hit += 1
     db.session.commit()
 
     feed_items = sorted(feed_content.values(), key=lambda x: x["x-added-on"], reverse=True)
@@ -66,7 +67,14 @@ def history():
 
 
 @app.route('/snowball', methods=["GET"])
-def query():
+def snowball():
     title = request.args.get('title')
 
     return render_template('index.html', query=f"REFTITLE(\"{title}\")")
+
+
+@app.route('/sameauthor', methods=["GET"])
+def same_author():
+    name = request.args.get('name')
+
+    return render_template('index.html', query=f"AUTHOR-NAME(\"{name}\")")

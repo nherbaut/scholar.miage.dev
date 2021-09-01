@@ -111,11 +111,13 @@
                 row.classList.add("table-success");
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
                 full_doi = doi_item["doi"].split("_")[0]
-                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>" + "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>";
+                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>"
+                row.innerHTML += "<td><a href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "\" target=\"_blank\"\">"+doi_item["X-FirstAuthor"]+"</td>"
+                row.innerHTML += "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>"
                 row.innerHTML += "<td><a href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
             } else {
                 row.classList.add("table-dark");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>" + "<td>-</td><td>-</td>";
+                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
             }
 
 
@@ -245,6 +247,7 @@
     <td>Date</td>
     <td>Title</td>
     <td>Publication Title</td>
+    <td>Author</td>
     <td>Sci-Hb link</td>
     <td>Snowball Link</td>
 
