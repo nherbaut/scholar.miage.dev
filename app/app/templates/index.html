@@ -64,9 +64,8 @@
 
         });
 
-         socket.on('feed_generated', (data) => {
-            console.log(data);
-            window.open("/feed/"+data["feed_id"]+".rss", '_blank');
+        socket.on('feed_generated', (data) => {
+            window.open("/feed/" + data["feed_id"] + ".rss", '_blank');
 
         });
 
@@ -74,6 +73,8 @@
         socket.on('doi_export_done', (data) => {
             document.getElementById("dlresults").removeAttribute("hidden");
             document.getElementById("rss").removeAttribute("hidden");
+            document.getElementById("permalink").removeAttribute("hidden");
+
         })
 
         socket.on('doi_update', (data) => {
@@ -112,7 +113,7 @@
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
                 full_doi = doi_item["doi"].split("_")[0]
                 row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td>" + doi_item["pubtitle"] + "</td>"
-                row.innerHTML += "<td><a href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "\" target=\"_blank\"\">"+doi_item["X-FirstAuthor"]+"</td>"
+                row.innerHTML += "<td><a href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + "</td>"
                 row.innerHTML += "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>"
                 row.innerHTML += "<td><a href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
             } else {
@@ -145,6 +146,8 @@
             document.getElementById("main_button").value = "Count Results";
             document.getElementById("dlresults").setAttribute("hidden", "true");
             document.getElementById("rss").setAttribute("hidden", "true");
+            document.getElementById("permalink").setAttribute("hidden", "true");
+
             document.getElementById("querybox").value = "";
             document.getElementById("pb_success").setAttribute("max", 0);
             document.getElementById("pb_success").setAttribute("value", 0);
@@ -161,7 +164,15 @@
             download("results.bib", bag_of_doi)
         }
 
-        function createRssLink(){
+        function copyPermalink() {
+
+            const query = document.getElementById("querybox").value;
+            window.open("/permalink?query=" +query, '_blank');
+
+
+        }
+
+        function createRssLink() {
             socket.emit('create_feed', {query: document.getElementById("querybox").value});
         }
 
@@ -204,28 +215,30 @@
 
 
         {% if count %}
-            <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+        <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
 
 
-            </fieldset>
-            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
-            <input type="submit" value="Fetch {{ count }} results (up to 1000)">
-        {% else %}
-            <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%">{{ query }}</textarea>
+    </fieldset>
+    <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
+    <input type="submit" value="Fetch {{ count }} results (up to 1000)">
+    {% else %}
+    <textarea id="querybox" name="query" onkeyup="textAreaChange()" style="width:100%">{{ query }}</textarea>
 
 
-
-            </fieldset>
-            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
-            <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
-                   onclick="handle_submit()">
-        {% endif %}
+    </fieldset>
+    <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
+    <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
+           onclick="handle_submit()">
+    {% endif %}
 
     <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
            onclick="downloadResults()"
            hidden/>
     <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
            onclick="createRssLink()"
+           hidden/>
+    <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
+           onclick="copyPermalink()"
            hidden/>
 
 </form>

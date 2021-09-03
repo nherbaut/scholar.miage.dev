@@ -77,4 +77,11 @@ def snowball():
 def same_author():
     name = request.args.get('name')
 
-    return render_template('index.html', query=f"AUTHOR-NAME(\"{name}\")")
+    return render_template('index.html', query=f"AUTHOR-NAME({name})")
+
+
+@app.route('/permalink', methods=["GET"])
+def permalink():
+    query = request.args.get('query')
+
+    return render_template('index.html', query=f"{query}")
