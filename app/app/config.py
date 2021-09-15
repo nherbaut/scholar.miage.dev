@@ -1,6 +1,6 @@
 import os
 
-DEFAULT_DB = "sqlite:///memory"
+DEFAULT_DB = "sqlite:////tmp/memory"
 
 
 

@@ -6,3 +6,4 @@ Flask-SQLAlchemy==2.5.1
 feedgen==0.9.0
 dateparser==1.0.0
 pytz==2020.5
+shlink==0.1.0 

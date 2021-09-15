@@ -1,10 +1,8 @@
 from flask_socketio import emit
 
 from app.main import socketio, db
-from app.business import count_results_for_query, get_results_for_query
+from app.business import count_results_for_query, get_results_for_query, create_short_link
 from app.model import ScpusFeed, ScpusRequest
-
-
 
 
 @socketio.on('create_feed')
@@ -23,8 +21,15 @@ def handle_message(data):
         emit('news', i)
 
 
+@socketio.on('create_permalink')
+def handle_count(json_data, log_query=False):
+    query = json_data["query"]
+    short_url = create_short_link(query)
+    emit('permalink_generated', short_url)
+
+
 @socketio.on('count')
-def handle_count(json_data,log_query=False):
+def handle_count(json_data, log_query=False):
     count = count_results_for_query(json_data["query"])
 
     n = ScpusRequest(query=json_data["query"], ip="0.0.0.0", count=count, fetched=False)

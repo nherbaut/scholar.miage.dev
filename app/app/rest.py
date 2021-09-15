@@ -12,6 +12,12 @@ def block_robots():
 Disallow: /"""
 
 
+@app.route("/feeds")
+def list_feeds():
+    feeds = db.session.query(ScpusFeed).all()
+    return render_template('feeds.html', feeds=feeds)
+
+
 @app.route("/feed/<id>.rss/items", methods=["DELETE"])
 def purge_items(id):
     try:

@@ -6,7 +6,7 @@ import dateparser
 import pytz
 import urllib.parse
 
-from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL
+from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY
 
 
 def generate_rss(feed_items, id="id", query="query"):
@@ -44,9 +44,9 @@ def update_feed(dois, feed_content):
                                                    "rel": "related",
                                                    "title": "SciHub link"}
                                                   ],
-                                         "title": ("°" if item["X-OA"] else "")+ item["title"],
+                                         "title": ("°" if item["X-OA"] else "") + item["title"],
                                          "pubdate": item["X-coverDate"],
-                                         "author": {"email": item["pubtitle"], "name":item["X-FirstAuthor"]},
+                                         "author": {"email": item["pubtitle"], "name": item["X-FirstAuthor"]},
                                          "x-added-on": datetime.datetime.utcnow(),
                                          "description": f"written by {item['X-FirstAuthor']} et as. Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
@@ -106,3 +106,28 @@ def count_results_for_query(query):
     else:
 
         return 0
+
+
+def create_short_link(query):
+    long_url = f"{ROOT_URL}/permalink?query={escape_query(query)}"
+    if SHLINK_API_KEY is None:
+        return long_url
+    body = {
+        "longUrl": long_url,
+        "tags": [
+            "miage scholar"
+        ],
+        "findIfExists": True,
+        "domain": "s.miage.dev",
+        "shortCodeLength": 5,
+        "validateUrl": True,
+        "title": f"Miage scholar permalink for {query}",
+        "crawlable": False
+    }
+    headers = {'X-Api-Key': SHLINK_API_KEY, "Content-type": "application/json"}
+    resp = requests.post("https://s.miage.dev/rest/v2/short-urls", json=body, headers=headers)
+    if resp.status_code == 200:
+        result_url = resp.json().get("shortUrl")
+    else:
+        result_url = long_url
+    return result_url
