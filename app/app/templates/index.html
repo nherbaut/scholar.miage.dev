@@ -274,6 +274,12 @@
 </div>
 <div style="width: 90%; margin: auto;">
 
+{% if  login_url %}
+<input type="button" class="btn btn-primary" onclick="window.location='{{ login_url }}'" value="Connect to Mendeley" />
+{% else %}
+<input type="button" class="btn btn-error" onclick="window.location='{{ "/mendeleyLogout" }}'" value="Disconnect from Mendeley" />
+{% endif %}
+
     <form action="query" method="POST">
         <p>Query:</p>
         <p>example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR
