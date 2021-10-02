@@ -267,8 +267,17 @@
             <h2>Sources</h2>
             <a href="https://github.com/nherbaut/scpus-hack/">GitHub Repository</a>
 
+<<<<<<< HEAD
         </div>
     </div>
+=======
+{% if  login_url %}
+<input type="button" class="btn btn-primary" onclick="window.location='{{ login_url }}'" value="Connect to Mendeley" />
+{% else %}
+<input type="button" class="btn btn-error" onclick="window.location='{{ "/mendeleyLogout" }}'" value="Disconnect from Mendeley" />
+{% endif %}
+
+>>>>>>> mendeley_integration
 
 
 </div>
