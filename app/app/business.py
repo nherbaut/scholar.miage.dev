@@ -51,7 +51,7 @@ def update_feed(dois, feed_content):
                                          "description": f"written by {item['X-FirstAuthor']} et as. Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
 
-def get_results_for_query(count, query, emitt=lambda *args, **kwargs: None):
+def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
     dois = []
 
     failed = 0
@@ -78,11 +78,35 @@ def get_results_for_query(count, query, emitt=lambda *args, **kwargs: None):
                 coverDate = dateparser.parse(coverDate)
 
             coverDate = pytz.timezone("UTC").localize(coverDate)
-            bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,
-                           "pubtitle": aa.get('prism:publicationName', ""),
-                           "X-coverDate": str(coverDate),
-                           "X-OA": aa.get('openaccessFlag', False),
-                           "X-FirstAuthor": aa.get('dc:creator', "unknown")});
+            doi = aa.get("prism:doi", "")
+            if doi != "" and xref:
+                data = requests.get(f"https://api.crossref.org/works/{doi}").json()["message"]
+                first_author = [a for a in data.get("author", []) if a.get("sequence", "") == "first"]
+                if len(first_author) == 0:
+                    first_author_orcid = ""
+                    first_author = "?"
+                else:
+                    first_author_orcid = first_author[0].get("ORCID", "").split("/")[-1]
+                    first_author = f"{first_author[0]['family']}, {first_author[0]['given'][0]}"
+
+                bucket.append({"doi": data["DOI"], "title": data["title"], "year": data["created"]["date-parts"][0][0],
+                               "pubtitle": aa.get('prism:publicationName', ""),
+                               "X-coverDate": str(coverDate),
+                               "X-OA": aa.get('openaccessFlag', False),
+                               "X-FirstAuthor": first_author,
+                               "X-FirstAuthor-ORCID": first_author_orcid,
+                               "X-IsReferencedByCount": data.get("is-referenced-by-count", -1),
+                               "X-subject": data.get("subject", []),
+                               "X-refcount": data.get("reference-count", ""),
+                               })
+
+            else:
+
+                bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,
+                               "pubtitle": aa.get('prism:publicationName', ""),
+                               "X-coverDate": str(coverDate),
+                               "X-OA": aa.get('openaccessFlag', False),
+                               "X-FirstAuthor": aa.get('dc:creator', "unknown")});
             emitt('doi_update', {"total": count, "done": success, "failed": failed})
         emitt('doi_results', bucket)
         dois = dois + bucket

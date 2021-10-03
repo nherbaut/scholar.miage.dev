@@ -1,9 +1,13 @@
+import requests
+
 from app.main import app, db, MENDELEY_CLIENT_ID, MENDELEY_SECRET
 from app.model import ScpusFeed, ScpusRequest
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
 from flask import abort, Response, render_template, request, session, redirect
 from mendeley import Mendeley
 from mendeley.session import MendeleySession
+from mendeley.exception import MendeleyException, MendeleyApiException
+import json
 import pickle
 
 mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
@@ -13,6 +17,16 @@ mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://lo
 def block_robots():
     return """User-agent: *    
 Disallow: /"""
+
+
+@app.route("/bibtex", methods=["POST"])
+def get_bibtex():
+    dois = json.loads(request.data)
+    mendeleySession = MendeleySession(mendeley, session['token'])
+    for k, v in dois.items():
+        print(data)
+
+    return "ok"
 
 
 @app.route("/feeds")
@@ -111,8 +125,11 @@ def snowball():
 @app.route('/sameauthor', methods=["GET"])
 def same_author():
     name = request.args.get('name')
-
-    return render_template('index.html', query=f"AUTHOR-NAME({name})")
+    orcid = request.args.get('orcid')
+    if orcid != "":
+        return render_template('index.html', query=f"ORCID({orcid})")
+    else:
+        return render_template('index.html', query=f"AUTHOR-NAME({name})")
 
 
 @app.route('/permalink', methods=["GET"])
