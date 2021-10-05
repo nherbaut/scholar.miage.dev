@@ -82,6 +82,7 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
             if doi != "" and xref:
                 data = requests.get(f"https://api.crossref.org/works/{doi}").json()["message"]
                 first_author = [a for a in data.get("author", []) if a.get("sequence", "") == "first"]
+                authors = " and ".join([a.get("family","")+", " +a.get("given","") for a in data.get("author",[])])
                 if len(first_author) == 0:
                     first_author_orcid = ""
                     first_author = "?"
@@ -96,8 +97,10 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
                                "X-FirstAuthor": first_author,
                                "X-FirstAuthor-ORCID": first_author_orcid,
                                "X-IsReferencedByCount": data.get("is-referenced-by-count", -1),
-                               "X-subject": data.get("subject", []),
+                               "X-subject": ", ".join(data.get("subject", [])),
                                "X-refcount": data.get("reference-count", ""),
+                               "X-abstract": data.get("abstract", ""),
+                               "X-authors" : authors
                                })
 
             else:
@@ -106,9 +109,11 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
                                "pubtitle": aa.get('prism:publicationName', ""),
                                "X-coverDate": str(coverDate),
                                "X-OA": aa.get('openaccessFlag', False),
-                               "X-FirstAuthor": aa.get('dc:creator', "unknown")});
+                               "X-FirstAuthor": aa.get('dc:creator', "unknown"),
+                               "X-authors": aa.get('dc:creator', "unknown"),
+                               });
             emitt('doi_update', {"total": count, "done": success, "failed": failed})
-        emitt('doi_results', bucket)
+            emitt('doi_results', [bucket[-1]])
         dois = dois + bucket
     emitt('doi_export_done', dois)
     return dois

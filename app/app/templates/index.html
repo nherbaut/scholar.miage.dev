@@ -5,6 +5,7 @@
           integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
     <link rel="stylesheet" href="static/css/style.css">
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
+    <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
 
     <meta charset="UTF-8">
     <title>MIAGE Scholar</title>
@@ -21,6 +22,25 @@
 
     <script>
 
+        function updateSciHubAccess(isSciHubReachable) {
+            if (!isSciHubReachable) {
+                document.getElementById("scihubok").style.display = "none";
+                document.getElementById("scihubko").style.display = "revert";
+
+            } else {
+                document.getElementById("scihubok").style.display = "revert";
+                document.getElementById("scihubko").style.display = "none";
+            }
+        }
+
+        var sciHubReachable = false;
+        fetch('https://sci-hub.se', {mode: 'no-cors'}).then(r => {
+            updateSciHubAccess(true);
+        })
+            .catch(e => {
+                updateSciHubAccess(false);
+            });
+
         function get(object, key, default_value) {
             var result = object[key];
             return (typeof result !== "undefined") ? result : default_value;
@@ -30,7 +50,23 @@
         var bag_of_doi = {};
         var item_info = new Array();
 
-        function download(filename, text) {
+        function download(filename, dois) {
+
+            var text = "";
+            var i = 0;
+            for (const property in dois) {
+                const content = dois[property];
+                text += `@article{miage_scholar_article_${i++},
+abstract = {${content["X-abstract"]}},
+author = {${content["X-authors"]}},
+doi = {${content["doi"]}},
+title = {${content["title"]}},
+year = {${content["year"]}},
+journal = { { ${content["pubtitle"]} } },
+}
+`
+            }
+
             var element = document.createElement('a');
             element.setAttribute('href', 'data:application/x-bibtex;charset=utf-8,' + encodeURIComponent(text));
             element.setAttribute('download', filename);
@@ -133,7 +169,7 @@
                 if (doi != "") {
                     item_info.push(doi_item);
 
-                    bag_of_doi[doi] = {title: title, year: doi_item["year"]};
+                    bag_of_doi[doi] = doi_item
                 }
             }
 
@@ -145,15 +181,25 @@
 
             if (doi_item["doi"] != "") {
                 row.classList.add("table-success");
+
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
                 full_doi = doi_item["doi"].split("_")[0]
-                row.innerHTML = "<th  scope=\"row\"><a href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td><td class=\"cite_count xref\">" + get(doi_item, "X-IsReferencedByCount", "") + "</td><td class=\"ref_count xref\">" + get(doi_item, "X-refcount", "") + "</td><td class=\"subject xref\"><ul>" + get(doi_item, "X-subject", []) + "</ul></td><td>" + doi_item["pubtitle"] + "</td>"
-                row.innerHTML += "<td><a href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + "</td>"
-                row.innerHTML += "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>"
-                row.innerHTML += "<td><a href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
+                row.innerHTML = "<th  scope=\"row\"><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td><td class='xref' style='width: 50%'>" + get(doi_item, "X-abstract", "") + "</td><td class=\"cite_count xref\">" + get(doi_item, "X-IsReferencedByCount", "") + "</td><td class=\"ref_count xref\">" + get(doi_item, "X-refcount", "") + "</td><td class=\"subject xref\">" + get(doi_item, "X-subject", []) + "</td><td>" + doi_item["pubtitle"] + "</td>"
+                row.innerHTML += "<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + "</td>"
+                if (get(doi_item, "X-OA", false) == false) {
+                    row.classList.add("table-info");
+                    row.classList.add("paywall");
+                    row.innerHTML += "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>"
+                } else {
+                    row.classList.add("table-success");
+                    row.classList.add("openaccess");
+                    row.innerHTML += "<td><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">Open Access!</a></td>"
+                }
+                row.innerHTML += "<td><a target=\"_blank\" href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
             } else {
                 row.classList.add("table-dark");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td class='xref'></td><td class='xref'></td><td class='xref'></td><td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
+                row.classList.add("paywall");
+                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td class='xref'></td><td class='xref'></td><td class='xref'></td><td class='xref'></td><td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
             }
 
 
@@ -179,7 +225,7 @@
         handle_submit = sendCountRequest;
 
         function resetAll() {
-            bag_of_doi = new Array();
+            bag_of_doi = {};
             handle_submit = sendCountRequest;
             document.getElementById("main_button").value = "Count Results";
             document.getElementById("dlresults").setAttribute("hidden", "true");
@@ -199,8 +245,8 @@
         }
 
         function downloadResults() {
-            fetch("bibtex", {method: "POST", headers: {"Content-type": "json"}, body: JSON.stringify(bag_of_doi)})
-            //download("results.bib", bag_of_doi)
+
+            download("results.bib", bag_of_doi)
         }
 
         function copyPermalink() {
@@ -229,12 +275,30 @@
 
         }
 
+        function oa_changed() {
+
+
+            document.querySelectorAll('link.oa').forEach(function (node) {
+                node.disabled = !document.getElementById("oa").checked;
+
+            });
+
+        }
+
+
     </script>
 </head>
 <body>
 <div class="jumbotron">
+
+
     <h1 class="display-4">MIAGE Scholar</h1>
-    <p class="lead">Export Scholar data for your SMS/SLRs</p>
+    <p class="lead">Export Scholar data for your SMS/SLRs <span id="scihubok" data-toggle="tooltip"
+                                                                class="badge badge-success scihubinfo"
+                                                                title="sci-hub server reachable">Sci-Hub servers</span>
+        <span id="scihubko" data-toggle="tooltip" class="badge badge-danger scihubinfo" title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1
+        ">Sci-Hub servers</span><span
+                class="badge badge-warning">beta</span></p>
 
 
     <p>
@@ -288,6 +352,7 @@
 
             <h2>Release note</h2>
             <ul>
+                <li>1.0.4 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour, bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge</li>
                 <li>1.0.3 Added Permalink Support</li>
                 <li>1.0.2 Added <a href="/feeds">RSS Support</a></li>
                 <li>1.0.1 Added <a href="/history">History</a></li>
@@ -308,6 +373,7 @@
 </div>
 <div style="width: 90%; margin: auto;">
 
+    <!--
     {% if  login_url %}
         <input type="button" class="btn btn-primary" onclick="window.location='{{ login_url }}'"
                value="Connect to Mendeley"/>
@@ -315,6 +381,7 @@
         <input type="button" class="btn btn-error" onclick="window.location='{{ "/mendeleyLogout" }}'"
                value="Disconnect from Mendeley"/>
     {% endif %}
+!-->
 
     <form action="query" method="POST">
         <p>Query:</p>
@@ -331,11 +398,27 @@
                 <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
                 <input type="submit" value="Fetch {{ count }} results (up to 1000)">
             {% else %}
-                <div>
-                    <input type="checkbox" id="xref" name="xref"
-                           onchange="xref_changed()" unchecked>
-                    <label for="xref">Download metadata with xref (10x slower)</label>
+                <button class="btn btn-secondary" type="button" data-toggle="collapse" data-target="#options"
+                        aria-expanded="false" aria-controls="collapseExample">
+                   Options
+                </button>
+                <div class="collapse" id="options">
+                    <div class="card card-body">
+                        <div>
+                            <input type="checkbox" id="xref" name="xref"
+                                   onchange="xref_changed()" unchecked>
+                            <label for="xref">Download metadata with xref (10x slower)<span
+                                    class="badge badge-warning">beta</span></label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="oa" name="oa"
+                                   onchange="oa_changed()" unchecked>
+                            <label for="oa">Show only Open Access work<span
+                                    class="badge badge-warning">beta</span></label>
+                        </div>
+                    </div>
                 </div>
+
                 <textarea id="querybox" name="query" onkeyup="textAreaChange()"
                           style="width:100%">{{ query }}</textarea>
 
@@ -373,11 +456,12 @@
         </div>
     </div>
 
-    <table class="table table-bordered table-hover sortable">
+    <table class="table table-bordered table-hover sortable w-auto">
         <thead>
         <td>DOI</td>
         <td>Date</td>
         <td>Title</td>
+        <td class="xref" style="width:200px">Abstract</td>
         <td class="cite_count xref">Citation Count</td>
         <td class="ref_count xref">Reference Count</td>
         <td class="subject xref">Subjects</td>
@@ -394,6 +478,7 @@
 
     </table>
 </div>
+
 </body>
 
 

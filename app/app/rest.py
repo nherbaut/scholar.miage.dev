@@ -19,14 +19,7 @@ def block_robots():
 Disallow: /"""
 
 
-@app.route("/bibtex", methods=["POST"])
-def get_bibtex():
-    dois = json.loads(request.data)
-    mendeleySession = MendeleySession(mendeley, session['token'])
-    for k, v in dois.items():
-        print(data)
 
-    return "ok"
 
 
 @app.route("/feeds")
