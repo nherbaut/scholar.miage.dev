@@ -42,7 +42,8 @@ def handle_count(json_data, log_query=False):
 @socketio.on('get_dois')
 def handle_get_dois(json_data):
     the_query = json_data["query"]
+    xref = json_data["xref"]
     count = count_results_for_query(the_query)
-    dois = get_results_for_query(count, the_query, emitt=emit)
+    dois = get_results_for_query(count, the_query, xref=xref, emitt=emit)
 
     emit("dois", {"dois": dois})

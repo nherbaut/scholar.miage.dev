@@ -1,15 +1,25 @@
-from app.main import app, db
+import requests
+
+from app.main import app, db, MENDELEY_CLIENT_ID, MENDELEY_SECRET
 from app.model import ScpusFeed, ScpusRequest
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
-from flask import abort, Response, render_template, request
-
+from flask import abort, Response, render_template, request, session, redirect
+from mendeley import Mendeley
+from mendeley.session import MendeleySession
+from mendeley.exception import MendeleyException, MendeleyApiException
+import json
 import pickle
+
+mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
 
 @app.route("/robots.txt")
 def block_robots():
     return """User-agent: *    
 Disallow: /"""
+
+
+
 
 
 @app.route("/feeds")
@@ -60,10 +70,36 @@ def get_feed(id):
     return Response(rss, mimetype='application/rss+xml')
 
 
+@app.route("/mendeleyLogout")
+def mendeleyLogout():
+    session.clear()
+    return redirect('/')
+
+
+@app.route('/oauth')
+def auth_return():
+    auth = mendeley.start_authorization_code_flow(state=session['state'])
+    mendeley_session = auth.authenticate(request.url)
+
+    session.clear()
+    session['token'] = mendeley_session.token
+
+    return redirect('/')
+
+
+def get_session_from_cookies():
+    return MendeleySession(mendeley, session['token'])
+
+
 @app.route('/')
 @app.route('/home')
 def home():
-    return render_template('index.html')
+    if 'token' in session:
+        return render_template('index.html', token=session['token'])
+    else:
+        auth = mendeley.start_authorization_code_flow()
+        session['state'] = auth.state
+        return render_template('index.html', login_url=auth.get_login_url())
 
 
 @app.route('/history', methods=["GET"])
@@ -82,8 +118,11 @@ def snowball():
 @app.route('/sameauthor', methods=["GET"])
 def same_author():
     name = request.args.get('name')
-
-    return render_template('index.html', query=f"AUTHOR-NAME({name})")
+    orcid = request.args.get('orcid')
+    if orcid != "":
+        return render_template('index.html', query=f"ORCID({orcid})")
+    else:
+        return render_template('index.html', query=f"AUTHOR-NAME({name})")
 
 
 @app.route('/permalink', methods=["GET"])
