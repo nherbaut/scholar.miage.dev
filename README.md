@@ -1,1 +1,1 @@
-# check the service live at https://scpushack.nextnet.top
+# check the service live at https://scholar.miage.dev
