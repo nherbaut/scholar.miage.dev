@@ -1,16 +1,16 @@
 import requests
 
-from app.main import app, db, MENDELEY_CLIENT_ID, MENDELEY_SECRET
+from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
 from flask import abort, Response, render_template, request, session, redirect
-from mendeley import Mendeley
-from mendeley.session import MendeleySession
-from mendeley.exception import MendeleyException, MendeleyApiException
+#from mendeley import Mendeley
+#from mendeley.session import MendeleySession
+#from mendeley.exception import MendeleyException, MendeleyApiException
 import json
 import pickle
 
-mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
+#mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
 
 @app.route("/robots.txt")
@@ -27,6 +27,17 @@ def list_feeds():
     feeds = db.session.query(ScpusFeed).all()
     return render_template('feeds.html', feeds=feeds)
 
+
+@app.route("/feed/<id>.rss", methods=["DELETE"])
+def remove_rss(id):
+    try:
+        feed = db.session.query(ScpusFeed).filter(ScpusFeed.id == id).one()
+        db.session.delete(feed)
+        db.session.commit()
+    except db.orm.exc.NoResultFound as e:
+        return abort(404, description="No feed with this id")
+    db.session.commit()
+    return "DELETED", 204
 
 @app.route("/feed/<id>.rss/items", methods=["DELETE"])
 def purge_items(id):
@@ -49,7 +60,7 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_results_for_query(count, feed.query)
+        dois = get_results_for_query(count, feed.query,xref=True)
     else:
         dois = []
     if feed.feed_content is not None:
@@ -70,36 +81,37 @@ def get_feed(id):
     return Response(rss, mimetype='application/rss+xml')
 
 
-@app.route("/mendeleyLogout")
-def mendeleyLogout():
-    session.clear()
-    return redirect('/')
+#@app.route("/mendeleyLogout")
+#def mendeleyLogout():
+#    session.clear()
+#    return redirect('/')
 
 
-@app.route('/oauth')
-def auth_return():
-    auth = mendeley.start_authorization_code_flow(state=session['state'])
-    mendeley_session = auth.authenticate(request.url)
+#@app.route('/oauth')
+#def auth_return():
+    #    auth = mendeley.start_authorization_code_flow(state=session['state'])
+    #mendeley_session = auth.authenticate(request.url)
+    #
+    #session.clear()
+    #session['token'] = mendeley_session.token
+    #
+    #return redirect('/')
 
-    session.clear()
-    session['token'] = mendeley_session.token
 
-    return redirect('/')
-
-
-def get_session_from_cookies():
-    return MendeleySession(mendeley, session['token'])
+#def get_session_from_cookies():
+#    return MendeleySession(mendeley, session['token'])
 
 
 @app.route('/')
 @app.route('/home')
 def home():
-    if 'token' in session:
-        return render_template('index.html', token=session['token'])
-    else:
-        auth = mendeley.start_authorization_code_flow()
-        session['state'] = auth.state
-        return render_template('index.html', login_url=auth.get_login_url())
+    #if 'token' in session:
+    #        return render_template('index.html', token=session['token'])
+    #else:
+    #        auth = mendeley.start_authorization_code_flow()
+    #        session['state'] = auth.state
+#    return render_template('index.html', login_url=auth.get_login_url())
+    return render_template('index.html')
 
 
 @app.route('/history', methods=["GET"])

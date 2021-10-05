@@ -45,10 +45,10 @@ def update_feed(dois, feed_content):
                                                    "title": "SciHub link"}
                                                   ],
                                          "title": ("°" if item["X-OA"] else "") + item["title"],
-                                         "pubdate": item["X-coverDate"],
-                                         "author": {"email": item["pubtitle"], "name": item["X-FirstAuthor"]},
+                                         "pubdate": item["x-precise-date"],
+                                         "author": {"email": item["pubtitle"], "name": item["X-authors"]},
                                          "x-added-on": datetime.datetime.utcnow(),
-                                         "description": f"written by {item['X-FirstAuthor']} et as. Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
+                                         "description": f"{item['X-abstract']} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
 
 def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
@@ -71,13 +71,7 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
                 rematch = re.findall("[0-9]{4}", year)
                 if len(rematch) > 0:
                     year = rematch[0]
-            coverDate = aa.get("prism:coverDate", "")
-            if coverDate == "":
-                coverDate = datetime.datetime.utcnow()
-            else:
-                coverDate = dateparser.parse(coverDate)
 
-            coverDate = pytz.timezone("UTC").localize(coverDate)
             doi = aa.get("prism:doi", "")
             if doi != "" and xref:
                 data = requests.get(f"https://api.crossref.org/works/{doi}").json()["message"]
@@ -89,10 +83,11 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
                 else:
                     first_author_orcid = first_author[0].get("ORCID", "").split("/")[-1]
                     first_author = f"{first_author[0]['family']}, {first_author[0]['given'][0]}"
-
-                bucket.append({"doi": data["DOI"], "title": data["title"], "year": data["created"]["date-parts"][0][0],
+                    precise_date=pytz.timezone("UTC").localize(dateparser.parse("-".join([str(date) for date in data["created"]["date-parts"][0]])))
+                bucket.append({"doi": data["DOI"], "title": data["title"][0], "year": data["created"]["date-parts"][0][0],
+                               "x-precise-date": str(precise_date),
                                "pubtitle": aa.get('prism:publicationName', ""),
-                               "X-coverDate": str(coverDate),
+
                                "X-OA": aa.get('openaccessFlag', False),
                                "X-FirstAuthor": first_author,
                                "X-FirstAuthor-ORCID": first_author_orcid,
@@ -105,9 +100,18 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
 
             else:
 
+                coverDate = aa.get("prism:coverDate", "")
+                if coverDate == "":
+                    coverDate = datetime.datetime.utcnow()
+                else:
+                    coverDate = dateparser.parse(coverDate)
+
+                coverDate = pytz.timezone("UTC").localize(coverDate)
+
                 bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,
+                               "x-precise-date": str(coverDate),
                                "pubtitle": aa.get('prism:publicationName', ""),
-                               "X-coverDate": str(coverDate),
+
                                "X-OA": aa.get('openaccessFlag', False),
                                "X-FirstAuthor": aa.get('dc:creator', "unknown"),
                                "X-authors": aa.get('dc:creator', "unknown"),

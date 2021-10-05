@@ -82,6 +82,13 @@ journal = { { ${content["pubtitle"]} } },
         function onLoaded(evt) {
             if (document.getElementById("querybox").value == "") {
                 document.getElementById("querybox").value = window.localStorage.getItem("query");
+                document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
+                document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
+
+                if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
+                    $("#options").collapse('show');
+                }
+
             } else {
                 //we already have a query, just fetch the results
                 handle_submit();
@@ -226,7 +233,7 @@ journal = { { ${content["pubtitle"]} } },
 
         function resetAll() {
             bag_of_doi = {};
-            window.location="/";
+            window.location = "/";
             handle_submit = sendCountRequest;
             document.getElementById("main_button").value = "Count Results";
             document.getElementById("dlresults").setAttribute("hidden", "true");
@@ -273,7 +280,9 @@ journal = { { ${content["pubtitle"]} } },
             document.querySelectorAll('link.xref').forEach(function (node) {
                 node.disabled = document.getElementById("xref").checked;
 
+
             });
+            window.localStorage.setItem("xref", document.getElementById("xref").checked);
 
         }
 
@@ -282,6 +291,7 @@ journal = { { ${content["pubtitle"]} } },
 
             document.querySelectorAll('link.oa').forEach(function (node) {
                 node.disabled = !document.getElementById("oa").checked;
+                window.localStorage.setItem("oa", document.getElementById("oa").checked);
 
             });
 
@@ -344,8 +354,9 @@ journal = { { ${content["pubtitle"]} } },
 
     <div class="collapse" id="importTuto">
         <div class="card card-body">
-            <iframe src="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/?is_iframe=true"
-                    width="640" height="360" style="padding: 0; margin: 0; border:0" allowfullscreen></iframe>
+            <p>
+                <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/"
+                   target="_blank">Access video tutorial here</a></p>
         </div>
     </div>
 
@@ -354,7 +365,9 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
-                <li>1.0.4 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour, bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge</li>
+                <li>1.0.4 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
+                    bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge
+                </li>
                 <li>1.0.3 Added Permalink Support</li>
                 <li>1.0.2 Added <a href="/feeds">RSS Support</a></li>
                 <li>1.0.1 Added <a href="/history">History</a></li>
@@ -402,7 +415,7 @@ journal = { { ${content["pubtitle"]} } },
             {% else %}
                 <button class="btn btn-secondary" type="button" data-toggle="collapse" data-target="#options"
                         aria-expanded="false" aria-controls="collapseExample">
-                   Options
+                    Options
                 </button>
                 <div class="collapse" id="options">
                     <div class="card card-body">
@@ -431,17 +444,17 @@ journal = { { ${content["pubtitle"]} } },
                        onclick="handle_submit()">
             {% endif %}
 
-        <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
-               onclick="downloadResults()"
-               hidden/>
-        <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
-               onclick="createRssLink()"
-               hidden/>
-        <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
-               onclick="copyPermalink()"
+            <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
+                   onclick="copyPermalink()"
+                   hidden/>
+            <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
+                   onclick="downloadResults()"
+                   hidden/>
+            <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
+                   onclick="createRssLink()"
+                   hidden/>
 
-               hidden/>
-
+        
     </form>
 
 

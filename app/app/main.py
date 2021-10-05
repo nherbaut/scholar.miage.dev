@@ -12,8 +12,8 @@ socketio.init_app(app, cors_allowed_origins="*")
 API_KEY = os.environ["API_KEY"]
 ROOT_URL = os.environ.get("ROOT_URL", "https://scholar.miage.dev")
 SHLINK_API_KEY = os.environ.get("SHLINK_API_KEY", "")
-MENDELEY_CLIENT_ID = os.environ.get("MENDELEY_CLIENT_ID", "")
-MENDELEY_SECRET = os.environ.get("MENDELEY_SECRET", "")
+#MENDELEY_CLIENT_ID = os.environ.get("MENDELEY_CLIENT_ID", "")
+#MENDELEY_SECRET = os.environ.get("MENDELEY_SECRET", "")
 
 SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
 app.config.from_object(Config())
