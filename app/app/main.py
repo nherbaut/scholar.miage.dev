@@ -1,4 +1,6 @@
 from flask import Flask
+from flask import url_for
+
 import os
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
@@ -18,6 +20,10 @@ REDIS_URL = os.environ.get("REDIS_URL", "")
 
 SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
 app.config.from_object(Config())
+
+
+
+
 db = SQLAlchemy(app)
 
 if Config().IN_MEMORY:

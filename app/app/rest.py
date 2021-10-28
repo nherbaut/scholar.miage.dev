@@ -3,15 +3,22 @@ import requests
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
-from flask import abort, Response, render_template, request, session, redirect
+from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 #from mendeley import Mendeley
 #from mendeley.session import MendeleySession
 #from mendeley.exception import MendeleyException, MendeleyApiException
 import json
 import pickle
+import os
 
 #mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, 'static/img'),
+                               'ms.ico', mimetype='image/vnd.microsoft.icon')
 
 @app.route("/robots.txt")
 def block_robots():
@@ -139,6 +146,12 @@ def same_author():
 
 @app.route('/permalink', methods=["GET"])
 def permalink():
+    query = request.args.get('query')
+
+    return render_template('index.html', query=f"{query}")
+
+@app.route('/opensearch', methods=["GET"])
+def opensearch():
     query = request.args.get('query')
 
     return render_template('index.html', query=f"{query}")
