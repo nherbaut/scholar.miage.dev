@@ -80,14 +80,17 @@ journal = { { ${content["pubtitle"]} } },
         }
 
         function onLoaded(evt) {
+
+            document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
+            document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
+
+            if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
+                $("#options").collapse('show');
+            }
+
             if (document.getElementById("querybox").value == "") {
                 document.getElementById("querybox").value = window.localStorage.getItem("query");
-                document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
-                document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
 
-                if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
-                    $("#options").collapse('show');
-                }
 
             } else {
                 //we already have a query, just fetch the results
@@ -206,7 +209,7 @@ journal = { { ${content["pubtitle"]} } },
             } else {
                 row.classList.add("table-dark");
                 row.classList.add("paywall");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td class='xref'></td><td class='xref'></td><td class='xref'></td><td class='xref'></td><td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
+                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td class='xref'></td><td class='xref'></td><td class='xref'></td><td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
             }
 
 
@@ -327,9 +330,14 @@ journal = { { ${content["pubtitle"]} } },
                 aria-expanded="false" aria-controls="collapseExample">
             Release Notes
         </button>
-        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#sources"
-                aria-expanded="false" aria-controls="collapseExample">
-            Get the sources
+        <button class="btn btn-secondary" type="button" onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
+            Query Language Doc
+        </button>
+        <button class="btn btn-secondary" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.dev';">
+            Sources
+        </button>
+         <button class="btn btn-secondary" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.dev/issues';">
+            Repport a Bug
         </button>
     </p>
     <div class="collapse" id="import_procedure">
@@ -365,7 +373,7 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
-                <li>1.0.4 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
+                <li>1.1.0 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
                     bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge
                 </li>
                 <li>1.0.3 Added Permalink Support</li>
@@ -376,13 +384,7 @@ journal = { { ${content["pubtitle"]} } },
         </div>
     </div>
 
-    <div class="collapse" id="sources">
-        <div class="card card-body">
-            <h2>Sources</h2>
-            <a href="https://github.com/nherbaut/scpus-hack/">GitHub Repository</a>
 
-        </div>
-    </div>
 
 
 </div>
@@ -444,15 +446,15 @@ journal = { { ${content["pubtitle"]} } },
                        onclick="handle_submit()">
             {% endif %}
 
-            <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
-                   onclick="copyPermalink()"
-                   hidden/>
-            <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
-                   onclick="downloadResults()"
-                   hidden/>
-            <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
-                   onclick="createRssLink()"
-                   hidden/>
+        <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
+               onclick="copyPermalink()"
+               hidden/>
+        <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
+               onclick="downloadResults()"
+               hidden/>
+        <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
+               onclick="createRssLink()"
+               hidden/>
 
 
     </form>

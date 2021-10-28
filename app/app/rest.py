@@ -60,7 +60,7 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_results_for_query(count, feed.query,xref=True)
+        dois = get_results_for_query(count, feed.query,xref=False)
     else:
         dois = []
     if feed.feed_content is not None:

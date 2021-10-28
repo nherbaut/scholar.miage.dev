@@ -6,7 +6,65 @@ import dateparser
 import pytz
 import urllib.parse
 
-from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY
+from requests_cache import CachedSession
+from datetime import timedelta
+
+from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL
+
+import logging
+
+
+def setup_redis_cache(redis_host, redis_port):
+    session_xref = CachedSession(
+        'xrefCache',
+        backend='redis',
+        host=redis_host,
+        port=redis_port,
+        expire_after=timedelta(days=365),
+        allowable_methods=['GET'],
+        stale_if_error=True,
+    )
+    session_scpus = CachedSession(
+        'scpusCache',
+        host=redis_host,
+        port=redis_port,
+        backend='redis',
+        use_cache_dir=True,
+        expire_after=timedelta(days=1),
+        stale_if_error=True,
+    )
+
+    return session_xref, session_scpus
+
+
+def setup_fs_cache():
+    session_xref = CachedSession(
+        'xrefCache',
+        backend='filesystem',
+        use_cache_dir=True,
+        expire_after=timedelta(days=365),
+        allowable_methods=['GET'],
+        stale_if_error=True,
+    )
+    session_scpus = CachedSession(
+        'scpusCache',
+        backend='filesystem',
+        use_cache_dir=True,
+        expire_after=timedelta(days=1),
+        stale_if_error=True,
+    )
+
+    return session_xref, session_scpus
+
+
+try:
+    if REDIS_URL != "":
+        redis_host, redis_port = REDIS_URL.split(":")
+        session_xref, session_scpus = setup_redis_cache(redis_host, redis_port)
+    else:
+        session_xref, session_scpus = setup_fs_cache()
+except:
+    session_xref, session_scpus = setup_fs_cache()
 
 
 def generate_rss(feed_items, id="id", query="query"):
@@ -48,7 +106,7 @@ def update_feed(dois, feed_content):
                                          "pubdate": item["x-precise-date"],
                                          "author": {"email": item["pubtitle"], "name": item["X-authors"]},
                                          "x-added-on": datetime.datetime.utcnow(),
-                                         "description": f"{item['X-abstract']} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
+                                         "description": f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
 
 def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
@@ -58,69 +116,81 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
     success = 0
     for i in range(0, min(1000, count), 25):
         bucket = []
-        partial_results = requests.get(
+        partial_results = session_scpus.get(
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
-        for aa in partial_results["search-results"]["entry"]:
-            if "prism:doi" in aa:
+        for entry in partial_results["search-results"]["entry"]:
+            if "prism:doi" in entry:
                 success += 1
             else:
                 failed += 1
 
-            year = aa.get('prism:coverDisplayDate', "")
-            if year != "":
-                rematch = re.findall("[0-9]{4}", year)
-                if len(rematch) > 0:
-                    year = rematch[0]
-
-            doi = aa.get("prism:doi", "")
+            doi = entry.get("prism:doi", "")
             if doi != "" and xref:
-                data = requests.get(f"https://api.crossref.org/works/{doi}").json()["message"]
-                first_author = [a for a in data.get("author", []) if a.get("sequence", "") == "first"]
-                authors = " and ".join([a.get("family","")+", " +a.get("given","") for a in data.get("author",[])])
-                if len(first_author) == 0:
-                    first_author_orcid = ""
-                    first_author = "?"
+                xref_response = session_xref.get(f"https://api.crossref.org/works/{doi}")
+                if xref_response.status_code == 200:
+                    xref_json_resp = xref_response.json()["message"]
+                    try:
+                        load_response_from_xref(bucket, xref_json_resp, entry)
+                    except:
+                        load_response_from_scpus(bucket, entry)
                 else:
-                    first_author_orcid = first_author[0].get("ORCID", "").split("/")[-1]
-                    first_author = f"{first_author[0]['family']}, {first_author[0]['given'][0]}"
-                    precise_date=pytz.timezone("UTC").localize(dateparser.parse("-".join([str(date) for date in data["created"]["date-parts"][0]])))
-                bucket.append({"doi": data["DOI"], "title": data["title"][0], "year": data["created"]["date-parts"][0][0],
-                               "x-precise-date": str(precise_date),
-                               "pubtitle": aa.get('prism:publicationName', ""),
-
-                               "X-OA": aa.get('openaccessFlag', False),
-                               "X-FirstAuthor": first_author,
-                               "X-FirstAuthor-ORCID": first_author_orcid,
-                               "X-IsReferencedByCount": data.get("is-referenced-by-count", -1),
-                               "X-subject": ", ".join(data.get("subject", [])),
-                               "X-refcount": data.get("reference-count", ""),
-                               "X-abstract": data.get("abstract", ""),
-                               "X-authors" : authors
-                               })
-
+                    load_response_from_scpus(bucket, entry)
             else:
-
-                coverDate = aa.get("prism:coverDate", "")
-                if coverDate == "":
-                    coverDate = datetime.datetime.utcnow()
-                else:
-                    coverDate = dateparser.parse(coverDate)
-
-                coverDate = pytz.timezone("UTC").localize(coverDate)
-
-                bucket.append({"doi": aa.get("prism:doi", ""), "title": aa.get("dc:title", "-"), "year": year,
-                               "x-precise-date": str(coverDate),
-                               "pubtitle": aa.get('prism:publicationName', ""),
-
-                               "X-OA": aa.get('openaccessFlag', False),
-                               "X-FirstAuthor": aa.get('dc:creator', "unknown"),
-                               "X-authors": aa.get('dc:creator', "unknown"),
-                               });
+                load_response_from_scpus(bucket, entry)
             emitt('doi_update', {"total": count, "done": success, "failed": failed})
             emitt('doi_results', [bucket[-1]])
         dois = dois + bucket
     emitt('doi_export_done', dois)
     return dois
+
+
+def load_response_from_scpus(bucket, entry):
+    year = entry.get('prism:coverDisplayDate', "")
+    if year != "":
+        rematch = re.findall("[0-9]{4}", year)
+        if len(rematch) > 0:
+            year = rematch[0]
+    coverDate = entry.get("prism:coverDate", "")
+    if coverDate == "":
+        coverDate = datetime.datetime.utcnow()
+    else:
+        coverDate = dateparser.parse(coverDate)
+    coverDate = pytz.timezone("UTC").localize(coverDate)
+    bucket.append({"doi": entry.get("prism:doi", ""), "title": entry.get("dc:title", "-"), "year": year,
+                   "x-precise-date": str(coverDate),
+                   "pubtitle": entry.get('prism:publicationName', ""),
+
+                   "X-OA": entry.get('openaccessFlag', False),
+                   "X-FirstAuthor": entry.get('dc:creator', "unknown"),
+                   "X-authors": entry.get('dc:creator', "unknown"),
+                   });
+
+
+def load_response_from_xref(bucket, xref_json_resp, entry):
+    first_author = [a for a in xref_json_resp.get("author", []) if a.get("sequence", "") == "first"]
+    authors = " and ".join([a.get("family", "") + ", " + a.get("given", "") for a in xref_json_resp.get("author", [])])
+    if len(first_author) == 0:
+        first_author_orcid = ""
+        first_author = "?"
+    else:
+        first_author_orcid = first_author[0].get("ORCID", "").split("/")[-1]
+        first_author = f"{first_author[0]['family']}, {first_author[0]['given'][0]}"
+    precise_date = pytz.timezone("UTC").localize(
+        dateparser.parse("-".join([str(date) for date in xref_json_resp["created"]["date-parts"][0]])))
+    bucket.append({"doi": xref_json_resp["DOI"], "title": xref_json_resp["title"][0],
+                   "year": xref_json_resp["created"]["date-parts"][0][0],
+                   "x-precise-date": str(precise_date),
+                   "pubtitle": entry.get('prism:publicationName', ""),
+
+                   "X-OA": entry.get('openaccessFlag', False),
+                   "X-FirstAuthor": first_author,
+                   "X-FirstAuthor-ORCID": first_author_orcid,
+                   "X-IsReferencedByCount": xref_json_resp.get("is-referenced-by-count", -1),
+                   "X-subject": ", ".join(xref_json_resp.get("subject", [])),
+                   "X-refcount": xref_json_resp.get("reference-count", ""),
+                   "X-abstract": xref_json_resp.get("abstract", ""),
+                   "X-authors": authors
+                   })
 
 
 def escape_query(query):
@@ -129,8 +199,7 @@ def escape_query(query):
 
 def count_results_for_query(query):
     print(f"query with {API_KEY} API_KEY")
-    response = requests.get(SCPUS_BACKEND % (0, 1, escape_query(query))).json()
-    print(response)
+    response = session_scpus.get(SCPUS_BACKEND % (0, 1, escape_query(query))).json()
 
     if "search-results" in response:
 
