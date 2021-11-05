@@ -8,10 +8,14 @@ import urllib.parse
 
 from requests_cache import CachedSession
 from datetime import timedelta
-
-from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL
+from app.model import PublicationSource
+from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
 
 import logging
+
+
+def get_sources():
+    return db.session.query(PublicationSource).all()
 
 
 def setup_redis_cache(redis_host, redis_port):

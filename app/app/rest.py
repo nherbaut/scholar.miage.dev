@@ -1,18 +1,18 @@
 import requests
 
 from app.main import app, db
-from app.model import ScpusFeed, ScpusRequest
-from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss
+from app.model import ScpusFeed, ScpusRequest, PublicationSource
+from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss, get_sources
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
-#from mendeley import Mendeley
-#from mendeley.session import MendeleySession
-#from mendeley.exception import MendeleyException, MendeleyApiException
+# from mendeley import Mendeley
+# from mendeley.session import MendeleySession
+# from mendeley.exception import MendeleyException, MendeleyApiException
 import json
 import pickle
 import os
 
-#mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
+# mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
 
 @app.route('/favicon.ico')
@@ -20,13 +20,62 @@ def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static/img'),
                                'ms.ico', mimetype='image/vnd.microsoft.icon')
 
+
 @app.route("/robots.txt")
 def block_robots():
     return """User-agent: *    
 Disallow: /"""
 
 
+@app.route("/sources", methods=["GET"])
+def list_sources():
+    sources = [{"short_name": ps.short_name, "full_text_name": ps.full_text_name, "code": ps.code} for ps in
+               db.session.query(PublicationSource).all()]
+    response = app.response_class(
+        response=json.dumps(sources),
+        status=200,
+        mimetype='application/json'
+    )
+    return response
 
+
+@app.route("/conference", methods=["POST"])
+def add_conference():
+    conference = request.get_json()
+    if db.session.query(PublicationSource).filter(
+            PublicationSource.short_name == conference['short_name']).count() != 0:
+        return abort(409, description="conference already exist")
+    else:
+        source = PublicationSource(short_name=conference['short_name'], full_text_name=conference['full_text_name'],
+                                   code="CONFNAME")
+        db.session.add(source)
+        db.session.commit()
+        return "CREATED", 204
+
+
+@app.route("/conference/<short_name>", methods=["DELETE"])
+def delete_conference(short_name):
+    try:
+        conf = db.session.query(PublicationSource).filter(PublicationSource.short_name == short_name).one()
+        db.session.delete(conf)
+        db.session.commit()
+        return 204, "deleted"
+    except Exception as e:
+        return abort(404, description="No conference with this short name")
+
+
+@app.route("/journal", methods=["POST"])
+def add_journal():
+    journal = request.get_json()
+    if db.session.query(PublicationSource).filter(
+            PublicationSource.short_name == journal['short_name']).count() != 0:
+        return abort(409, description="journal already exist")
+    else:
+        source = PublicationSource(short_name=journal['short_name'], full_text_name=journal['full_text_name'],
+                                   code="EXACTSRCTITLE")
+        db.session.add(source)
+        db.session.commit()
+        return "CREATED", 204
 
 
 @app.route("/feeds")
@@ -45,6 +94,7 @@ def remove_rss(id):
         return abort(404, description="No feed with this id")
     db.session.commit()
     return "DELETED", 204
+
 
 @app.route("/feed/<id>.rss/items", methods=["DELETE"])
 def purge_items(id):
@@ -67,7 +117,7 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_results_for_query(count, feed.query,xref=False)
+        dois = get_results_for_query(count, feed.query, xref=False)
     else:
         dois = []
     if feed.feed_content is not None:
@@ -88,37 +138,37 @@ def get_feed(id):
     return Response(rss, mimetype='application/rss+xml')
 
 
-#@app.route("/mendeleyLogout")
-#def mendeleyLogout():
+# @app.route("/mendeleyLogout")
+# def mendeleyLogout():
 #    session.clear()
 #    return redirect('/')
 
 
-#@app.route('/oauth')
-#def auth_return():
-    #    auth = mendeley.start_authorization_code_flow(state=session['state'])
-    #mendeley_session = auth.authenticate(request.url)
-    #
-    #session.clear()
-    #session['token'] = mendeley_session.token
-    #
-    #return redirect('/')
+# @app.route('/oauth')
+# def auth_return():
+#    auth = mendeley.start_authorization_code_flow(state=session['state'])
+# mendeley_session = auth.authenticate(request.url)
+#
+# session.clear()
+# session['token'] = mendeley_session.token
+#
+# return redirect('/')
 
 
-#def get_session_from_cookies():
+# def get_session_from_cookies():
 #    return MendeleySession(mendeley, session['token'])
 
 
 @app.route('/')
 @app.route('/home')
 def home():
-    #if 'token' in session:
+    # if 'token' in session:
     #        return render_template('index.html', token=session['token'])
-    #else:
+    # else:
     #        auth = mendeley.start_authorization_code_flow()
     #        session['state'] = auth.state
-#    return render_template('index.html', login_url=auth.get_login_url())
-    return render_template('index.html')
+    #    return render_template('index.html', login_url=auth.get_login_url())
+    return render_template('index.html', sources=get_sources())
 
 
 @app.route('/history', methods=["GET"])
@@ -131,7 +181,7 @@ def history():
 def snowball():
     title = request.args.get('title')
 
-    return render_template('index.html', query=f"REFTITLE(\"{title}\")")
+    return render_template('index.html', query=f"REFTITLE(\"{title}\")", sources=get_sources())
 
 
 @app.route('/sameauthor', methods=["GET"])
@@ -139,19 +189,20 @@ def same_author():
     name = request.args.get('name')
     orcid = request.args.get('orcid')
     if orcid != "":
-        return render_template('index.html', query=f"ORCID({orcid})")
+        return render_template('index.html', query=f"ORCID({orcid})", sources=get_sources())
     else:
-        return render_template('index.html', query=f"AUTHOR-NAME({name})")
+        return render_template('index.html', query=f"AUTHOR-NAME({name})", sources=get_sources())
 
 
 @app.route('/permalink', methods=["GET"])
 def permalink():
     query = request.args.get('query')
 
-    return render_template('index.html', query=f"{query}")
+    return render_template('index.html', query=f"{query}", sources=get_sources())
+
 
 @app.route('/opensearch', methods=["GET"])
 def opensearch():
     query = request.args.get('query')
 
-    return render_template('index.html', query=f"{query}")
+    return render_template('index.html', query=f"{query}", sources=get_sources())

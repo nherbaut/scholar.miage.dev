@@ -6,7 +6,8 @@
     <link rel="stylesheet" href="static/css/style.css">
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
-    <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml" title="MIAGE Scholar">
+    <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
+          title="MIAGE Scholar">
     <meta charset="UTF-8">
     <title>MIAGE Scholar</title>
     <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
@@ -289,6 +290,14 @@ journal = { { ${content["pubtitle"]} } },
 
         }
 
+        function add_restriction_to_query(){
+            var option=document.querySelector("#source_select").selectedOptions[0];
+            var querybox=document.querySelector("#querybox");
+            var code = option.getAttribute("code");
+            var full_text_name = option.getAttribute("value");
+            querybox.value=code+"("+full_text_name+") AND "+querybox.value;
+        }
+
         function oa_changed() {
 
 
@@ -330,13 +339,16 @@ journal = { { ${content["pubtitle"]} } },
                 aria-expanded="false" aria-controls="collapseExample">
             Release Notes
         </button>
-        <button class="btn btn-secondary" type="button" onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
+        <button class="btn btn-secondary" type="button"
+                onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
             Query Language Doc
         </button>
-        <button class="btn btn-secondary" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.dev';">
+        <button class="btn btn-secondary" type="button"
+                onclick="window.location='https://github.com/nherbaut/scholar.miage.dev';">
             Sources
         </button>
-         <button class="btn btn-secondary" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.dev/issues';">
+        <button class="btn btn-secondary" type="button"
+                onclick="window.location='https://github.com/nherbaut/scholar.miage.dev/issues';">
             Repport a Bug
         </button>
     </p>
@@ -385,8 +397,6 @@ journal = { { ${content["pubtitle"]} } },
     </div>
 
 
-
-
 </div>
 <div style="width: 90%; margin: auto;">
 
@@ -432,6 +442,17 @@ journal = { { ${content["pubtitle"]} } },
                                    onchange="oa_changed()" unchecked>
                             <label for="oa">Show only Open Access work<span
                                     class="badge badge-warning">beta</span></label>
+                        </div>
+                        <div>
+                            <p>Search in specific conference/journal</p>
+                            <select id="source_select">
+                            {% for source in sources %}
+                                <option value="{{ source.full_text_name }}"
+                                        code="{{ source.code }}">{{ source.short_name }}</option>
+                            {% endfor %}
+                            </select>
+                        <input class="btn btn-primary" type="button" value="add restriction to query" onclick="add_restriction_to_query()"/>
+
                         </div>
                     </div>
                 </div>

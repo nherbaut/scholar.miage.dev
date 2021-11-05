@@ -14,6 +14,14 @@ db_session = scoped_session(sessionmaker(autocommit=False,
                                          bind=engine))
 
 
+class PublicationSource(Base):
+    __tablename__ = "publication_source"
+    short_name = Column(String(64), primary_key=True)
+    code = Column(String(64), nullable=False)
+    full_text_name = Column(String(255), nullable=False)
+
+
+
 class ScpusRequest(Base):
     __tablename__ = "history"
     id = Column(Integer, primary_key=True)
