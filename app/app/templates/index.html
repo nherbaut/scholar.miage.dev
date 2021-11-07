@@ -8,6 +8,20 @@
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
     <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
           title="MIAGE Scholar">
+    <link
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
+            rel="stylesheet"
+    />
+    <!-- Google Fonts -->
+    <link
+            href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+            rel="stylesheet"
+    />
+    <!-- MDB -->
+    <link
+            href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/3.6.0/mdb.min.css"
+            rel="stylesheet"
+    />
     <meta charset="UTF-8">
     <title>MIAGE Scholar</title>
     <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
@@ -196,7 +210,7 @@ journal = { { ${content["pubtitle"]} } },
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
                 full_doi = doi_item["doi"].split("_")[0]
                 row.innerHTML = "<th  scope=\"row\"><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td><td class='xref xref-abstract' style='width: 50%'>" + get(doi_item, "X-abstract", "") + "</td><td class=\"cite_count xref\">" + get(doi_item, "X-IsReferencedByCount", "") + "</td><td class=\"ref_count xref\">" + get(doi_item, "X-refcount", "") + "</td><td class=\"subject xref\">" + get(doi_item, "X-subject", []) + "</td><td>" + doi_item["pubtitle"] + "</td>"
-                row.innerHTML += "<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + "</td>"
+                row.innerHTML += "<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + '<p>' + doi_item["X-Country-First-affiliation"] + "</p><i class='flag " + doi_item["X-Country-First-Author"] + "'></i></td>"
                 if (get(doi_item, "X-OA", false) == false) {
                     row.classList.add("table-info");
                     row.classList.add("paywall");
@@ -290,12 +304,12 @@ journal = { { ${content["pubtitle"]} } },
 
         }
 
-        function add_restriction_to_query(){
-            var option=document.querySelector("#source_select").selectedOptions[0];
-            var querybox=document.querySelector("#querybox");
+        function add_restriction_to_query() {
+            var option = document.querySelector("#source_select").selectedOptions[0];
+            var querybox = document.querySelector("#querybox");
             var code = option.getAttribute("code");
             var full_text_name = option.getAttribute("value");
-            querybox.value=code+"("+full_text_name+") AND "+querybox.value;
+            querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
         }
 
         function oa_changed() {
@@ -446,12 +460,19 @@ journal = { { ${content["pubtitle"]} } },
                         <div>
                             <p>Search in specific conference/journal</p>
                             <select id="source_select">
-                            {% for source in sources %}
-                                <option value="{{ source.full_text_name }}"
-                                        code="{{ source.code }}">{{ source.short_name }}</option>
-                            {% endfor %}
+                                {% for category in sources.keys() %}
+                                    <optgroup label="{{ category }}">
+                                    {%  for source in sources[category] %}
+                                        <option value="{{ source.full_text_name }}"
+                                            code="{{ source.code }}">{{ source.short_name }}</option>
+                                    {% endfor %}
+
+                                    </optgroup>
+
+                                {% endfor %}
                             </select>
-                        <input class="btn btn-primary" type="button" value="add restriction to query" onclick="add_restriction_to_query()"/>
+                            <input class="btn btn-primary" type="button" value="add restriction to query"
+                                   onclick="add_restriction_to_query()"/>
 
                         </div>
                     </div>
@@ -518,6 +539,9 @@ journal = { { ${content["pubtitle"]} } },
 </div>
 
 </body>
+<script>
 
+    xref_changed();
+</script>
 
 </html>

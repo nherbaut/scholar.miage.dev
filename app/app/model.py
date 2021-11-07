@@ -19,7 +19,7 @@ class PublicationSource(Base):
     short_name = Column(String(64), primary_key=True)
     code = Column(String(64), nullable=False)
     full_text_name = Column(String(255), nullable=False)
-
+    category = Column(String(64), default="Uncaterogized")
 
 
 class ScpusRequest(Base):

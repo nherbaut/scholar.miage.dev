@@ -15,7 +15,14 @@ import logging
 
 
 def get_sources():
-    return db.session.query(PublicationSource).all()
+    sources = db.session.query(PublicationSource).all()
+    res = {}
+    for entry in sources:
+        if entry.category in res:
+            res[entry.category].append(entry)
+        else:
+            res[entry.category] = [entry]
+    return res
 
 
 def setup_redis_cache(redis_host, redis_port):
@@ -160,19 +167,45 @@ def load_response_from_scpus(bucket, entry):
     else:
         coverDate = dateparser.parse(coverDate)
     coverDate = pytz.timezone("UTC").localize(coverDate)
+
+    first_author_country = get_first_auth_country(entry)
+    first_affiliation = get_first_auth_affil(entry)
+
     bucket.append({"doi": entry.get("prism:doi", ""), "title": entry.get("dc:title", "-"), "year": year,
                    "x-precise-date": str(coverDate),
                    "pubtitle": entry.get('prism:publicationName', ""),
 
                    "X-OA": entry.get('openaccessFlag', False),
                    "X-FirstAuthor": entry.get('dc:creator', "unknown"),
+                   "X-Country-First-Author": first_author_country,
+                   "X-Country-First-affiliation": first_affiliation,
                    "X-authors": entry.get('dc:creator', "unknown"),
                    });
+
+
+def get_first_auth_affil(entry):
+    res = entry.get("affiliation", [{}])[0].get("affilname", "")
+    if res is not None:
+        return res
+    else:
+        return ""
+
+
+def get_first_auth_country(entry):
+    res = entry.get("affiliation", [{}])[0].get("affiliation-country", "")
+    if res is not None:
+        return res.lower()
+    else:
+        return ""
 
 
 def load_response_from_xref(bucket, xref_json_resp, entry):
     first_author = [a for a in xref_json_resp.get("author", []) if a.get("sequence", "") == "first"]
     authors = " and ".join([a.get("family", "") + ", " + a.get("given", "") for a in xref_json_resp.get("author", [])])
+
+    first_author_country = get_first_auth_country(entry)
+    first_affiliation = get_first_auth_affil(entry)
+
     if len(first_author) == 0:
         first_author_orcid = ""
         first_author = "?"
@@ -188,6 +221,8 @@ def load_response_from_xref(bucket, xref_json_resp, entry):
 
                    "X-OA": entry.get('openaccessFlag', False),
                    "X-FirstAuthor": first_author,
+                   "X-Country-First-Author": first_author_country,
+                   "X-Country-First-affiliation": first_affiliation,
                    "X-FirstAuthor-ORCID": first_author_orcid,
                    "X-IsReferencedByCount": xref_json_resp.get("is-referenced-by-count", -1),
                    "X-subject": ", ".join(xref_json_resp.get("subject", [])),

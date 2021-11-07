@@ -47,19 +47,19 @@ def add_conference():
         return abort(409, description="conference already exist")
     else:
         source = PublicationSource(short_name=conference['short_name'], full_text_name=conference['full_text_name'],
-                                   code="CONFNAME")
+                                   code="EXACTSRCTITLE",category=conference['category'])
         db.session.add(source)
         db.session.commit()
         return "CREATED", 204
 
 
-@app.route("/conference/<short_name>", methods=["DELETE"])
+@app.route("/source/<short_name>", methods=["DELETE"])
 def delete_conference(short_name):
     try:
         conf = db.session.query(PublicationSource).filter(PublicationSource.short_name == short_name).one()
         db.session.delete(conf)
         db.session.commit()
-        return 204, "deleted"
+        return "DELETED", 204
     except Exception as e:
         return abort(404, description="No conference with this short name")
 
@@ -72,7 +72,7 @@ def add_journal():
         return abort(409, description="journal already exist")
     else:
         source = PublicationSource(short_name=journal['short_name'], full_text_name=journal['full_text_name'],
-                                   code="EXACTSRCTITLE")
+                                   code="EXACTSRCTITLE",category=journal['category'])
         db.session.add(source)
         db.session.commit()
         return "CREATED", 204
