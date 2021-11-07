@@ -39,19 +39,6 @@ def list_sources():
     return response
 
 
-@app.route("/conference", methods=["POST"])
-def add_conference():
-    conference = request.get_json()
-    if db.session.query(PublicationSource).filter(
-            PublicationSource.short_name == conference['short_name']).count() != 0:
-        return abort(409, description="conference already exist")
-    else:
-        source = PublicationSource(short_name=conference['short_name'], full_text_name=conference['full_text_name'],
-                                   code="EXACTSRCTITLE",category=conference['category'])
-        db.session.add(source)
-        db.session.commit()
-        return "CREATED", 204
-
 
 @app.route("/source/<short_name>", methods=["DELETE"])
 def delete_conference(short_name):
@@ -64,7 +51,7 @@ def delete_conference(short_name):
         return abort(404, description="No conference with this short name")
 
 
-@app.route("/journal", methods=["POST"])
+@app.route("/source", methods=["POST"])
 def add_journal():
     journal = request.get_json()
     if db.session.query(PublicationSource).filter(
@@ -72,7 +59,7 @@ def add_journal():
         return abort(409, description="journal already exist")
     else:
         source = PublicationSource(short_name=journal['short_name'], full_text_name=journal['full_text_name'],
-                                   code="EXACTSRCTITLE",category=journal['category'])
+                                   code=journal['code'],category=journal['category'])
         db.session.add(source)
         db.session.commit()
         return "CREATED", 204
