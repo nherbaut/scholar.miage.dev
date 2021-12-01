@@ -175,7 +175,7 @@ def snowball():
 def same_author():
     name = request.args.get('name')
     orcid = request.args.get('orcid')
-    if orcid != "":
+    if orcid:
         return render_template('index.html', query=f"ORCID({orcid})", sources=get_sources())
     else:
         return render_template('index.html', query=f"AUTHOR-NAME({name})", sources=get_sources())

@@ -210,7 +210,14 @@ journal = { { ${content["pubtitle"]} } },
                 //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
                 full_doi = doi_item["doi"].split("_")[0]
                 row.innerHTML = "<th  scope=\"row\"><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td><td class='xref xref-abstract' style='width: 50%'>" + get(doi_item, "X-abstract", "") + "</td><td class=\"cite_count xref\">" + get(doi_item, "X-IsReferencedByCount", "") + "</td><td class=\"ref_count xref\">" + get(doi_item, "X-refcount", "") + "</td><td class=\"subject xref\">" + get(doi_item, "X-subject", []) + "</td><td>" + doi_item["pubtitle"] + "</td>"
-                row.innerHTML += "<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]) + "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"]) + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + '<p>' + doi_item["X-Country-First-affiliation"] + "</p><i class='flag " + doi_item["X-Country-First-Author"] + "'></i></td>"
+
+                var firstAuthor="<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]);
+
+                if( doi_item["X-FirstAuthor-ORCID"] ){
+                    firstAuthor += "&orcid="+encodeURIComponent(doi_item["X-FirstAuthor-ORCID"])
+                }
+                row.innerHTML+= firstAuthor + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + '<p>' + doi_item["X-Country-First-affiliation"] + "</p><i class='flag " + doi_item["X-Country-First-Author"] + "'></i></td>"
+
                 if (get(doi_item, "X-OA", false) == false) {
                     row.classList.add("table-info");
                     row.classList.add("paywall");
@@ -399,7 +406,7 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
-                <li>1.2.0 Country and affiliation for first author, added preset conf/journal restriction</li>
+                <li>1.2.0 Country and affiliation for first author, added preset <a href="/sources">conf/journal restrictions</a></li>
                 <li>1.1.0 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
                     bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge
                 </li>

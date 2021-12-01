@@ -125,7 +125,7 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
 
     failed = 0
     success = 0
-    for i in range(0, min(1000, count), 25):
+    for i in range(0, min(5000, count), 25):
         bucket = []
         partial_results = session_scpus.get(
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
@@ -179,6 +179,7 @@ def load_response_from_scpus(bucket, entry):
                    "X-FirstAuthor": entry.get('dc:creator', "unknown"),
                    "X-Country-First-Author": first_author_country,
                    "X-Country-First-affiliation": first_affiliation,
+                   "X-FirstAuthor-ORCID": "",
                    "X-authors": entry.get('dc:creator', "unknown"),
                    });
 
