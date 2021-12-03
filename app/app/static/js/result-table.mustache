@@ -1,0 +1,33 @@
+<tr class="
+
+{{^success}}
+    table-dark
+{{/success}}
+
+{{#openaccess}}
+    table-success openaccess
+{{/openaccess}}
+{{^openaccess}}
+    table-info
+{{/openaccess}}
+">
+    <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
+    <td>{{year}}</td>
+    <td>{{title}}</td>
+    <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td>
+    <td class="cite_count xref">{{cite_count}}</td>
+    <td class="ref_count xref">{{ref_count}}</td>
+    <td class="subject xref">{{subject}}</td>
+    <td>{{pub_title}}</td>
+    <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
+    <td class="xref">{{affil}}</td>
+    <td class="xref"><i class="flag {{country}}"></i></td>
+    <td><a target="_blank"
+        {{#openaccess}}
+            href="https://www.doi.org/{{doi}}">Open Access!</a></td>
+        {{/openaccess}}
+        {{^openaccess}}
+            href="https://sci-hub.se/{{full_doi}}">Download</a></td>
+        {{/openaccess}}
+    <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+</tr>

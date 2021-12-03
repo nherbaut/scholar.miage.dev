@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
     <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="static/contrib/js/mustache.js"></script>
     <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
           title="MIAGE Scholar">
     <link
@@ -159,18 +161,16 @@ journal = { { ${content["pubtitle"]} } },
 
         socket.on('doi_export_done', (data) => {
             document.getElementById("dlresults").removeAttribute("hidden");
+            document.getElementById("dlresultsxsl").removeAttribute("hidden");
+
             document.getElementById("rss").removeAttribute("hidden");
-            $(document).ready(function () {
-                if (table != undefined) {
-                    table.destroy();
-                }
-                table = $('table').DataTable({
-                    "paging": false,
-                    "ordering": true,
 
-                });
+            alert("doi_export_done");
+            table = $('#doitable').DataTable({
+                "paging": false,
+
+
             });
-
 
         })
 
@@ -203,37 +203,40 @@ journal = { { ${content["pubtitle"]} } },
         });
 
         function add_item_to_table(doi_item) {
-            var row = document.getElementById("doi_table").insertRow()
 
-            if (doi_item["doi"] != "") {
-                row.classList.add("table-success");
 
-                //sometime doi contain _ for books chapter, remove it since it does always work with sci-hub
-                full_doi = doi_item["doi"].split("_")[0]
-                row.innerHTML = "<th  scope=\"row\"><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">" + doi_item["doi"] + "</a></th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td><td class='xref xref-abstract' style='width: 50%'>" + get(doi_item, "X-abstract", "") + "</td><td class=\"cite_count xref\">" + get(doi_item, "X-IsReferencedByCount", "") + "</td><td class=\"ref_count xref\">" + get(doi_item, "X-refcount", "") + "</td><td class=\"subject xref\">" + get(doi_item, "X-subject", []) + "</td><td>" + doi_item["pubtitle"] + "</td>"
+            let firstAuthorLink = "sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]);
 
-                var firstAuthor = "<td><a target=\"_blank\" href=\"/sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]);
-
-                if (doi_item["X-FirstAuthor-ORCID"]) {
-                    firstAuthor += "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"])
-                }
-                row.innerHTML += firstAuthor + "\" target=\"_blank\"\">" + doi_item["X-FirstAuthor"] + '<p>' + doi_item["X-Country-First-affiliation"] + "</p><i class='flag " + doi_item["X-Country-First-Author"] + "'></i></td>"
-
-                if (get(doi_item, "X-OA", false) == false) {
-                    row.classList.add("table-info");
-                    row.classList.add("paywall");
-                    row.innerHTML += "<td><a href=\"https://sci-hub.se/" + full_doi + "\" target=\"_blank\">Download</a></td>"
-                } else {
-                    row.classList.add("table-success");
-                    row.classList.add("openaccess");
-                    row.innerHTML += "<td><a target=\"_blank\" href=\"https://www.doi.org/" + doi_item["doi"] + "\">Open Access!</a></td>"
-                }
-                row.innerHTML += "<td><a target=\"_blank\" href=\"/snowball?title=" + encodeURIComponent(doi_item["title"]) + "\" target=\"_blank\"\">Snowball</td>"
-            } else {
-                row.classList.add("table-dark");
-                row.classList.add("paywall");
-                row.innerHTML = "<th  scope=\"row\">None</th><td>" + doi_item["year"] + "</td><td>" + doi_item["title"] + "</td>" + "<td class='xref'></td><td class='xref'></td><td class='xref'></td><td>" + doi_item["pubtitle"] + "</td><td></td>" + "<td>-</td><td>-</td>";
+            if (doi_item["X-FirstAuthor-ORCID"]) {
+                firstAuthorLink += "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"])
             }
+            const full_doi = doi_item["doi"].split("_")[0];
+
+            fetch("static/js/result-table.mustache")
+                .then((response) => response.text())
+                .then((template) => {
+
+                    var rendered = Mustache.render(template, {
+                        success: doi_item["doi"] != "" ? true : false,
+                        openaccess: get(doi_item, "X-OA", false) != false,
+                        doi: doi_item["doi"],
+                        full_doi: full_doi,
+                        year: doi_item["year"],
+                        title: doi_item["title"],
+                        abstract: get(doi_item, "X-abstract", ""),
+                        cite_count: get(doi_item, "X-IsReferencedByCount", ""),
+                        ref_count: get(doi_item, "X-refcount", ""),
+                        subject: get(doi_item, "X-subject", []),
+                        pub_title: doi_item["pubtitle"],
+                        same_auth_link: firstAuthorLink,
+                        name: doi_item["X-FirstAuthor"],
+                        affil: doi_item["X-Country-First-affiliation"],
+                        country: doi_item["X-Country-First-Author"],
+                    });
+                    document.getElementById("doi_table").innerHTML += rendered;
+
+
+                });
 
 
         }
@@ -263,9 +266,9 @@ journal = { { ${content["pubtitle"]} } },
             handle_submit = sendCountRequest;
             document.getElementById("main_button").value = "Count Results";
             document.getElementById("dlresults").setAttribute("hidden", "true");
+            document.getElementById("dlresultsxsl").setAttribute("hidden", "true");
             document.getElementById("rss").setAttribute("hidden", "true");
             resetPermalinkButton();
-            table.destroy();
 
             //document.getElementById("querybox").value = "";
             document.getElementById("pb_success").setAttribute("max", 0);
@@ -283,6 +286,16 @@ journal = { { ${content["pubtitle"]} } },
 
             download("results.bib", bag_of_doi)
         }
+
+        function downloadExcel(type, fn, dl) {
+            var elt = document.getElementById('doitable');
+            var wb = XLSX.utils.table_to_book(elt, {sheet: "sheet1"});
+            return dl ?
+                XLSX.write(wb, {bookType: type, bookSST: true, type: 'base64'}) :
+                XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
+
+        }
+
 
         function copyPermalink() {
 
@@ -343,8 +356,7 @@ journal = { { ${content["pubtitle"]} } },
                                                                 class="badge badge-success scihubinfo"
                                                                 title="sci-hub server reachable">Sci-Hub servers</span>
         <span id="scihubko" data-toggle="tooltip" class="badge badge-danger scihubinfo" title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1
-        ">Sci-Hub servers</span><span
-                class="badge badge-warning">beta</span></p>
+        ">Sci-Hub servers</span></p>
 
 
     <p>
@@ -458,14 +470,12 @@ journal = { { ${content["pubtitle"]} } },
                         <div>
                             <input type="checkbox" id="xref" name="xref"
                                    onchange="xref_changed()" unchecked>
-                            <label for="xref">Download metadata with xref (10x slower)<span
-                                    class="badge badge-warning">beta</span></label>
+                            <label for="xref">Download metadata with xref (10x slower)</label>
                         </div>
                         <div>
                             <input type="checkbox" id="oa" name="oa"
                                    onchange="oa_changed()" unchecked>
-                            <label for="oa">Show only Open Access work<span
-                                    class="badge badge-warning">beta</span></label>
+                            <label for="oa">Show only Open Access work</label>
                         </div>
                         <div>
                             <p>Search in specific conference/journal</p>
@@ -504,6 +514,12 @@ journal = { { ${content["pubtitle"]} } },
         <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
                onclick="downloadResults()"
                hidden/>
+    <span id="dlresultsxsl" hidden>
+        <input class="btn btn-success" type="button" value="export in spreadsheet"
+               onclick="downloadExcel('xlsx')"
+               /><span
+                class="badge badge-warning">beta</span>
+        </span>
         <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
                onclick="createRssLink()"
                hidden/>
@@ -525,7 +541,7 @@ journal = { { ${content["pubtitle"]} } },
         </div>
     </div>
 
-    <table class="table table-bordered table-hover sortable w-auto">
+    <table id="doitable" class="table table-bordered table-hover sortable w-auto">
         <thead>
         <td>DOI</td>
         <td>Date</td>
@@ -536,6 +552,8 @@ journal = { { ${content["pubtitle"]} } },
         <td class="subject xref">Subjects</td>
         <td>Publication Title</td>
         <td>Author</td>
+        <td class="xref">Affiliation</td>
+        <td class="xref">country</td>
         <td>Sci-Hb link</td>
         <td>Snowball Link</td>
 
