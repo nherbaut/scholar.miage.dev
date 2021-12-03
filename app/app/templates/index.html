@@ -40,6 +40,14 @@
 
     <script>
 
+        var tableRowTemplate = undefined;
+        fetch("static/js/result-table.mustache")
+            .then((response) => response.text())
+            .then((template) => {
+                tableRowTemplate = template;
+            });
+
+
         function updateSciHubAccess(isSciHubReachable) {
             if (!isSciHubReachable) {
                 document.getElementById("scihubok").style.display = "none";
@@ -165,12 +173,6 @@ journal = { { ${content["pubtitle"]} } },
 
             document.getElementById("rss").removeAttribute("hidden");
 
-            alert("doi_export_done");
-            table = $('#doitable').DataTable({
-                "paging": false,
-
-
-            });
 
         })
 
@@ -187,17 +189,20 @@ journal = { { ${content["pubtitle"]} } },
         });
 
         socket.on('doi_results', (data) => {
+            var rendered_html="";
             for (let doi_item of data) {
                 var doi = doi_item["doi"];
                 var title = doi_item["title"] + " " + get(doi_item, "X-IsReferencedByCount", "");
                 var year = doi_item["year"]
-                add_item_to_table(doi_item);
+                rendered_html+=add_item_to_table(doi_item);
                 if (doi != "") {
                     item_info.push(doi_item);
 
                     bag_of_doi[doi] = doi_item
                 }
+
             }
+            document.getElementById("doi_table").innerHTML +=rendered_html;
 
 
         });
@@ -212,32 +217,25 @@ journal = { { ${content["pubtitle"]} } },
             }
             const full_doi = doi_item["doi"].split("_")[0];
 
-            fetch("static/js/result-table.mustache")
-                .then((response) => response.text())
-                .then((template) => {
 
-                    var rendered = Mustache.render(template, {
-                        success: doi_item["doi"] != "" ? true : false,
-                        openaccess: get(doi_item, "X-OA", false) != false,
-                        doi: doi_item["doi"],
-                        full_doi: full_doi,
-                        year: doi_item["year"],
-                        title: doi_item["title"],
-                        abstract: get(doi_item, "X-abstract", ""),
-                        cite_count: get(doi_item, "X-IsReferencedByCount", ""),
-                        ref_count: get(doi_item, "X-refcount", ""),
-                        subject: get(doi_item, "X-subject", []),
-                        pub_title: doi_item["pubtitle"],
-                        same_auth_link: firstAuthorLink,
-                        name: doi_item["X-FirstAuthor"],
-                        affil: doi_item["X-Country-First-affiliation"],
-                        country: doi_item["X-Country-First-Author"],
-                    });
-                    document.getElementById("doi_table").innerHTML += rendered;
-
-
-                });
-
+            var rendered = Mustache.render(tableRowTemplate, {
+                success: doi_item["doi"] != "" ? true : false,
+                openaccess: get(doi_item, "X-OA", false) != false,
+                doi: doi_item["doi"],
+                full_doi: full_doi,
+                year: doi_item["year"],
+                title: doi_item["title"],
+                abstract: get(doi_item, "X-abstract", ""),
+                cite_count: get(doi_item, "X-IsReferencedByCount", ""),
+                ref_count: get(doi_item, "X-refcount", ""),
+                subject: get(doi_item, "X-subject", []),
+                pub_title: doi_item["pubtitle"],
+                same_auth_link: firstAuthorLink,
+                name: doi_item["X-FirstAuthor"],
+                affil: doi_item["X-Country-First-affiliation"],
+                country: doi_item["X-Country-First-Author"],
+            });
+            return rendered;
 
         }
 
@@ -514,10 +512,10 @@ journal = { { ${content["pubtitle"]} } },
         <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
                onclick="downloadResults()"
                hidden/>
-    <span id="dlresultsxsl" hidden>
+        <span id="dlresultsxsl" hidden>
         <input class="btn btn-success" type="button" value="export in spreadsheet"
                onclick="downloadExcel('xlsx')"
-               /><span
+        /><span
                 class="badge badge-warning">beta</span>
         </span>
         <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"

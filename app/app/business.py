@@ -125,6 +125,8 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
 
     failed = 0
     success = 0
+    client_results_bucket_size=200
+    client_bucket=[]
     for i in range(0, min(5000, count), 25):
         bucket = []
         partial_results = session_scpus.get(
@@ -148,8 +150,11 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
                     load_response_from_scpus(bucket, entry)
             else:
                 load_response_from_scpus(bucket, entry)
-            emitt('doi_update', {"total": count, "done": success, "failed": failed})
-            emitt('doi_results', [bucket[-1]])
+        emitt('doi_update', {"total": count, "done": success, "failed": failed})
+        client_bucket+=bucket
+        if len(client_bucket)>client_results_bucket_size:
+            emitt('doi_results', client_bucket)
+            client_bucket=[]
         dois = dois + bucket
     emitt('doi_export_done', dois)
     return dois
