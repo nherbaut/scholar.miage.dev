@@ -11,9 +11,11 @@
     table-info
 {{/openaccess}}
 ">
+
     <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
     <td>{{year}}</td>
     <td>{{title}}</td>
+    {{#success}}
     <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td>
     <td class="cite_count xref">{{cite_count}}</td>
     <td class="ref_count xref">{{ref_count}}</td>
@@ -30,4 +32,17 @@
             href="https://sci-hub.se/{{full_doi}}">Download</a></td>
         {{/openaccess}}
     <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+    {{/success}}
+    {{^success}}
+        <td class="xref xref-abstract" style="width: 50%"></td>
+        <td class="cite_count xref"></td>
+        <td class="ref_count xref"></td>
+        <td class="subject xref"></td>
+        <td>{{pub_title}}</td>
+        <td></td>
+        <td class="xref"></td>
+        <td class="xref"></td>
+        <td>-</td>
+        <td>-</td>
+    {{/success}}
 </tr>

@@ -17,7 +17,7 @@
     {% for query in queries %}
         <tr>
         <td>{{ query.timestamp }}</td>
-        <td>{{ query.query }}</td>
+            <td><a href="/permalink?query={{ query.query }}">{{ query.query }}</a></td>
         <td>{{ query.count }}</td>
         </tr>
     {% endfor %}

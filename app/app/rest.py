@@ -39,7 +39,6 @@ def list_sources():
     return response
 
 
-
 @app.route("/source/<short_name>", methods=["DELETE"])
 def delete_conference(short_name):
     try:
@@ -59,7 +58,7 @@ def add_journal():
         return abort(409, description="journal already exist")
     else:
         source = PublicationSource(short_name=journal['short_name'], full_text_name=journal['full_text_name'],
-                                   code=journal['code'],category=journal['category'])
+                                   code=journal['code'], category=journal['category'])
         db.session.add(source)
         db.session.commit()
         return "CREATED", 204
@@ -161,7 +160,11 @@ def home():
 @app.route('/history', methods=["GET"])
 def history():
     queries = db.session.query(ScpusRequest).all()
-    return render_template('history.html', queries=queries)
+    accepts = request.headers["Accept"].split(",")
+    if "application/json" in accepts:
+        return json.dumps([q.query for q in queries])
+    else:
+        return render_template('history.html', queries=queries)
 
 
 @app.route('/snowball', methods=["GET"])

@@ -109,8 +109,9 @@ journal = { { ${content["pubtitle"]} } },
 
             document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
+            document.getElementById("hacker").checked = window.localStorage.getItem("hacker") === 'true';
 
-            if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
+            if (document.getElementById("xref").checked || document.getElementById("oa").checked || document.getElementById("hacker").checked) {
                 $("#options").collapse('show');
             }
 
@@ -143,7 +144,12 @@ journal = { { ${content["pubtitle"]} } },
         });
 
         socket.on('count', (count) => {
-            document.getElementById("main_button").value = "fetch " + count + " results ";
+            if(count>1000) {
+                document.getElementById("main_button").value = "fetch the first 1000 (" + count+" breaches the mimit)";
+            }
+            else {
+                document.getElementById("main_button").value = "fetch " + count + " results ";
+            }
             handle_submit = sendDoisRequest;
             document.getElementById("permalink").removeAttribute("hidden");
         });
@@ -173,6 +179,14 @@ journal = { { ${content["pubtitle"]} } },
 
             document.getElementById("rss").removeAttribute("hidden");
 
+            table = $('table').DataTable({
+                "paging": false,
+                scrollY: '50vh',
+                scrollCollapse: true,
+                "ordering": true,
+                "order": [[1, "desc"]]
+            });
+
 
         })
 
@@ -189,12 +203,12 @@ journal = { { ${content["pubtitle"]} } },
         });
 
         socket.on('doi_results', (data) => {
-            var rendered_html="";
+            var rendered_html = "";
             for (let doi_item of data) {
                 var doi = doi_item["doi"];
                 var title = doi_item["title"] + " " + get(doi_item, "X-IsReferencedByCount", "");
                 var year = doi_item["year"]
-                rendered_html+=add_item_to_table(doi_item);
+                rendered_html += add_item_to_table(doi_item);
                 if (doi != "") {
                     item_info.push(doi_item);
 
@@ -202,7 +216,7 @@ journal = { { ${content["pubtitle"]} } },
                 }
 
             }
-            document.getElementById("doi_table").innerHTML +=rendered_html;
+            document.getElementById("doi_table").innerHTML += rendered_html;
 
 
         });
@@ -331,6 +345,14 @@ journal = { { ${content["pubtitle"]} } },
             querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
         }
 
+        function hacker_changed(){
+            document.querySelectorAll('link.hacker').forEach(function (node) {
+            node.disabled = document.getElementById("hacker").checked;
+
+
+            });
+            window.localStorage.setItem("hacker", document.getElementById("hacker").checked);
+        }
         function oa_changed() {
 
 
@@ -474,6 +496,11 @@ journal = { { ${content["pubtitle"]} } },
                             <input type="checkbox" id="oa" name="oa"
                                    onchange="oa_changed()" unchecked>
                             <label for="oa">Show only Open Access work</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="hacker" name="hacker"
+                                   onchange="hacker_changed()" unchecked>
+                            <label for="hacker">I'm a hacker</label>
                         </div>
                         <div>
                             <p>Search in specific conference/journal</p>
