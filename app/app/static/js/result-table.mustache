@@ -1,18 +1,23 @@
-<tr class="
+<tr
 
 {{^success}}
-    table-dark
+    class="table-danger"
 {{/success}}
 
 {{#openaccess}}
-    table-success openaccess
+    class="table-success openaccess"
 {{/openaccess}}
 {{^openaccess}}
-    table-info
+    class="table-info paywall"
 {{/openaccess}}
-">
+>
 
+    {{#success}}
     <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
+    {{/success}}
+    {{^success}}
+    <th scope="row"><a target="_blank" href="https://portal.issn.org/resource/ISSN/{{issn}}">{{issn}}</a></th>
+    {{/success}}
     <td>{{year}}</td>
     <td>{{title}}</td>
     {{#success}}
@@ -24,12 +29,12 @@
     <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
     <td class="xref">{{affil}}</td>
     <td class="xref"><i class="flag {{country}}"></i></td>
-    <td><a target="_blank"
+    <td>
         {{#openaccess}}
-            href="https://www.doi.org/{{doi}}">Open Access!</a></td>
+            <a target="_blank" href="https://www.doi.org/{{doi}}">Open Access!</a></td>
         {{/openaccess}}
         {{^openaccess}}
-            href="https://sci-hub.se/{{full_doi}}">Download</a></td>
+            <a target="_blank" href="https://sci-hub.se/{{full_doi}}" class="hacker">Paywall</a></td>
         {{/openaccess}}
     <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
     {{/success}}
@@ -39,10 +44,10 @@
         <td class="ref_count xref"></td>
         <td class="subject xref"></td>
         <td>{{pub_title}}</td>
-        <td></td>
+        <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
         <td class="xref"></td>
         <td class="xref"></td>
-        <td>-</td>
-        <td>-</td>
+        <td><a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar Link</a></td>
+         <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
     {{/success}}
 </tr>

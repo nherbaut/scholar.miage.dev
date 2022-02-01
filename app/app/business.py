@@ -178,18 +178,23 @@ def load_response_from_scpus(bucket, entry):
 
     first_author_country = get_first_auth_country(entry)
     first_affiliation = get_first_auth_affil(entry)
+    issn = entry.get("prism:issn", None)
+    if not issn:
+        issn = entry.get("prism:eIssn", "")
 
-    bucket.append({"doi": entry.get("prism:doi", ""), "title": entry.get("dc:title", "-"), "year": year,
-                   "x-precise-date": str(coverDate),
-                   "pubtitle": entry.get('prism:publicationName', ""),
+    bucket.append(
+        {"doi": entry.get("prism:doi", ""), "issn": issn, "title": entry.get("dc:title", "-"),
+         "year": year,
+         "x-precise-date": str(coverDate),
+         "pubtitle": entry.get('prism:publicationName', ""),
 
-                   "X-OA": entry.get('openaccessFlag', False),
-                   "X-FirstAuthor": entry.get('dc:creator', "unknown"),
-                   "X-Country-First-Author": first_author_country,
-                   "X-Country-First-affiliation": first_affiliation,
-                   "X-FirstAuthor-ORCID": "",
-                   "X-authors": entry.get('dc:creator', "unknown"),
-                   });
+         "X-OA": entry.get('openaccessFlag', False),
+         "X-FirstAuthor": entry.get('dc:creator', "unknown"),
+         "X-Country-First-Author": first_author_country,
+         "X-Country-First-affiliation": first_affiliation,
+         "X-FirstAuthor-ORCID": "",
+         "X-authors": entry.get('dc:creator', "unknown"),
+         });
 
 
 def get_first_auth_affil(entry):

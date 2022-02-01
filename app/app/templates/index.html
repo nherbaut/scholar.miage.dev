@@ -109,9 +109,9 @@ journal = { { ${content["pubtitle"]} } },
 
             document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
-            document.getElementById("hacker").checked = window.localStorage.getItem("hacker") === 'true';
 
-            if (document.getElementById("xref").checked || document.getElementById("oa").checked || document.getElementById("hacker").checked) {
+
+            if (document.getElementById("xref").checked || document.getElementById("oa").checked ) {
                 $("#options").collapse('show');
             }
 
@@ -144,10 +144,9 @@ journal = { { ${content["pubtitle"]} } },
         });
 
         socket.on('count', (count) => {
-            if(count>1000) {
-                document.getElementById("main_button").value = "fetch the first 1000 (" + count+" breaches the mimit)";
-            }
-            else {
+            if (count > 1000) {
+                document.getElementById("main_button").value = "fetch the first 1000 (" + count + " breaches the mimit)";
+            } else {
                 document.getElementById("main_button").value = "fetch " + count + " results ";
             }
             handle_submit = sendDoisRequest;
@@ -236,6 +235,7 @@ journal = { { ${content["pubtitle"]} } },
                 success: doi_item["doi"] != "" ? true : false,
                 openaccess: get(doi_item, "X-OA", false) != false,
                 doi: doi_item["doi"],
+                issn: doi_item["issn"],
                 full_doi: full_doi,
                 year: doi_item["year"],
                 title: doi_item["title"],
@@ -345,22 +345,21 @@ journal = { { ${content["pubtitle"]} } },
             querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
         }
 
-        function hacker_changed(){
-            document.querySelectorAll('link.hacker').forEach(function (node) {
-            node.disabled = document.getElementById("hacker").checked;
 
-
-            });
-            window.localStorage.setItem("hacker", document.getElementById("hacker").checked);
-        }
         function oa_changed() {
 
 
-            document.querySelectorAll('link.oa').forEach(function (node) {
-                node.disabled = !document.getElementById("oa").checked;
-                window.localStorage.setItem("oa", document.getElementById("oa").checked);
+            document.querySelectorAll('tr.paywall').forEach(function (node) {
+                if(document.getElementById("oa").checked){
+                    node.style.display='none';
+                }
+                else{
+                    node.style.display='table-row';
+                }
+
 
             });
+            window.localStorage.setItem("oa", document.getElementById("oa").checked);
 
         }
 
@@ -393,6 +392,14 @@ journal = { { ${content["pubtitle"]} } },
                 aria-expanded="false" aria-controls="collapseExample">
             Release Notes
         </button>
+
+         <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#word_cloud"
+                aria-expanded="false" aria-controls="collapseExample">
+            Popular search terms<span
+                class="badge badge-warning">beta</span>
+        </button>
+
+
         <button class="btn btn-secondary" type="button"
                 onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
             Query Language Doc
@@ -439,6 +446,7 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
+                <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for documents without DOI</li>
                 <li>1.2.0 Country and affiliation for first author, added preset <a href="/sources">conf/journal
                     restrictions</a></li>
                 <li>1.1.0 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
@@ -449,6 +457,14 @@ journal = { { ${content["pubtitle"]} } },
                 <li>1.0.1 Added <a href="/history">History</a></li>
                 <li>1.0.0 Initial version</li>
             </ul>
+        </div>
+    </div>
+    <div class="collapse" id="word_cloud">
+        <div class="card card-body">
+
+            <h2>Most search terms (last 200 queries)</h2>
+            <img src="https://scholar-wc.miage.dev/word-cloud?limit=200"/>
+
         </div>
     </div>
 
@@ -497,11 +513,7 @@ journal = { { ${content["pubtitle"]} } },
                                    onchange="oa_changed()" unchecked>
                             <label for="oa">Show only Open Access work</label>
                         </div>
-                        <div>
-                            <input type="checkbox" id="hacker" name="hacker"
-                                   onchange="hacker_changed()" unchecked>
-                            <label for="hacker">I'm a hacker</label>
-                        </div>
+
                         <div>
                             <p>Search in specific conference/journal</p>
                             <select id="source_select">
@@ -542,8 +554,7 @@ journal = { { ${content["pubtitle"]} } },
         <span id="dlresultsxsl" hidden>
         <input class="btn btn-success" type="button" value="export in spreadsheet"
                onclick="downloadExcel('xlsx')"
-        /><span
-                class="badge badge-warning">beta</span>
+        />
         </span>
         <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
                onclick="createRssLink()"
@@ -568,7 +579,7 @@ journal = { { ${content["pubtitle"]} } },
 
     <table id="doitable" class="table table-bordered table-hover sortable w-auto">
         <thead>
-        <td>DOI</td>
+        <td>Identifier</td>
         <td>Date</td>
         <td>Title</td>
         <td class="xref xref-abstract" style="width:200px">Abstract</td>
@@ -589,6 +600,9 @@ journal = { { ${content["pubtitle"]} } },
         </tbody>
 
     </table>
+
+
+
 </div>
 
 </body>

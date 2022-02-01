@@ -159,10 +159,18 @@ def home():
 
 @app.route('/history', methods=["GET"])
 def history():
-    queries = db.session.query(ScpusRequest).all()
+    limit = request.args.get('limit')
+    if limit is None:
+        limit = 2000
+    queries = db.session.query(ScpusRequest).order_by(ScpusRequest.timestamp.desc()).limit(limit).all()
     accepts = request.headers["Accept"].split(",")
     if "application/json" in accepts:
-        return json.dumps([q.query for q in queries])
+        return app.response_class(
+            response=json.dumps([q.query for q in queries]),
+            status=200,
+            mimetype='application/json'
+        )
+
     else:
         return render_template('history.html', queries=queries)
 
