@@ -157,6 +157,31 @@ def home():
     return render_template('index.html', sources=get_sources())
 
 
+@app.route("/cite", methods=["GET"])
+def cite():
+    doi = request.args.get('doi')
+    style = request.args.get('style')
+    if style == "bibtex":
+        accept = "application/x-bibtex"
+        headers = {'Accept': f"{accept}"}
+    else:
+        style = "apa" if style is None else style
+        accept = "text/x-bibliography"
+        headers = {'Accept': f"{accept}; style={style}"}
+
+
+    resp = requests.get(f"https://doi.org/{doi}", headers=headers)
+    if resp.status_code == 200:
+        return app.response_class(
+            response=json.dumps({"doi": doi, "citation": resp.content.decode("utf-8")}),
+            status=200,
+            mimetype='application/json'
+        )
+
+    else:
+        abort(resp.status_code)
+
+
 @app.route('/history', methods=["GET"])
 def history():
     limit = request.args.get('limit')

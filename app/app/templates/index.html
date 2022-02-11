@@ -111,7 +111,7 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
 
 
-            if (document.getElementById("xref").checked || document.getElementById("oa").checked ) {
+            if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
                 $("#options").collapse('show');
             }
 
@@ -312,8 +312,39 @@ journal = { { ${content["pubtitle"]} } },
         function copyPermalink() {
 
             socket.emit('create_permalink', {query: document.getElementById("querybox").value});
+        }
 
+        function get_doi_cite(elt) {
 
+            let style="apa";
+            if(document.getElementById("cite_bib").checked){
+                style="bibtex";
+            }
+
+            const my_doi = elt.attributes.doi.value;
+            var query = ".cite_btn[doi='" + my_doi + "']";
+            document.querySelector(query).value = "Retrieving!";
+            document.querySelector(query).classList.remove("btn-info");
+            document.querySelector(query).classList.add("btn-warning");
+            fetch("/cite?doi=" + my_doi+"&style="+style)
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json()
+                })
+                .then(function (response) {
+                    var query = ".cite_btn[doi='" + response["doi"] + "']";
+                    document.querySelector(query).value = "Copied!";
+                    document.querySelector(query).classList.remove("btn-warning");
+                    document.querySelector(query).classList.add("btn-success");
+                    setTimeout(function(){
+                        document.querySelector(query).value = "Copy Citation";
+                        document.querySelector(query).classList.remove("btn-success");
+                        document.querySelector(query).classList.add("btn-info");
+                    }, 3.0*1000)
+                    navigator.clipboard.writeText(response["citation"]);
+                });
         }
 
         function createRssLink() {
@@ -346,15 +377,15 @@ journal = { { ${content["pubtitle"]} } },
         }
 
 
+
         function oa_changed() {
 
 
             document.querySelectorAll('tr.paywall').forEach(function (node) {
-                if(document.getElementById("oa").checked){
-                    node.style.display='none';
-                }
-                else{
-                    node.style.display='table-row';
+                if (document.getElementById("oa").checked) {
+                    node.style.display = 'none';
+                } else {
+                    node.style.display = 'table-row';
                 }
 
 
@@ -362,6 +393,8 @@ journal = { { ${content["pubtitle"]} } },
             window.localStorage.setItem("oa", document.getElementById("oa").checked);
 
         }
+
+
 
 
     </script>
@@ -393,7 +426,7 @@ journal = { { ${content["pubtitle"]} } },
             Release Notes
         </button>
 
-         <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#word_cloud"
+        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#word_cloud"
                 aria-expanded="false" aria-controls="collapseExample">
             Popular search terms<span
                 class="badge badge-warning">beta</span>
@@ -446,7 +479,11 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
-                <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for documents without DOI</li>
+                <li>1.4.0 export citation directly as txt or bitex
+                </li>
+                <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for
+                    documents without DOI
+                </li>
                 <li>1.2.0 Country and affiliation for first author, added preset <a href="/sources">conf/journal
                     restrictions</a></li>
                 <li>1.1.0 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
@@ -512,6 +549,12 @@ journal = { { ${content["pubtitle"]} } },
                             <input type="checkbox" id="oa" name="oa"
                                    onchange="oa_changed()" unchecked>
                             <label for="oa">Show only Open Access work</label>
+                        </div>
+
+                      <div>
+                            <input type="checkbox" id="cite_bib" name="cite_bib"
+                                   onchange="cite_bib_changed()" unchecked>
+                            <label for="cite_bib">Citation as bibtex</label>
                         </div>
 
                         <div>
@@ -590,8 +633,9 @@ journal = { { ${content["pubtitle"]} } },
         <td>Author</td>
         <td class="xref">Affiliation</td>
         <td class="xref">country</td>
-        <td>Sci-Hb link</td>
+        <td>Extra link</td>
         <td>Snowball Link</td>
+        <td>Cite</td>
 
         </thead>
         <tbody id="doi_table">
@@ -600,7 +644,6 @@ journal = { { ${content["pubtitle"]} } },
         </tbody>
 
     </table>
-
 
 
 </div>

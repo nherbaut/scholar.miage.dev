@@ -37,6 +37,13 @@
             <a target="_blank" href="https://sci-hub.se/{{full_doi}}" class="hacker">Paywall</a></td>
         {{/openaccess}}
     <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+    <td >
+
+         <input class="btn btn-info cite_btn" doi="{{doi}}" id="permalink" type="button" value="Copy Citation"
+               onclick="get_doi_cite(this)"
+               />
+
+    </td>
     {{/success}}
     {{^success}}
         <td class="xref xref-abstract" style="width: 50%"></td>
@@ -49,5 +56,6 @@
         <td class="xref"></td>
         <td><a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar Link</a></td>
          <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+        <td>-</td>
     {{/success}}
 </tr>
