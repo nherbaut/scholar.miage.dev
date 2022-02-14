@@ -1,11 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css"
-          integrity="sha384-B0vP5xmATw1+K9KRQjQERJvTumQW0nPEzvF6L/Z6nronJ3oUOFUFpCjEUQouq2+l" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+          integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
     <link rel="stylesheet" href="static/css/style.css">
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
+    <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
     <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script src="static/contrib/js/mustache.js"></script>
@@ -15,25 +16,20 @@
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
             rel="stylesheet"
     />
-    <!-- Google Fonts -->
-    <link
-            href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
-            rel="stylesheet"
-    />
-    <!-- MDB -->
-    <link
-            href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/3.6.0/mdb.min.css"
-            rel="stylesheet"
-    />
+
     <meta charset="UTF-8">
     <title>MIAGE Scholar</title>
     <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
-            integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj"
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+            integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
             crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"
-            integrity="sha384-Piv4xVNRyMGpqkS2by6br4gNJ7DXjqk09RmUpJ8jgGtD7zP9yug3goQfGII0yAns"
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"
+            integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
             crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"
+            integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+            crossorigin="anonymous"></script>
+
 
     <script type="text/javascript" src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
@@ -108,6 +104,7 @@ journal = { { ${content["pubtitle"]} } },
         function onLoaded(evt) {
 
             document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
+            document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
 
 
@@ -316,9 +313,9 @@ journal = { { ${content["pubtitle"]} } },
 
         function get_doi_cite(elt) {
 
-            let style="apa";
-            if(document.getElementById("cite_bib").checked){
-                style="bibtex";
+            let style = "apa";
+            if (document.getElementById("cite_bib").checked) {
+                style = "bibtex";
             }
 
             const my_doi = elt.attributes.doi.value;
@@ -326,7 +323,7 @@ journal = { { ${content["pubtitle"]} } },
             document.querySelector(query).value = "Retrieving!";
             document.querySelector(query).classList.remove("btn-info");
             document.querySelector(query).classList.add("btn-warning");
-            fetch("/cite?doi=" + my_doi+"&style="+style)
+            fetch("/cite?doi=" + my_doi + "&style=" + style)
                 .then(function (response) {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
@@ -338,11 +335,11 @@ journal = { { ${content["pubtitle"]} } },
                     document.querySelector(query).value = "Copied!";
                     document.querySelector(query).classList.remove("btn-warning");
                     document.querySelector(query).classList.add("btn-success");
-                    setTimeout(function(){
+                    setTimeout(function () {
                         document.querySelector(query).value = "Copy Citation";
                         document.querySelector(query).classList.remove("btn-success");
                         document.querySelector(query).classList.add("btn-info");
-                    }, 3.0*1000)
+                    }, 3.0 * 1000)
                     navigator.clipboard.writeText(response["citation"]);
                 });
         }
@@ -376,7 +373,9 @@ journal = { { ${content["pubtitle"]} } },
             querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
         }
 
-
+        function cite_bib_changed(){
+            window.localStorage.setItem("cite_bib", document.getElementById("cite_bib").checked);
+        }
 
         function oa_changed() {
 
@@ -393,8 +392,6 @@ journal = { { ${content["pubtitle"]} } },
             window.localStorage.setItem("oa", document.getElementById("oa").checked);
 
         }
-
-
 
 
     </script>
@@ -428,23 +425,27 @@ journal = { { ${content["pubtitle"]} } },
 
         <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#word_cloud"
                 aria-expanded="false" aria-controls="collapseExample">
-            Popular search terms<span
-                class="badge badge-warning">beta</span>
+            Popular search terms
         </button>
 
 
-        <button class="btn btn-secondary" type="button"
+        <button class="btn btn-light" type="button"
                 onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
             Query Language Doc
         </button>
-        <button class="btn btn-secondary" type="button"
+        <button class="btn btn-light" type="button"
                 onclick="window.location='https://github.com/nherbaut/scholar.miage.dev';">
             Sources
         </button>
-        <button class="btn btn-secondary" type="button"
+        <button class="btn btn-light" type="button"
                 onclick="window.location='https://github.com/nherbaut/scholar.miage.dev/issues';">
             Repport a Bug
         </button>
+    <div class="custom-control custom-switch">
+        <input type="checkbox" class="custom-control-input" id="darkSwitch"/>
+        <label class="custom-control-label" for="darkSwitch">Dark Mode</label><span
+                class="badge badge-warning">beta</span>
+    </div>
     </p>
     <div class="collapse" id="import_procedure">
         <div class="card card-body">
@@ -551,7 +552,7 @@ journal = { { ${content["pubtitle"]} } },
                             <label for="oa">Show only Open Access work</label>
                         </div>
 
-                      <div>
+                        <div>
                             <input type="checkbox" id="cite_bib" name="cite_bib"
                                    onchange="cite_bib_changed()" unchecked>
                             <label for="cite_bib">Citation as bibtex</label>
@@ -649,9 +650,8 @@ journal = { { ${content["pubtitle"]} } },
 </div>
 
 </body>
-<script>
 
-    xref_changed();
-</script>
+
+<script src="static/contrib/js/dark-mode-switch.min.js"></script>
 
 </html>

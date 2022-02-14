@@ -1,0 +1,45 @@
+[data-theme="dark"], [data-theme="dark"] .table, [data-theme="dark"] .dataTables_filter, [data-theme="dark"] .card {
+  background-color: #111 !important;
+  color: #eee !important;
+
+}
+
+[data-theme="dark"] a{
+  color: #111188 !important;
+}
+
+[data-theme="dark"] #doitable{
+  background-color: #111 !important;
+  color: #eee;
+}
+
+[data-theme="dark"] .table-info > th,[data-theme="dark"] .table-info > tr,[data-theme="dark"] .table-info > td{
+  background-color: #115555 !important;
+   border-color: #bbbbbb !important;
+}
+
+[data-theme="dark"] .table-success > th,[data-theme="dark"] .table-success > tr,[data-theme="dark"] .table-success > td{
+  background-color: #118811 !important;
+   border-color: #bbbbbb !important;
+}
+
+[data-theme="dark"] .table-danger > th,[data-theme="dark"] .table-danger > tr,[data-theme="dark"] .table-danger > td{
+  background-color: #441111 !important;
+   border-color: #bbbbbb !important;
+}
+
+[data-theme="dark"] .bg-light {
+  background-color: #333 !important;
+}
+
+[data-theme="dark"] .bg-white {
+  background-color: #000 !important;
+}
+
+[data-theme="dark"] .bg-black {
+  background-color: #eee !important;
+}
+
+[data-theme="dark"] .jumbotron {
+  background-color: #333 !important;
+}
