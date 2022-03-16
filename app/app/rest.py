@@ -2,7 +2,8 @@ import requests
 
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource
-from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss, get_sources
+from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss, get_sources, \
+    get_ref_for_doi
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
 # from mendeley.session import MendeleySession
@@ -157,6 +158,22 @@ def home():
     return render_template('index.html', sources=get_sources())
 
 
+@app.route("/doi/<doi1>/<doi2>", methods=["GET"])
+def get_info_for_doi(doi1, doi2):
+    get_ref_for_doi(doi1 + "/" + doi2)
+
+
+@app.route("/doi", methods=["GET"])
+def get_doi_for_title():
+    title = request.args.get('title')
+    query=f"TITLE({title})"
+    count=count_results_for_query(query)
+    dois=get_results_for_query(count,query,False)
+    return app.response_class(
+        response=json.dumps(dois[0]["doi"]),
+        status=200,
+        mimetype='application/json'
+    )
 @app.route("/cite", methods=["GET"])
 def cite():
     doi = request.args.get('doi')
@@ -168,7 +185,6 @@ def cite():
         style = "apa" if style is None else style
         accept = "text/x-bibliography"
         headers = {'Accept': f"{accept}; style={style}"}
-
 
     resp = requests.get(f"https://doi.org/{doi}", headers=headers)
     if resp.status_code == 200:
@@ -202,9 +218,22 @@ def history():
 
 @app.route('/snowball', methods=["GET"])
 def snowball():
-    title = request.args.get('title')
+    accepts = request.headers["Accept"].split(",")
+    if "application/json" in accepts:
+        doi = request.args.get('doi')
+        query = f"DOI({doi})"
+        count = count_results_for_query(query)
+        dois = get_results_for_query(count, query, False)
+        return app.response_class(
+            response=json.dumps([doi["doi"] for doi in dois]),
+            status=200,
+            mimetype='application/json'
+        )
 
-    return render_template('index.html', query=f"REFTITLE(\"{title}\")", sources=get_sources())
+
+    else:
+        title = request.args.get('title')
+        return render_template('index.html', query=f"REFTITLE(\"{title}\")", sources=get_sources())
 
 
 @app.route('/sameauthor', methods=["GET"])

@@ -19,6 +19,7 @@ REDIS_URL = os.environ.get("REDIS_URL", "")
 #MENDELEY_SECRET = os.environ.get("MENDELEY_SECRET", "")
 
 SCPUS_BACKEND = f'https://api.elsevier.com/content/search/scopus?start=%d&count=%d&query=%s&apiKey={API_KEY}'
+SCPUS_ABTRACT_BACKEND = f'https://api.elsevier.com/content/abstract/doi/%s?apiKey={API_KEY}'
 app.config.from_object(Config())
 
 

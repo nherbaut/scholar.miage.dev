@@ -9,7 +9,7 @@ import urllib.parse
 from requests_cache import CachedSession
 from datetime import timedelta
 from app.model import PublicationSource
-from app.main import SCPUS_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
+from app.main import SCPUS_BACKEND,SCPUS_ABTRACT_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
 
 import logging
 
@@ -121,6 +121,10 @@ def update_feed(dois, feed_content):
                                          "x-added-on": datetime.datetime.utcnow(),
                                          "description": f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
+def get_ref_for_doi(doi):
+    resp = requests.get(SCPUS_ABTRACT_BACKEND%doi, headers={"Accept":"application/json"})
+    result=resp.json()
+    print(result)
 
 def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
     dois = []
@@ -187,7 +191,7 @@ def load_response_from_scpus(bucket, entry):
          "year": year,
          "x-precise-date": str(coverDate),
          "pubtitle": entry.get('prism:publicationName', ""),
-
+         "scopis_id":entry.get('dc:identifier',""),
          "X-OA": entry.get('openaccessFlag', False),
          "X-FirstAuthor": entry.get('dc:creator', "unknown"),
          "X-Country-First-Author": first_author_country,
