@@ -5,13 +5,16 @@ import re
 import dateparser
 import pytz
 import urllib.parse
-
+import csv
+from sqlalchemy import or_
 from requests_cache import CachedSession
 from datetime import timedelta
-from app.model import PublicationSource
-from app.main import SCPUS_BACKEND,SCPUS_ABTRACT_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
+from app.model import PublicationSource, Ranking
+from app.main import SCPUS_BACKEND, SCPUS_ABTRACT_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
 
 import logging
+
+logger = logging.getLogger('business')
 
 MAX_RESULTS_QUERY = 1000
 
@@ -74,10 +77,13 @@ try:
     if REDIS_URL != "":
         redis_host, redis_port = REDIS_URL.split(":")
         session_xref, session_scpus = setup_redis_cache(redis_host, redis_port)
+        logger.info("using redis cache")
     else:
         session_xref, session_scpus = setup_fs_cache()
+        logger.info("using rs cache")
 except:
     session_xref, session_scpus = setup_fs_cache()
+    logger.info("using rs cache")
 
 
 def generate_rss(feed_items, id="id", query="query"):
@@ -121,10 +127,86 @@ def update_feed(dois, feed_content):
                                          "x-added-on": datetime.datetime.utcnow(),
                                          "description": f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
+
+def get_ranking(conf_or_journal):
+    conf_or_journal_lower = conf_or_journal.lower()
+    conf_or_journal_lower = conf_or_journal_lower.replace("&amp;", "and")
+    conf_or_journal_lower = conf_or_journal_lower.replace("&", "and")
+    rank_dto = lambda x: {"title": x.title, "acronym": x.acr, "source": x.source,
+                          "rank": x.rank, "hindex": x.hindex}
+
+    # try to find by acronym
+    acrs = set()
+    acrs.update(re.findall("\(([A-Z]+)\)", conf_or_journal))
+    acrs.update(re.findall("([A-Z]{3,})(?:\s|$)", conf_or_journal))
+    if len(acrs) > 0:
+        ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
+        if len(ranks) > 0:
+            return rank_dto(ranks[0])
+
+    conf_or_journal_lower = conf_or_journal_lower.lower()
+    ranks = db.session.query(Ranking)
+    for word in conf_or_journal_lower.split(" "):
+        ranks = ranks.filter(Ranking.title.contains(word))
+
+    ranks = ranks.order_by(Ranking.source.desc()).all()
+    for rank in ranks:
+        if conf_or_journal_lower == rank.title.lower():
+            return rank_dto(rank)
+    else:
+        return None
+
+
+def refresh_ranking():
+    for rank in db.session.query(Ranking).all():
+        db.session.delete(rank)
+    db.session.commit()
+    with open('app/app/ranking/CORE2021.csv', newline='\n') as csvfile:
+        core_conf_reader = csv.reader(csvfile, delimiter=',')
+        for row in core_conf_reader:
+            if row[0].startswith("#"):
+                continue
+            ranking = Ranking(id=int(row[0]),
+                              type="c",
+                              title=row[1].lower(),
+                              acr=row[2],
+                              source=row[3],
+                              rank=row[4])
+            db.session.add(ranking)
+        db.session.commit()
+    with open('app/app/ranking/CORE2018.csv', newline='\n') as csvfile:
+        core_conf_reader = csv.reader(csvfile, delimiter=',')
+        for row in core_conf_reader:
+            if row[0].startswith("#"):
+                continue
+            ranking = Ranking(id=int(row[0]),
+                              type="c",
+                              title=row[1].lower(),
+                              acr=row[2],
+                              source=row[3],
+                              rank=row[4])
+            db.session.add(ranking)
+        db.session.commit()
+    with open('app/app/ranking/scimagojr2020.csv', newline='\n') as csvfile:
+        reader = csv.DictReader(csvfile, delimiter=';')
+
+        for row in reader:
+            ranking = Ranking(id=row["Sourceid"],
+                              type="j",
+                              title=row["Title"].lower(),
+                              acr="",
+                              source="scimagojr2020",
+                              rank=row["SJR Best Quartile"],
+                              hindex=row["H index"])
+            db.session.add(ranking)
+        db.session.commit()
+
+
 def get_ref_for_doi(doi):
-    resp = requests.get(SCPUS_ABTRACT_BACKEND%doi, headers={"Accept":"application/json"})
-    result=resp.json()
+    resp = requests.get(SCPUS_ABTRACT_BACKEND % doi, headers={"Accept": "application/json"})
+    result = resp.json()
     print(result)
+
 
 def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
     dois = []
@@ -191,7 +273,7 @@ def load_response_from_scpus(bucket, entry):
          "year": year,
          "x-precise-date": str(coverDate),
          "pubtitle": entry.get('prism:publicationName', ""),
-         "scopis_id":entry.get('dc:identifier',""),
+         "scopis_id": entry.get('dc:identifier', ""),
          "X-OA": entry.get('openaccessFlag', False),
          "X-FirstAuthor": entry.get('dc:creator', "unknown"),
          "X-Country-First-Author": first_author_country,
@@ -232,11 +314,24 @@ def load_response_from_xref(bucket, xref_json_resp, entry):
         first_author = f"{first_author[0]['family']}, {first_author[0]['given'][0]}"
     precise_date = pytz.timezone("UTC").localize(
         dateparser.parse("-".join([str(date) for date in xref_json_resp["created"]["date-parts"][0]])))
+
+    ranking_info = get_ranking(xref_json_resp["container-title"][0])
+    if ranking_info is not None:
+        pub_rank = ranking_info["rank"]
+        rank_source = f"{ranking_info['source']}"
+        hindex = f"{ranking_info['hindex']}"
+    else:
+        pub_rank = "?"
+        rank_source = ""
+        hindex=""
+
     bucket.append({"doi": xref_json_resp["DOI"], "title": xref_json_resp["title"][0],
                    "year": xref_json_resp["created"]["date-parts"][0][0],
                    "x-precise-date": str(precise_date),
-                   "pubtitle": entry.get('prism:publicationName', ""),
-
+                   "pubtitle": xref_json_resp["container-title"][0],
+                   "pub_rank": pub_rank,
+                   "rank_source": rank_source,
+                   "hindex": hindex,
                    "X-OA": entry.get('openaccessFlag', False),
                    "X-FirstAuthor": first_author,
                    "X-Country-First-Author": first_author_country,

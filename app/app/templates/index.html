@@ -32,7 +32,6 @@
             crossorigin="anonymous"></script>
 
 
-
     <script type="text/javascript" src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
 
@@ -177,13 +176,21 @@ journal = { { ${content["pubtitle"]} } },
 
             document.getElementById("rss").removeAttribute("hidden");
 
-            table = $('table').DataTable({
-                "paging": false,
-                scrollY: '50vh',
-                scrollCollapse: true,
-                "ordering": true,
-                "order": [[1, "desc"]]
-            });
+            try {
+                table = $('table').DataTable({
+                    "paging": false,
+                    scrollY: '50vh',
+                    scrollCollapse: true,
+                    "ordering": false,
+                    columnDefs: [
+                        {orderable: true, targets: 5}
+                    ],
+                    "order": [[1, "desc"]]
+                });
+            }
+            catch (e) {
+                console.log(e);
+            }
 
 
         })
@@ -243,6 +250,9 @@ journal = { { ${content["pubtitle"]} } },
                 ref_count: get(doi_item, "X-refcount", ""),
                 subject: get(doi_item, "X-subject", []),
                 pub_title: doi_item["pubtitle"],
+                pub_rank: doi_item["pub_rank"],
+                rank_source: doi_item["rank_source"],
+                hindex: doi_item["hindex"],
                 same_auth_link: firstAuthorLink,
                 name: doi_item["X-FirstAuthor"],
                 affil: doi_item["X-Country-First-affiliation"],
@@ -375,7 +385,7 @@ journal = { { ${content["pubtitle"]} } },
             querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
         }
 
-        function cite_bib_changed(){
+        function cite_bib_changed() {
             window.localStorage.setItem("cite_bib", document.getElementById("cite_bib").checked);
         }
 
@@ -446,7 +456,7 @@ journal = { { ${content["pubtitle"]} } },
     <div class="custom-control custom-switch">
         <input type="checkbox" class="custom-control-inloput" id="darkSwitch"/>
         <label class="custom-control-label" for="darkSwitch">Dark Mode</label><span
-                class="badge badge-warning">beta</span>
+            class="badge badge-warning">beta</span>
     </div>
     </p>
     <div class="collapse" id="import_procedure">
@@ -497,14 +507,6 @@ journal = { { ${content["pubtitle"]} } },
                 <li>1.0.1 Added <a href="/history">History</a></li>
                 <li>1.0.0 Initial version</li>
             </ul>
-        </div>
-    </div>
-    <div class="collapse" id="word_cloud">
-        <div class="card card-body">
-
-            <h2>Most search terms (last 200 queries)</h2>
-            <img src="https://scholar-wc.miage.dev/word-cloud?limit=200"/>
-
         </div>
     </div>
 
@@ -633,6 +635,8 @@ journal = { { ${content["pubtitle"]} } },
         <td class="ref_count xref">Reference Count</td>
         <td class="subject xref">Subjects</td>
         <td>Publication Title</td>
+        <td class="xref">Ranking</td>
+        <td class="xref">H-Index</td>
         <td>Author</td>
         <td class="xref">Affiliation</td>
         <td class="xref">country</td>

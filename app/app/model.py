@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, MetaData
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary, Float
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.config import Config
@@ -12,6 +12,17 @@ engine = create_engine(Config().SQLALCHEMY_DATABASE_URI, echo=True)
 db_session = scoped_session(sessionmaker(autocommit=False,
                                          autoflush=False,
                                          bind=engine))
+
+
+class Ranking(Base):
+    __tablename__ = "ranking"
+    id = Column(Integer, primary_key=True)
+    type = Column(String(1), primary_key=True)
+    title = Column(String(128))
+    acr = Column(String(64))
+    source = Column(String(64), primary_key=True)
+    rank = Column(String(128))
+    hindex = Column(Float, default=None)
 
 
 class PublicationSource(Base):

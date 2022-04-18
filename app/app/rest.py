@@ -3,7 +3,7 @@ import requests
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource
 from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss, get_sources, \
-    get_ref_for_doi
+    get_ref_for_doi, get_ranking, refresh_ranking
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
 # from mendeley.session import MendeleySession
@@ -166,14 +166,18 @@ def get_info_for_doi(doi1, doi2):
 @app.route("/doi", methods=["GET"])
 def get_doi_for_title():
     title = request.args.get('title')
-    query=f"TITLE({title})"
-    count=count_results_for_query(query)
-    dois=get_results_for_query(count,query,False)
+    query = f"TITLE({title})"
+    count = count_results_for_query(query)
+    dois = get_results_for_query(count, query, False)
+    if (len(dois) == 0):
+        abort(404)
     return app.response_class(
         response=json.dumps(dois[0]["doi"]),
         status=200,
         mimetype='application/json'
     )
+
+
 @app.route("/cite", methods=["GET"])
 def cite():
     doi = request.args.get('doi')
@@ -216,12 +220,55 @@ def history():
         return render_template('history.html', queries=queries)
 
 
+@app.route("/refresh_ranking", methods=["GET"])
+def refresh_ranking_rest():
+    refresh_ranking()
+    return "UPDATED", 204
+
+
+@app.route("/rank", methods=["GET"])
+def getRanking():
+    query = request.args.get("query")
+    type = request.args.get("type")
+    res = get_ranking(query)
+
+    if type=="img":
+
+        if res is None:
+            return redirect("static/img/qm.png", code=302)
+        if res["rank"]=="A*":
+            return redirect("static/img/as.png", code=302)
+        if res["rank"]=="A":
+            return redirect("static/img/a.png", code=302)
+        if res["rank"]=="B":
+            return redirect("static/img/b.png", code=302)
+        if res["rank"]=="C":
+            return redirect("static/img/c.png", code=302)
+        return redirect("static/img/qm.png", code=302)
+
+    if type=="txt":
+        if res is None:
+            return "?"
+        else:
+            return res["rank"]
+
+    else:
+        if res is not None:
+            return app.response_class(
+                response=json.dumps(res),
+                status=200,
+                mimetype='application/json'
+            )
+        else:
+            return abort(404, description="No Ranking Available")
+
+
 @app.route('/snowball', methods=["GET"])
 def snowball():
     accepts = request.headers["Accept"].split(",")
     if "application/json" in accepts:
-        doi = request.args.get('doi')
-        query = f"DOI({doi})"
+        title = request.args.get('title')
+        query = f"REFTITLE(\"{title}\")"
         count = count_results_for_query(query)
         dois = get_results_for_query(count, query, False)
         return app.response_class(
