@@ -1,51 +1,57 @@
 <tr
 
-{{^success}}
+    {{^success}}
     class="table-danger"
-{{/success}}
+    {{/success}}
 
-{{#openaccess}}
+    {{#openaccess}}
     class="table-success openaccess"
-{{/openaccess}}
-{{^openaccess}}
+    {{/openaccess}}
+    {{^openaccess}}
     class="table-info paywall"
-{{/openaccess}}
+    {{/openaccess}}
 >
 
     {{#success}}
-    <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
+        <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
     {{/success}}
     {{^success}}
-    <th scope="row"><a target="_blank" href="https://portal.issn.org/resource/ISSN/{{issn}}">{{issn}}</a></th>
+        <th scope="row"><a target="_blank" href="https://portal.issn.org/resource/ISSN/{{issn}}">{{issn}}</a></th>
     {{/success}}
     <td>{{year}}</td>
     <td>{{title}}</td>
     {{#success}}
-    <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td>
-    <td class="cite_count xref">{{cite_count}}</td>
-    <td class="ref_count xref">{{ref_count}}</td>
-    <td class="subject xref">{{subject}}</td>
-    <td>{{pub_title}}</td>
-    <td class="xref">{{pub_rank}} ({{rank_source}})</td>
-    <td class="xref">{{hindex}}</td>
-    <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
-    <td class="xref">{{affil}}</td>
-    <td class="xref"><i class="flag {{country}}"></i></td>
+        <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td>
+        <td class="cite_count xref">{{cite_count}}</td>
+        <td class="ref_count xref">{{ref_count}}</td>
+        <td class="subject xref">{{subject}}</td>
+        <td>{{pub_title}}</td>
+    {{#rank_source}}
+        <td class="xref">{{pub_rank}} ({{rank_source}})</td>
+    {{/rank_source}}
+    {{^rank_source}}
+        <td class="xref"></td>
+    {{/rank_source}}
+        <td class="xref">{{hindex}}</td>
+        <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
+        <td class="xref">{{affil}}</td>
+        <td class="xref"><span class="flag-icon flag-icon-{{country}}"></span></span></td>
     <td>
         {{#openaccess}}
             <a target="_blank" href="https://www.doi.org/{{doi}}">Open Access!</a></td>
         {{/openaccess}}
         {{^openaccess}}
-            <a target="_blank" href="https://sci-hub.se/{{full_doi}}" class="hacker">Paywall</a>/<a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar</a></td>
+            <a target="_blank" href="https://sci-hub.se/{{full_doi}}" class="hacker">Paywall</a>/<a
+                href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar</a></td>
         {{/openaccess}}
-    <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
-    <td >
+        <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+        <td>
 
-         <input class="btn btn-info cite_btn" doi="{{doi}}" id="permalink" type="button" value="Copy Citation"
-               onclick="get_doi_cite(this)"
-               />
+            <input class="btn btn-info cite_btn" doi="{{doi}}" id="permalink" type="button" value="Copy Citation"
+                   onclick="get_doi_cite(this)"
+            />
 
-    </td>
+        </td>
     {{/success}}
     {{^success}}
         <td class="xref xref-abstract" style="width: 50%"></td>
@@ -53,11 +59,13 @@
         <td class="ref_count xref"></td>
         <td class="subject xref"></td>
         <td>{{pub_title}}</td>
+        <td class="xref"></td>
+        <td class="xref"></td>
         <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
         <td class="xref"></td>
         <td class="xref"></td>
         <td><a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar Link</a></td>
-         <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+        <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
         <td>-</td>
     {{/success}}
 </tr>

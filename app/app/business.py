@@ -6,12 +6,13 @@ import dateparser
 import pytz
 import urllib.parse
 import csv
+import os
 from sqlalchemy import or_
 from requests_cache import CachedSession
 from datetime import timedelta
 from app.model import PublicationSource, Ranking
 from app.main import SCPUS_BACKEND, SCPUS_ABTRACT_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
-
+import pycountry
 import logging
 
 logger = logging.getLogger('business')
@@ -128,40 +129,67 @@ def update_feed(dois, feed_content):
                                          "description": f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
 
 
+def get_blank_ranking():
+    return {"title": "", "acronym": "", "source": "", "rank": "", "hindex": ""}
+
+
+def rank_dto_converter(rank_entity):
+    res = {}
+    if rank_entity.title is not None:
+        res.update({"title": rank_entity.title})
+    if rank_entity.acr is not None:
+        res.update({"acronym": rank_entity.acr})
+    if rank_entity.source is not None:
+        res.update({"source": rank_entity.source})
+    if rank_entity.rank is not None and rank_entity.rank != "-":
+        res.update({"rank": rank_entity.rank})
+    if rank_entity.hindex is not None:
+        res.update({"hindex": rank_entity.hindex})
+    return res
+
+
 def get_ranking(conf_or_journal):
     conf_or_journal_lower = conf_or_journal.lower()
     conf_or_journal_lower = conf_or_journal_lower.replace("&amp;", "and")
     conf_or_journal_lower = conf_or_journal_lower.replace("&", "and")
-    rank_dto = lambda x: {"title": x.title, "acronym": x.acr, "source": x.source,
-                          "rank": x.rank, "hindex": x.hindex}
 
     # try to find by acronym
-    acrs = set()
-    acrs.update(re.findall("\(([A-Z]+)\)", conf_or_journal))
-    acrs.update(re.findall("([A-Z]{3,})(?:\s|$)", conf_or_journal))
-    if len(acrs) > 0:
-        ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
-        if len(ranks) > 0:
-            return rank_dto(ranks[0])
+
+    rank_dto_acronym = get_ranking_by_acronym(conf_or_journal)
 
     conf_or_journal_lower = conf_or_journal_lower.lower()
     ranks = db.session.query(Ranking)
     for word in conf_or_journal_lower.split(" "):
         ranks = ranks.filter(Ranking.title.contains(word))
 
+    rank_dto_title = get_blank_ranking()
     ranks = ranks.order_by(Ranking.source.desc()).all()
     for rank in ranks:
         if conf_or_journal_lower == rank.title.lower():
-            return rank_dto(rank)
-    else:
-        return None
+            rank_dto_title = rank_dto_converter(rank)
+            break
+
+    rank_dto_title.update(rank_dto_acronym)
+    return rank_dto_title
+
+
+def get_ranking_by_acronym(conf_or_journal):
+    acrs = set()
+    acrs.update(re.findall("\(([A-Z]+)\)", conf_or_journal))
+    acrs.update(re.findall("([A-Z]{3,})(?:\s|$)", conf_or_journal))
+    if len(acrs) > 0:
+        ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
+        if len(ranks) > 0:
+            return rank_dto_converter(ranks[0])
+    return {}
 
 
 def refresh_ranking():
     for rank in db.session.query(Ranking).all():
         db.session.delete(rank)
     db.session.commit()
-    with open('app/app/ranking/CORE2021.csv', newline='\n') as csvfile:
+    base_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)),"ranking")
+    with open(os.path.join(base_folder,'CORE2021.csv'), newline='\n') as csvfile:
         core_conf_reader = csv.reader(csvfile, delimiter=',')
         for row in core_conf_reader:
             if row[0].startswith("#"):
@@ -174,7 +202,7 @@ def refresh_ranking():
                               rank=row[4])
             db.session.add(ranking)
         db.session.commit()
-    with open('app/app/ranking/CORE2018.csv', newline='\n') as csvfile:
+    with open(os.path.join(base_folder,'CORE2018.csv'), newline='\n') as csvfile:
         core_conf_reader = csv.reader(csvfile, delimiter=',')
         for row in core_conf_reader:
             if row[0].startswith("#"):
@@ -187,7 +215,7 @@ def refresh_ranking():
                               rank=row[4])
             db.session.add(ranking)
         db.session.commit()
-    with open('app/app/ranking/scimagojr2020.csv', newline='\n') as csvfile:
+    with open(os.path.join(base_folder,'scimagojr2020.csv'), newline='\n') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=';')
 
         for row in reader:
@@ -292,11 +320,13 @@ def get_first_auth_affil(entry):
 
 
 def get_first_auth_country(entry):
-    res = entry.get("affiliation", [{}])[0].get("affiliation-country", "")
-    if res is not None:
-        return res.lower()
-    else:
-        return ""
+    country = entry.get("affiliation", [{}])[0].get("affiliation-country", None)
+    if country:
+        fuzzy_country_list = pycountry.countries.search_fuzzy(country)
+        if len(fuzzy_country_list) > 0:
+            return fuzzy_country_list[0].alpha_3.lower()
+
+    return "xxx"
 
 
 def load_response_from_xref(bucket, xref_json_resp, entry):
@@ -323,7 +353,7 @@ def load_response_from_xref(bucket, xref_json_resp, entry):
     else:
         pub_rank = "?"
         rank_source = ""
-        hindex=""
+        hindex = ""
 
     bucket.append({"doi": xref_json_resp["DOI"], "title": xref_json_resp["title"][0],
                    "year": xref_json_resp["created"]["date-parts"][0][0],

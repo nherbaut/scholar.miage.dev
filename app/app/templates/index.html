@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
-          integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
 
     <link rel="stylesheet" href="static/css/style.css">
+    <link rel="stylesheet" href="static/css/flag-icon.css">
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
     <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
@@ -21,14 +23,15 @@
     <meta charset="UTF-8">
     <title>MIAGE Scholar</title>
     <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
-            integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+    <script
+            src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+            integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
             crossorigin="anonymous"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js"
-            integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49"
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
+            integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
             crossorigin="anonymous"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js"
-            integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy"
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+            integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
             crossorigin="anonymous"></script>
 
 
@@ -105,6 +108,7 @@ journal = { { ${content["pubtitle"]} } },
         function onLoaded(evt) {
 
             document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
+            xref_changed()
             document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
 
@@ -181,14 +185,11 @@ journal = { { ${content["pubtitle"]} } },
                     "paging": false,
                     scrollY: '50vh',
                     scrollCollapse: true,
-                    "ordering": false,
-                    columnDefs: [
-                        {orderable: true, targets: 5}
-                    ],
+                    "ordering": true,
+
                     "order": [[1, "desc"]]
                 });
-            }
-            catch (e) {
+            } catch (e) {
                 console.log(e);
             }
 
@@ -269,6 +270,10 @@ journal = { { ${content["pubtitle"]} } },
         }
 
         function sendDoisRequest() {
+
+            //when the request for doi is done, you can't change the xref option because it breaks DAtaTable
+
+            document.getElementById("xref").disabled = true;
 
             document.getElementById("main_button").disabled = true;
             socket.emit('get_dois', {
@@ -413,29 +418,29 @@ journal = { { ${content["pubtitle"]} } },
 
 
     <h1 class="display-4">MIAGE Scholar</h1>
-    <p class="lead">Export Scholar data for your SMS/SLRs <span id="scihubok" data-toggle="tooltip"
-                                                                class="badge badge-success scihubinfo"
+    <p class="lead">Export Scholar data for your SMS/SLRs <span id="scihubok" data-bs-toggle="tooltip"
+                                                                class="badge bg-success scihubinfo"
                                                                 title="sci-hub server reachable">Sci-Hub servers</span>
-        <span id="scihubko" data-toggle="tooltip" class="badge badge-danger scihubinfo" title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1
+        <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo" title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1
         ">Sci-Hub servers</span></p>
 
 
     <p>
 
-        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#import_procedure"
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#import_procedure"
                 aria-expanded="false" aria-controls="collapseExample">
             SMS/SLR Import Procedure
         </button>
-        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#importTuto"
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#importTuto"
                 aria-expanded="false" aria-controls="collapseExample">
             SMS/SLR Import Tutorial (video)
         </button>
-        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#releaseNotes"
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#releaseNotes"
                 aria-expanded="false" aria-controls="collapseExample">
             Release Notes
         </button>
 
-        <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#word_cloud"
+        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#word_cloud"
                 aria-expanded="false" aria-controls="collapseExample">
             Popular search terms
         </button>
@@ -456,7 +461,7 @@ journal = { { ${content["pubtitle"]} } },
     <div class="custom-control custom-switch">
         <input type="checkbox" class="custom-control-inloput" id="darkSwitch"/>
         <label class="custom-control-label" for="darkSwitch">Dark Mode</label><span
-            class="badge badge-warning">beta</span>
+            class="badge bg-warning">beta</span>
     </div>
     </p>
     <div class="collapse" id="import_procedure">
@@ -539,7 +544,7 @@ journal = { { ${content["pubtitle"]} } },
                 <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
                 <input type="submit" value="Fetch {{ count }} results (up to 1000)">
             {% else %}
-                <button class="btn btn-secondary" type="button" data-toggle="collapse" data-target="#options"
+                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#options"
                         aria-expanded="false" aria-controls="collapseExample">
                     Options
                 </button>
@@ -548,7 +553,8 @@ journal = { { ${content["pubtitle"]} } },
                         <div>
                             <input type="checkbox" id="xref" name="xref"
                                    onchange="xref_changed()" unchecked>
-                            <label for="xref">Download metadata with xref (10x slower)</label>
+                            <label for="xref">Download paper metadata (10x slower)<span
+            class="badge bg-warning">beta</span></label>
                         </div>
                         <div>
                             <input type="checkbox" id="oa" name="oa"

@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine, MetaData
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary, Float, BigInteger
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 from app.config import Config
@@ -16,9 +16,9 @@ db_session = scoped_session(sessionmaker(autocommit=False,
 
 class Ranking(Base):
     __tablename__ = "ranking"
-    id = Column(Integer, primary_key=True)
+    id = Column(BigInteger, primary_key=True)
     type = Column(String(1), primary_key=True)
-    title = Column(String(128))
+    title = Column(String(1024))
     acr = Column(String(64))
     source = Column(String(64), primary_key=True)
     rank = Column(String(128))
