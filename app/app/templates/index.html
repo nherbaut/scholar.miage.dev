@@ -175,6 +175,8 @@ journal = { { ${content["pubtitle"]} } },
 
 
         socket.on('doi_export_done', (data) => {
+            document.getElementById("pb_success").classList.remove("progress-bar-striped");
+            document.getElementById("pb_failure").classList.remove("progress-bar-striped");
             document.getElementById("dlresults").removeAttribute("hidden");
             document.getElementById("dlresultsxsl").removeAttribute("hidden");
 
@@ -197,18 +199,22 @@ journal = { { ${content["pubtitle"]} } },
         })
 
         socket.on('doi_update', (data) => {
-
-            document.getElementById("pb_success").setAttribute("max", data["total"]);
-            document.getElementById("pb_success").setAttribute("value", data["done"]);
-            document.getElementById("pb_success_count").innerHTML = data["done"] + "/" + data["total"];
-            document.getElementById("pb_failure").setAttribute("max", data["total"]);
-            document.getElementById("pb_failure").setAttribute("value", data["failed"]);
-            document.getElementById("pb_failure_count").innerHTML = data["failed"] + "/" + data["total"];
+            document.getElementById("pb_success").classList.add("progress-bar-striped");
+            document.getElementById("pb_success").setAttribute("aria-valuemax", data["total"]);
+            document.getElementById("pb_success").setAttribute("aria-valuenow", data["done"]);
+            document.getElementById("pb_success").style.width=100*data["done"]/data["total"]+"%";
+            document.getElementById("pb_success_count").innerHTML = data["done"];
+            document.getElementById("pb_failure").classList.add("progress-bar-striped");
+            document.getElementById("pb_failure").setAttribute("aria-valuemax", data["total"]);
+            document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
+            document.getElementById("pb_failure").style.width=100*data["failed"]/data["total"]+"%";
+            document.getElementById("pb_failure_count").innerHTML = data["failed"];
 
 
         });
 
         socket.on('doi_results', (data) => {
+
             var rendered_html = "";
             for (let doi_item of data) {
                 var doi = doi_item["doi"];
@@ -508,7 +514,8 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
-                <li>1.5.0 Allow selecting several conf/journal to restrict the query, restric the query by subject area, include CORE2021/CORE2018 and scimajr in extra metadata
+                <li>1.5.0 Allow selecting several conf/journal to restrict the query, restric the query by subject area,
+                    include CORE2021/CORE2018 and scimajr in extra metadata
                 <li>1.4.0 export citation directly as txt or bitex
                 </li>
                 <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for
@@ -687,18 +694,23 @@ journal = { { ${content["pubtitle"]} } },
 
     </form>
 
+    <div class="container" id="progress-container">
+        <div class="row">
 
-    <div>
-        <div>
-            <label for="file">Resolved DOIs:</label>
-            <progress id="pb_success" max="0" value="0"></progress>
-            <span id="pb_success_count"></span>
+            <div class="col-md-12">
+                <div>
+                    <label for="file">Progress:</label>
+                    <div class="progress">
+                        <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated" id="pb_success" aria-valuemin="0" aria-valuenow="0"
+                             aria-valuemax="0"><span id="pb_success_count"></span></div>
+                         <div role="progressbar"  style="width: 0%" class="progress-bar bg-warning progress-bar-animated"  id="pb_failure" aria-valuemin="0" aria-valuenow="0"
+                             aria-valuemax="0"><span id="pb_failure_count"></span></div>
+                    </div>
+
+                </div>
+            </div>
         </div>
-        <div>
-            <label for="file">Entry without DOIs:</label>
-            <progress id="pb_failure" max="0" value="0"></progress>
-            <span id="pb_failure_count"></span>
-        </div>
+
     </div>
 
     <table id="doitable" class="table table-bordered table-hover sortable w-auto">
