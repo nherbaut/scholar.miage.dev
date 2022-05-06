@@ -122,7 +122,7 @@ def update_feed(dois, feed_content):
                                                    "rel": "related",
                                                    "title": "SciHub link"}
                                                   ],
-                                         "title": ("°" if item["X-OA"] else "") + item["title"],
+                                         "title": (" " if item["X-OA"] else "") + item["title"],
                                          "pubdate": item["x-precise-date"],
                                          "author": {"email": item["pubtitle"], "name": item["X-authors"]},
                                          "x-added-on": datetime.datetime.utcnow(),
@@ -175,8 +175,8 @@ def get_ranking(conf_or_journal):
 
 def get_ranking_by_acronym(conf_or_journal):
     acrs = set()
-    acrs.update(re.findall("\(([A-Z]+)\)", conf_or_journal))
-    acrs.update(re.findall("([A-Z]{3,})(?:\s|$)", conf_or_journal))
+    acrs.update(re.findall("\(([A-Za-z]+)\)", conf_or_journal))
+    acrs.update(re.findall("([A-Za-z]{3,})(?:\s|$)", conf_or_journal))
     if len(acrs) > 0:
         ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
         if len(ranks) > 0:

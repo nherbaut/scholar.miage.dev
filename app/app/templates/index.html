@@ -382,12 +382,23 @@ journal = { { ${content["pubtitle"]} } },
 
         }
 
-        function add_restriction_to_query() {
-            var option = document.querySelector("#source_select").selectedOptions[0];
+        function add_domain_restriction_to_query() {
+            var options = Array.prototype.slice.call(document.querySelector("#domain_select").selectedOptions);
             var querybox = document.querySelector("#querybox");
-            var code = option.getAttribute("code");
-            var full_text_name = option.getAttribute("value");
-            querybox.value = code + "(" + full_text_name + ") AND " + querybox.value;
+
+            querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
+                return `SUBJAREA("${elt.getAttribute("value")}")`
+            }).join(" OR ") + " )"
+        }
+
+
+        function add_source_restriction_to_query() {
+            var options = Array.prototype.slice.call(document.querySelector("#source_select").selectedOptions);
+            var querybox = document.querySelector("#querybox");
+
+            querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
+                return `${elt.getAttribute("code")}("${elt.getAttribute("value")}")`
+            }).join(" OR ") + " )"
         }
 
         function cite_bib_changed() {
@@ -497,6 +508,7 @@ journal = { { ${content["pubtitle"]} } },
 
             <h2>Release note</h2>
             <ul>
+                <li>1.5.0 Allow selecting several conf/journal to restrict the query, restric the query by subject area, include CORE2021/CORE2018 and scimajr in extra metadata
                 <li>1.4.0 export citation directly as txt or bitex
                 </li>
                 <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for
@@ -554,7 +566,7 @@ journal = { { ${content["pubtitle"]} } },
                             <input type="checkbox" id="xref" name="xref"
                                    onchange="xref_changed()" unchecked>
                             <label for="xref">Download paper metadata (10x slower)<span
-            class="badge bg-warning">beta</span></label>
+                                    class="badge bg-warning">beta</span></label>
                         </div>
                         <div>
                             <input type="checkbox" id="oa" name="oa"
@@ -568,25 +580,83 @@ journal = { { ${content["pubtitle"]} } },
                             <label for="cite_bib">Citation as bibtex</label>
                         </div>
 
-                        <div>
-                            <p>Search in specific conference/journal</p>
-                            <select id="source_select">
-                                {% for category in sources.keys() %}
-                                    <optgroup label="{{ category }}">
-                                        {% for source in sources[category] %}
-                                            <option value="{{ source.full_text_name }}"
-                                                    code="{{ source.code }}">{{ source.short_name }}</option>
-                                        {% endfor %}
 
-                                    </optgroup>
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <fieldset>
+                                        <legend>Search in specific conference/journal</legend>
+                                        <div class="row">
+                                            <select id="source_select" multiple>
+                                                {% for category in sources.keys() %}
+                                                    <optgroup label="{{ category }}">
+                                                        {% for source in sources[category] %}
+                                                            <option value="{{ source.full_text_name }}"
+                                                                    code="{{ source.code }}">{{ source.short_name }}</option>
+                                                        {% endfor %}
 
-                                {% endfor %}
-                            </select>
-                            <input class="btn btn-primary" type="button" value="add restriction to query"
-                                   onclick="add_restriction_to_query()"/>
+                                                    </optgroup>
 
+                                                {% endfor %}
+                                            </select></div>
+                                        <div class="row">
+                                            <input id="source_select_btn" class="btn btn-primary add-restrict"
+                                                   type="button"
+                                                   value="Apply Source Restriction"
+                                                   onclick="add_source_restriction_to_query()"/></div>
+                                    </fieldset>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="row">
+                                        <fieldset>
+                                            <legend>Search by specific subject area</legend>
+                                            <div class="row">
+                                                <select id="domain_select" multiple>
+                                                    <option value="COMP">Computer Science</option>
+                                                    <option value="AGRI">Agricultural and Biological Sciences</option>
+                                                    <option value="ARTS">Arts and Humanities</option>
+                                                    <option value="BIOC">Biochemistry, Genetics and Molecular Biology
+                                                    </option>
+                                                    <option value="BUSI">Business, Management and Accounting</option>
+                                                    <option value="CENG">Chemical Engineering</option>
+                                                    <option value="CHEM">Chemistry</option>
+                                                    <option value="DECI">Decision Sciences</option>
+                                                    <option value="DENT">Dentistry</option>
+                                                    <option value="EART">Earth and Planetary Sciences</option>
+                                                    <option value="ECON">Economics, Econometrics and Finance</option>
+                                                    <option value="ENER">Energy</option>
+                                                    <option value="ENGI">Engineering</option>
+                                                    <option value="ENVI">Environmental Science</option>
+                                                    <option value="HEAL">Health Professions</option>
+                                                    <option value="IMMU">Immunology and Microbiology</option>
+                                                    <option value="MATE">Materials Science</option>
+                                                    <option value="MATH">Mathematics</option>
+                                                    <option value="MEDI">Medicine</option>
+                                                    <option value="NEUR">Neuroscience</option>
+                                                    <option value="NURS">Nursing</option>
+                                                    <option value="PHAR">Pharmacology, Toxicology and Pharmaceutics
+                                                    </option>
+                                                    <option value="PHYS">Physics and Astronomy</option>
+                                                    <option value="PSYC">Psychology</option>
+                                                    <option value="SOCI">Social Sciences</option>
+                                                    <option value="VETE">Veterinary</option>
+                                                    <option value="MULT">Multidisciplinary</option>
+                                                </select>
+                                            </div>
+
+                                            <div class="row">
+                                                <input id="source_select_btn" class="btn btn-primary add-restrict"
+                                                       type="button"
+                                                       value="Apply Domain Restriction"
+                                                       onclick="add_domain_restriction_to_query()"/></div>
+                                        </fieldset>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
                 </div>
 
                 <textarea id="querybox" name="query" onkeyup="textAreaChange()"
