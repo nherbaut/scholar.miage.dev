@@ -181,6 +181,7 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("dlresultsxsl").removeAttribute("hidden");
 
             document.getElementById("rss").removeAttribute("hidden");
+            document.getElementById("cloud").removeAttribute("hidden");
 
             try {
                 table = $('table').DataTable({
@@ -202,12 +203,12 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("pb_success").classList.add("progress-bar-striped");
             document.getElementById("pb_success").setAttribute("aria-valuemax", data["total"]);
             document.getElementById("pb_success").setAttribute("aria-valuenow", data["done"]);
-            document.getElementById("pb_success").style.width=100*data["done"]/data["total"]+"%";
+            document.getElementById("pb_success").style.width = 100 * data["done"] / data["total"] + "%";
             document.getElementById("pb_success_count").innerHTML = data["done"];
             document.getElementById("pb_failure").classList.add("progress-bar-striped");
             document.getElementById("pb_failure").setAttribute("aria-valuemax", data["total"]);
             document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
-            document.getElementById("pb_failure").style.width=100*data["failed"]/data["total"]+"%";
+            document.getElementById("pb_failure").style.width = 100 * data["failed"] / data["total"] + "%";
             document.getElementById("pb_failure_count").innerHTML = data["failed"];
 
 
@@ -367,6 +368,30 @@ journal = { { ${content["pubtitle"]} } },
                 });
         }
 
+
+        async function fetchCloud(data = []) {
+            // Default options are marked with *
+            const response = await fetch("https://scholar-wc.miage.dev/word-cloud?gramSize=4", {
+                method: 'POST', // *GET, POST, PUT, DELETE, etc.
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                redirect: 'follow', // manual, *follow, error
+                referrerPolicy: 'no-referrer', // no-referrer, *no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url
+                body: JSON.stringify(data) // body data type must match "Content-Type" header
+            });
+            return response.blob(); // parses JSON response into native JavaScript objects
+        }
+
+        function cloudResults() {
+            fetchCloud(Object.values(bag_of_doi).map(item => item["title"])).then(blob => {
+                var img = URL.createObjectURL(blob);
+                document.getElementById('cloud').setAttribute('src', img);
+                document.getElementById('cloudimg').setAttribute('src', img);
+                document.getElementById("cloudimg").removeAttribute("hidden");
+            });
+        }
+
         function createRssLink() {
             socket.emit('create_feed', {query: document.getElementById("querybox").value});
         }
@@ -477,8 +502,7 @@ journal = { { ${content["pubtitle"]} } },
         </button>
     <div class="custom-control custom-switch">
         <input type="checkbox" class="custom-control-inloput" id="darkSwitch"/>
-        <label class="custom-control-label" for="darkSwitch">Dark Mode</label><span
-            class="badge bg-warning">beta</span>
+        <label class="custom-control-label" for="darkSwitch">Dark Mode</label>
     </div>
     </p>
     <div class="collapse" id="import_procedure">
@@ -690,6 +714,12 @@ journal = { { ${content["pubtitle"]} } },
         <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
                onclick="createRssLink()"
                hidden/>
+        <div id="cloud" hidden>
+            <input class="btn btn-success" type="button" value="Get Cloud for these results"
+                   onclick="cloudResults()"
+            /><span
+                class="badge bg-warning">beta</span>
+        </div>
 
 
     </form>
@@ -701,9 +731,11 @@ journal = { { ${content["pubtitle"]} } },
                 <div>
                     <label for="file">Progress:</label>
                     <div class="progress">
-                        <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated" id="pb_success" aria-valuemin="0" aria-valuenow="0"
+                        <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated"
+                             id="pb_success" aria-valuemin="0" aria-valuenow="0"
                              aria-valuemax="0"><span id="pb_success_count"></span></div>
-                         <div role="progressbar"  style="width: 0%" class="progress-bar bg-warning progress-bar-animated"  id="pb_failure" aria-valuemin="0" aria-valuenow="0"
+                        <div role="progressbar" style="width: 0%" class="progress-bar bg-warning progress-bar-animated"
+                             id="pb_failure" aria-valuemin="0" aria-valuenow="0"
                              aria-valuemax="0"><span id="pb_failure_count"></span></div>
                     </div>
 
@@ -712,26 +744,28 @@ journal = { { ${content["pubtitle"]} } },
         </div>
 
     </div>
+    <img src="" id="cloudimg" hidden/>
 
     <table id="doitable" class="table table-bordered table-hover sortable w-auto">
         <thead>
-        <td>Identifier</td>
-        <td>Date</td>
-        <td>Title</td>
-        <td class="xref xref-abstract" style="width:200px">Abstract</td>
-        <td class="cite_count xref">Citation Count</td>
-        <td class="ref_count xref">Reference Count</td>
-        <td class="subject xref">Subjects</td>
-        <td>Publication Title</td>
-        <td class="xref">Ranking</td>
-        <td class="xref">H-Index</td>
-        <td>Author</td>
-        <td class="xref">Affiliation</td>
-        <td class="xref">country</td>
-        <td>Extra link</td>
-        <td>Snowball Link</td>
-        <td>Cite</td>
-
+        <tr>
+            <th>Identifier</th>
+            <th>Date</th>
+            <th>Title</th>
+            <th class="xref xref-abstract" style="width:200px">Abstract</th>
+            <th class="cite_count xref">Citation Count</th>
+            <th class="ref_count xref">Reference Count</th>
+            <th class="subject xref">Subjects</th>
+            <th>Publication Title</th>
+            <th class="xref">Ranking</th>
+            <th class="xref">H-Index</th>
+            <th>Author</th>
+            <th class="xref">Affiliation</th>
+            <th class="xref">country</th>
+            <th>Extra link</th>
+            <th>Snowball Link</th>
+            <th>Cite</th>
+        </tr>
         </thead>
         <tbody id="doi_table">
 

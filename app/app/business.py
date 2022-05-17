@@ -1,4 +1,5 @@
 from feedgen.feed import FeedGenerator
+from Levenshtein.StringMatcher import distance
 import requests
 import datetime
 import re
@@ -165,7 +166,8 @@ def get_ranking(conf_or_journal):
     rank_dto_title = get_blank_ranking()
     ranks = ranks.order_by(Ranking.source.desc()).all()
     for rank in ranks:
-        if conf_or_journal_lower == rank.title.lower():
+        rank_title=rank.title.lower().replace("proceedings of","")
+        if rank_title in conf_or_journal_lower or conf_or_journal_lower in rank_title or distance(conf_or_journal_lower, rank_title) < 5:
             rank_dto_title = rank_dto_converter(rank)
             break
 
@@ -176,7 +178,7 @@ def get_ranking(conf_or_journal):
 def get_ranking_by_acronym(conf_or_journal):
     acrs = set()
     acrs.update(re.findall("\(([A-Za-z]+)\)", conf_or_journal))
-    acrs.update(re.findall("([A-Za-z]{3,})(?:\s|$)", conf_or_journal))
+    # acrs.update(re.findall("([A-Za-z]{3,})(?:\s|$)", conf_or_journal))
     if len(acrs) > 0:
         ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
         if len(ranks) > 0:
@@ -188,8 +190,8 @@ def refresh_ranking():
     for rank in db.session.query(Ranking).all():
         db.session.delete(rank)
     db.session.commit()
-    base_folder=os.path.join(os.path.dirname(os.path.abspath(__file__)),"ranking")
-    with open(os.path.join(base_folder,'CORE2021.csv'), newline='\n') as csvfile:
+    base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ranking")
+    with open(os.path.join(base_folder, 'CORE2021.csv'), newline='\n') as csvfile:
         core_conf_reader = csv.reader(csvfile, delimiter=',')
         for row in core_conf_reader:
             if row[0].startswith("#"):
@@ -202,7 +204,7 @@ def refresh_ranking():
                               rank=row[4])
             db.session.add(ranking)
         db.session.commit()
-    with open(os.path.join(base_folder,'CORE2018.csv'), newline='\n') as csvfile:
+    with open(os.path.join(base_folder, 'CORE2018.csv'), newline='\n') as csvfile:
         core_conf_reader = csv.reader(csvfile, delimiter=',')
         for row in core_conf_reader:
             if row[0].startswith("#"):
@@ -215,7 +217,7 @@ def refresh_ranking():
                               rank=row[4])
             db.session.add(ranking)
         db.session.commit()
-    with open(os.path.join(base_folder,'scimagojr2020.csv'), newline='\n') as csvfile:
+    with open(os.path.join(base_folder, 'scimagojr2020.csv'), newline='\n') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=';')
 
         for row in reader:

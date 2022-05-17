@@ -10,3 +10,4 @@ shlink==0.1.0
 requests-cache==0.8.1 
 redis==3.5.3
 pycountry==22.3.5
+python-Levenshtein==0.12.2

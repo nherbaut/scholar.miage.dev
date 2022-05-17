@@ -304,4 +304,4 @@ def permalink():
 def opensearch():
     query = request.args.get('query')
 
-    return render_template('index.html', query=f"{query}", sources=get_sources())
+    return render_template('index.html', query=f"TITLE(\"{query}\")", sources=get_sources())
