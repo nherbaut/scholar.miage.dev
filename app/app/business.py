@@ -324,9 +324,12 @@ def get_first_auth_affil(entry):
 def get_first_auth_country(entry):
     country = entry.get("affiliation", [{}])[0].get("affiliation-country", None)
     if country:
-        fuzzy_country_list = pycountry.countries.search_fuzzy(country)
-        if len(fuzzy_country_list) > 0:
-            return fuzzy_country_list[0].alpha_3.lower()
+        try:
+            fuzzy_country_list = pycountry.countries.search_fuzzy(country)
+            if len(fuzzy_country_list) > 0:
+                return fuzzy_country_list[0].alpha_3.lower()
+        except:
+            return "xxx"
 
     return "xxx"
 
