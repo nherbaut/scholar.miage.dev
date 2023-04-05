@@ -33,6 +33,7 @@ def get_sources():
 
 
 def setup_redis_cache(redis_host, redis_port):
+    logger.info(f"setting up redis {redis_host} {redis_port}")
     session_xref = CachedSession(
         'xrefCache',
         backend='redis',
@@ -410,7 +411,7 @@ def create_short_link(query):
         "domain": "s.miage.dev",
         "shortCodeLength": 5,
         "validateUrl": True,
-        "title": f"Miage scholar permalink for {query}",
+        "title": f"Miage scholar permalink for {query[:30]}",
         "crawlable": False
     }
     headers = {'X-Api-Key': SHLINK_API_KEY, "Content-type": "application/json"}
