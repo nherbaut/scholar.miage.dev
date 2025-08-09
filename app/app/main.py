@@ -8,8 +8,10 @@ from flask_sqlalchemy import SQLAlchemy
 from app.config import Config
 
 
-app = Flask(__name__)
 
+print("creating flask application")
+app = Flask(__name__)
+print("creating flask application done")
 with app.app_context():
     socketio = SocketIO(app)
     socketio.init_app(app, cors_allowed_origins="*")
@@ -38,7 +40,7 @@ with app.app_context():
     # app.run(host="0.0.0.0")
     socketio = SocketIO(app)
     socketio.init_app(app, cors_allowed_origins="*")
-    socketio.run(app, host="0.0.0.0",allow_unsafe_werkzeug=True)
+    socketio.run(app, host="0.0.0.0",allow_unsafe_werkzeug=True,debug=True)
     from app.rest import *
     from app.websocket import *
 

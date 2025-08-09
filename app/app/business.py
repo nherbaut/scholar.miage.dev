@@ -248,6 +248,7 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
     client_bucket = []
     for i in range(0, min(MAX_RESULTS_QUERY, count), 25):
         bucket = []
+        print(f"SCPUS_BACKEND {SCPUS_BACKEND}")
         partial_results = session_scpus.get(
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
         for entry in partial_results["search-results"]["entry"]:
