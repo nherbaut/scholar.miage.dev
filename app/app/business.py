@@ -408,14 +408,14 @@ def create_short_link(query):
             "miage scholar"
         ],
         "findIfExists": True,
-        "domain": "s.miage.dev",
+        "domain": "s.miage.nextnet.top",
         "shortCodeLength": 5,
         "validateUrl": True,
         "title": f"Miage scholar permalink for {query[:30]}",
         "crawlable": False
     }
     headers = {'X-Api-Key': SHLINK_API_KEY, "Content-type": "application/json"}
-    resp = requests.post("https://s.miage.dev/rest/v2/short-urls", json=body, headers=headers)
+    resp = requests.post("https://s.miage.nextnet.top/rest/v2/short-urls", json=body, headers=headers)
     if resp.status_code == 200:
         result_url = resp.json().get("shortUrl")
     else:

@@ -14,7 +14,7 @@ with app.app_context():
     socketio = SocketIO(app)
     socketio.init_app(app, cors_allowed_origins="*")
     API_KEY = os.environ["API_KEY"]
-    ROOT_URL = os.environ.get("ROOT_URL", "https://scholar.miage.dev")
+    ROOT_URL = os.environ.get("ROOT_URL", "https://scholar.miage.nextnet.top")
     SHLINK_API_KEY = os.environ.get("SHLINK_API_KEY", "")
     REDIS_URL = os.environ.get("REDIS_URL", "")
     #MENDELEY_CLIENT_ID = os.environ.get("MENDELEY_CLIENT_ID", "")
