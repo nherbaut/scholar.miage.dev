@@ -2,8 +2,8 @@ import requests
 
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource
-from app.business import count_results_for_query, get_results_for_query, update_feed, generate_rss, get_sources, \
-    get_ref_for_doi, get_ranking, refresh_ranking
+from app.business import count_results_for_query, get_scopus_works_for_query, update_feed, generate_rss, get_sources, \
+    get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
 # from mendeley.session import MendeleySession
@@ -11,7 +11,8 @@ from flask import abort, Response, render_template, request, session, redirect, 
 import json
 import pickle
 import os
-
+from app.researchers import get_venue_for_orcid, get_venue_for_openalex
+from collections import Counter
 
 # mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
 
@@ -43,7 +44,8 @@ def list_sources():
 @app.route("/source/<short_name>", methods=["DELETE"])
 def delete_conference(short_name):
     try:
-        conf = db.session.query(PublicationSource).filter(PublicationSource.short_name == short_name).one()
+        conf = db.session.query(PublicationSource).filter(
+            PublicationSource.short_name == short_name).one()
         db.session.delete(conf)
         db.session.commit()
         return "DELETED", 204
@@ -104,7 +106,7 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_results_for_query(count, feed.query, xref=False)
+        dois = get_scopus_works_for_query(count, feed.query, xref=True)
     else:
         dois = []
     if feed.feed_content is not None:
@@ -118,11 +120,12 @@ def get_feed(id):
     feed.hit += 1
     db.session.commit()
 
-    feed_items = sorted(feed_content.values(), key=lambda x: x["x-added-on"], reverse=True)
+    feed_items = sorted(feed_content.values(),
+                        key=lambda x: x["pubdate"], reverse=True)
 
     rss = generate_rss(feed_items, feed.id, feed.query)
-
-    return Response(rss, mimetype='application/rss+xml')
+ 
+    return Response(rss, mimetype='application/atom+xml')
 
 
 # @app.route("/mendeleyLogout")
@@ -168,7 +171,7 @@ def get_doi_for_title():
     title = request.args.get('title')
     query = f"TITLE({title})"
     count = count_results_for_query(query)
-    dois = get_results_for_query(count, query, False)
+    dois = get_scopus_works_for_query(count, query, False)
     if (len(dois) == 0):
         abort(404)
     return app.response_class(
@@ -193,7 +196,8 @@ def cite():
     resp = requests.get(f"https://doi.org/{doi}", headers=headers)
     if resp.status_code == 200:
         return app.response_class(
-            response=json.dumps({"doi": doi, "citation": resp.content.decode("utf-8")}),
+            response=json.dumps(
+                {"doi": doi, "citation": resp.content.decode("utf-8")}),
             status=200,
             mimetype='application/json'
         )
@@ -207,7 +211,8 @@ def history():
     limit = request.args.get('limit')
     if limit is None:
         limit = 2000
-    queries = db.session.query(ScpusRequest).order_by(ScpusRequest.timestamp.desc()).limit(limit).all()
+    queries = db.session.query(ScpusRequest).order_by(
+        ScpusRequest.timestamp.desc()).limit(limit).all()
     accepts = request.headers["Accept"].split(",")
     if "application/json" in accepts:
         return app.response_class(
@@ -232,21 +237,21 @@ def getRanking():
     type = request.args.get("type")
     res = get_ranking(query)
 
-    if type=="img":
+    if type == "img":
 
         if res is None:
             return redirect("static/img/qm.png", code=302)
-        if res["rank"]=="A*":
+        if res["rank"] == "A*":
             return redirect("static/img/as.png", code=302)
-        if res["rank"]=="A":
+        if res["rank"] == "A":
             return redirect("static/img/a.png", code=302)
-        if res["rank"]=="B":
+        if res["rank"] == "B":
             return redirect("static/img/b.png", code=302)
-        if res["rank"]=="C":
+        if res["rank"] == "C":
             return redirect("static/img/c.png", code=302)
         return redirect("static/img/qm.png", code=302)
 
-    if type=="txt":
+    if type == "txt":
         if res is None:
             return "?"
         else:
@@ -270,17 +275,23 @@ def snowball():
         title = request.args.get('title')
         query = f"REFTITLE(\"{title}\")"
         count = count_results_for_query(query)
-        dois = get_results_for_query(count, query, False)
+        dois = get_scopus_works_for_query(count, query, False)
         return app.response_class(
             response=json.dumps([doi["doi"] for doi in dois]),
             status=200,
             mimetype='application/json'
         )
 
-
     else:
         title = request.args.get('title')
         return render_template('index.html', query=f"REFTITLE(\"{title}\")", sources=get_sources())
+
+
+@app.route("/dois-list", methods=["GET"])
+def doi_list():
+    dois = request.args.get('dois').split(",")
+
+    return render_template('index.html', query=" OR ".join([f'DOI("{doi}")' for doi in dois]), sources=get_sources())
 
 
 @app.route('/sameauthor', methods=["GET"])
@@ -291,6 +302,21 @@ def same_author():
         return render_template('index.html', query=f"ORCID({orcid})", sources=get_sources())
     else:
         return render_template('index.html', query=f"AUTHOR-NAME({name})", sources=get_sources())
+
+
+@app.route('/sameauthor-and-conf', methods=["GET"])
+def same_author_and_conf():
+    source = request.args.get('source')
+    orcid = request.args.get('orcid')
+    return render_template('index.html', query=f"ORCID({orcid}) AND EXACTSRCTITLE({source})", sources=get_sources())
+
+
+@app.route("/venues", methods=["GET"])
+def get_venues_form():
+    orcid = request.args.get('orcid')
+    openalex = request.args.get('openalex')
+
+    return render_template('venues.html', orcid=orcid, openalex=openalex, sources=get_sources())
 
 
 @app.route('/permalink', methods=["GET"])
@@ -305,3 +331,16 @@ def opensearch():
     query = request.args.get('query')
 
     return render_template('index.html', query=f"TITLE(\"{query}\")", sources=get_sources())
+
+@app.route("/network/compute/<id>",methods=["GET"])
+def get_network_data(id):
+     return app.response_class(
+            response=net_get_graph_data(id),
+            status=200,
+            mimetype='application/json'
+        )
+    
+
+@app.route('/network/<work_list_id>',methods=["GET"])
+def get_network_page(work_list_id):
+    return render_template('network.html', work_list_id=work_list_id,  sources=get_sources())

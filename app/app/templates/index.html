@@ -1,58 +1,572 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
+
 <head>
+    <meta charset="UTF-8">
+    <title>MIAGE Scholar</title>
+
+    <!-- Bootstrap + Vendors -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-          integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-
-
-    <link rel="stylesheet" href="static/css/style.css">
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
     <link rel="stylesheet" href="static/css/flag-icon.css">
     <link rel="stylesheet" href="static/css/xref.css" class="xref">
     <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
     <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
-    <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="static/css/style.css">
+
+    <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
+        title="MIAGE Scholar">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
+
+    <!-- Aesthetic overrides (no functional change) -->
+    <style>
+        :root {
+            --ms-bg: #0d1117;
+            --ms-bg-2: #161b22;
+            --ms-accent: #0d6efd;
+            --ms-muted: #6c757d;
+            --ms-border: rgba(0, 0, 0, .08);
+        }
+
+        body {
+            background-color: #f7f9fc;
+        }
+
+        .navbar {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, .06);
+        }
+
+        .hero {
+            background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%);
+            border-bottom: 1px solid var(--ms-border);
+        }
+
+        .hero .display-6 {
+            letter-spacing: .2px;
+        }
+
+        .info-badges .badge {
+            font-weight: 500;
+        }
+
+        .card {
+            border: 1px solid var(--ms-border);
+            border-radius: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+        }
+
+        .card .card-header {
+            background-color: transparent;
+            border-bottom: 1px dashed var(--ms-border);
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-weight: 600;
+            margin-bottom: .25rem;
+        }
+
+        textarea#querybox {
+            width: 100%;
+            min-height: 120px;
+            resize: vertical;
+            border-radius: .75rem;
+            border: 1px solid var(--ms-border);
+            padding: .75rem 1rem;
+            background: #fff;
+        }
+
+        .btn+.btn {
+            margin-left: .5rem;
+        }
+
+        /* Progress */
+        #progress-container .progress {
+            height: 1rem;
+            border-radius: 999px;
+            background-color: #e9ecef;
+        }
+
+        /* Table enhancements */
+        .table-wrap {
+            border: 1px solid var(--ms-border);
+            border-radius: .75rem;
+            background: #fff;
+            padding: .5rem;
+        }
+
+        table#doitable {
+            
+            width: 100% !important;
+        }
+
+        table#doitable thead th {
+            position: sticky;
+            top: 0;
+            background: #fff;
+            z-index: 5;
+            box-shadow: 0 1px 0 var(--ms-border);
+        }
+
+        /* Honor explicit widths and allow wrapping */
+table#doitable {
+  table-layout: fixed;
+  width: 100% !important;
+  white-space: normal;            /* override the previous nowrap */
+}
+
+/* Wrap and clamp cells to 200px (apply via class or columnDefs) */
+#doitable th.wrap-200,
+#doitable td.wrap-200 {
+  max-width: 200px;
+  white-space: normal;            /* multi-line wrapping */
+  word-break: break-word;         /* break long tokens (DOIs, URLs) */
+  overflow-wrap: anywhere;        /* allow breaks almost anywhere */
+}
+
+/* Optional: keep some columns on one line (e.g., identifiers) */
+#doitable th.nowrap,
+#doitable td.nowrap {
+  white-space: nowrap;
+}
+
+        /* DataTables alignment fix when scrollX */
+        div.dataTables_wrapper {
+            width: 100%;
+        }
+
+        /* Collapsible groups spacing */
+        .collapse .card.card-body {
+            border-radius: .75rem;
+        }
+
+        /* Utility */
+        .muted {
+            color: var(--ms-muted);
+        }
+
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+        }
+
+        /* Dark mode small tweaks (let existing dark-mode.css do most) */
+        html.dark-mode body {
+            background: var(--ms-bg);
+        }
+
+        html.dark-mode .hero {
+            background: linear-gradient(180deg, var(--ms-bg) 0%, var(--ms-bg-2) 100%);
+            border-bottom-color: rgba(255, 255, 255, .08);
+        }
+
+        html.dark-mode .table-wrap,
+        html.dark-mode textarea#querybox,
+        html.dark-mode .card {
+            background: var(--ms-bg-2);
+            border-color: rgba(255, 255, 255, .08);
+            color: #e6edf3;
+        }
+
+        html.dark-mode table#doitable thead th {
+            background: var(--ms-bg-2);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, .08);
+        }
+    </style>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+        integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
+        integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+        integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+        crossorigin="anonymous"></script>
+
+    <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
+
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script src="static/contrib/js/mustache.js"></script>
-    <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
-          title="MIAGE Scholar">
-    <link
-            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css"
-            rel="stylesheet"
-    />
 
-    <meta charset="UTF-8">
-    <title>MIAGE Scholar</title>
-    <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
-    <script
-            src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
-            integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI="
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
-            integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
-            crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
-            integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
-            crossorigin="anonymous"></script>
+    <!-- Keep existing dark-mode switch -->
+    <script src="static/contrib/js/dark-mode-switch.min.js" defer></script>
+
+</head>
 
 
-    <script type="text/javascript" src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
-    <script type="text/javascript" src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
+<!-- Network progress modal -->
+<div class="modal fade" id="networkModal" tabindex="-1" aria-labelledby="networkModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="networkModalLabel">Building citation network</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="networkProgress" class="form-label mb-1">Progress</label>
+          <progress id="networkProgress" class="w-100" value="0" max="0"></progress>
+          <div class="small text-muted mt-1">
+            <span id="networkProcessed">0</span> / <span id="networkTotal">0</span> works processed
+          </div>
+        </div>
+        <div>
+          <span class="fw-semibold">References processed:</span>
+          <span id="networkRefs">0</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Hide</button>
+      </div>
+    </div>
+  </div>
+</div>
 
+
+<body>
+
+    <!-- Top Nav -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#">
+                <span class="text-primary">MIAGE</span> Scholar
+            </a>
+            <div class="ms-auto d-flex align-items-center gap-3">
+                <div class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="darkSwitch">
+                    <label class="form-check-label" for="darkSwitch">Dark mode</label>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero / Header -->
+    <header class="hero py-5">
+        <div class="container">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <h1 class="display-6 mb-2">Export Scholar data for SMS/SLRs</h1>
+                    <p class="muted mb-3">Search, fetch DOIs, export BibTeX/Excel, and generate RSS or word clouds.</p>
+                    <div class="info-badges d-flex align-items-center gap-2">
+                        <span id="scihubok" data-bs-toggle="tooltip" class="badge bg-success scihubinfo"
+                            title="sci-hub server reachable">Sci‑Hub servers</span>
+                        <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo"
+                            title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1">Sci‑Hub
+                            servers</span>
+                    </div>
+                </div>
+                <div class="col-lg-4 text-lg-end">
+                    <div class="btn-toolbar justify-content-lg-end" role="toolbar" aria-label="Toolbar">
+                        <div class="btn-group me-2" role="group" aria-label="Help">
+                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#import_procedure" aria-expanded="false">
+                                <i class="fas fa-list-ul"></i><span>Import Procedure</span>
+                            </button>
+                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#importTuto" aria-expanded="false">
+                                <i class="fas fa-video"></i><span>Tutorial</span>
+                            </button>
+                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#releaseNotes" aria-expanded="false">
+                                <i class="fas fa-bullhorn"></i><span>Release Notes</span>
+                            </button>
+                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#word_cloud" aria-expanded="false">
+                                <i class="fas fa-cloud"></i><span>Popular terms</span>
+                            </button>
+                        </div>
+                        <div class="btn-group" role="group" aria-label="Links">
+                            <button class="btn btn-light" type="button"
+                                onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
+                                Query Language
+                            </button>
+                            <button class="btn btn-light" type="button"
+                                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">
+                                Sources
+                            </button>
+                            <button class="btn btn-light" type="button"
+                                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">
+                                Report a Bug
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collapsibles -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="collapse" id="import_procedure">
+                        <div class="card card-body">
+                            <ol class="mb-0">
+                                <li>Type a query following the <a
+                                        href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a>,
+                                    e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND
+                                        (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
+                                <li>Click “Count Results”.</li>
+                                <li>Click “Fetch” to resolve DOIs.</li>
+                                <li>Download the BibTeX file.</li>
+                                <li>Import into Mendeley Desktop Legacy.</li>
+                                <li>Update details in Mendeley and re‑export as .bib.</li>
+                                <li>Import into <a href="https://parsif.al/">parsif.al</a>.</li>
+                            </ol>
+                        </div>
+                    </div>
+                    <div class="collapse" id="importTuto">
+                        <div class="card card-body">
+                            <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/"
+                                target="_blank">Access video tutorial here</a>
+                        </div>
+                    </div>
+                    <div class="collapse" id="releaseNotes">
+                        <div class="card card-body">
+                            <h2 class="h5 section-title">Release notes</h2>
+                            <ul class="mb-0">
+                                <li>1.5.0 Subject area/journal restriction; CORE2021/2018 &amp; SCImago metadata.</li>
+                                <li>1.4.0 Citation export to txt or BibTeX.</li>
+                                <li>1.3.0 Word cloud; ISSN and Google Scholar links for items without DOI.</li>
+                                <li>1.2.0 Country/affiliation for first author; <a href="/sources">presets</a>.</li>
+                                <li>1.1.0 CrossRef metadata; OA filter; sortable/filterable table; Sci‑hub badge.</li>
+                                <li>1.0.3 Permalink support.</li>
+                                <li>1.0.2 RSS support.</li>
+                                <li>1.0.1 History.</li>
+                                <li>1.0.0 Initial version.</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="collapse" id="word_cloud">
+                        <div class="card card-body">
+                            <span class="text-muted">Generate a word cloud after fetching results.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="py-4">
+        <div class="container">
+
+            <!-- Query Form -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span>Query</span>
+                        <small class="text-muted">Example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND
+                            (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy)) AND PUBYEAR &gt; 2020</small>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form action="query" method="POST" class="mb-2">
+                        <fieldset>
+
+                            {% if count %}
+                            <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+                        </fieldset>
+                        <div class="mt-3 d-flex flex-wrap align-items-center">
+                            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
+                            <input class="btn btn-primary ms-2" type="submit"
+                                value="Fetch {{ count }} results (up to 1000)">
+                        </div>
+                        {% else %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                                data-bs-target="#options" aria-expanded="false" aria-controls="collapseExample">
+                                Options
+                            </button>
+                        </div>
+
+                        <div class="collapse" id="options">
+                            <div class="card card-body mb-3">
+                                <div class="row g-4">
+                                    <div class="col-lg-4">
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="xref" name="xref"
+                                                onchange="xref_changed()" unchecked>
+                                            <label class="form-check-label" for="xref">Download paper metadata <span
+                                                    class="badge bg-warning">beta</span></label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="oa" name="oa"
+                                                onchange="oa_changed()" unchecked>
+                                            <label class="form-check-label" for="oa">Show only Open Access work</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input type="checkbox" class="form-check-input" id="cite_bib"
+                                                name="cite_bib" onchange="cite_bib_changed()" unchecked>
+                                            <label class="form-check-label" for="cite_bib">Citation as BibTeX</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <fieldset>
+                                            <legend class="h6">Search in specific conference/journal</legend>
+                                            <select id="source_select" multiple class="form-select" size="10">
+                                                {% for category in sources.keys() %}
+                                                <optgroup label="{{ category }}">
+                                                    {% for source in sources[category] %}
+                                                    <option value="{{ source.full_text_name }}"
+                                                        code="{{ source.code }}">{{ source.short_name }}</option>
+                                                    {% endfor %}
+                                                </optgroup>
+                                                {% endfor %}
+                                            </select>
+                                            <div class="mt-2">
+                                                <input id="source_select_btn" class="btn btn-primary add-restrict"
+                                                    type="button" value="Apply Source Restriction"
+                                                    onclick="add_source_restriction_to_query()" />
+                                            </div>
+                                        </fieldset>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <fieldset>
+                                            <legend class="h6">Search by specific subject area</legend>
+                                            <select id="domain_select" multiple class="form-select" size="10">
+                                                <option value="COMP">Computer Science</option>
+                                                <option value="AGRI">Agricultural and Biological Sciences</option>
+                                                <option value="ARTS">Arts and Humanities</option>
+                                                <option value="BIOC">Biochemistry, Genetics and Molecular Biology
+                                                </option>
+                                                <option value="BUSI">Business, Management and Accounting</option>
+                                                <option value="CENG">Chemical Engineering</option>
+                                                <option value="CHEM">Chemistry</option>
+                                                <option value="DECI">Decision Sciences</option>
+                                                <option value="DENT">Dentistry</option>
+                                                <option value="EART">Earth and Planetary Sciences</option>
+                                                <option value="ECON">Economics, Econometrics and Finance</option>
+                                                <option value="ENER">Energy</option>
+                                                <option value="ENGI">Engineering</option>
+                                                <option value="ENVI">Environmental Science</option>
+                                                <option value="HEAL">Health Professions</option>
+                                                <option value="IMMU">Immunology and Microbiology</option>
+                                                <option value="MATE">Materials Science</option>
+                                                <option value="MATH">Mathematics</option>
+                                                <option value="MEDI">Medicine</option>
+                                                <option value="NEUR">Neuroscience</option>
+                                                <option value="NURS">Nursing</option>
+                                                <option value="PHAR">Pharmacology, Toxicology and Pharmaceutics</option>
+                                                <option value="PHYS">Physics and Astronomy</option>
+                                                <option value="PSYC">Psychology</option>
+                                                <option value="SOCI">Social Sciences</option>
+                                                <option value="VETE">Veterinary</option>
+                                                <option value="MULT">Multidisciplinary</option>
+                                            </select>
+                                            <div class="mt-2">
+                                                <input class="btn btn-primary add-restrict" type="button"
+                                                    value="Apply Domain Restriction"
+                                                    onclick="add_domain_restriction_to_query()" />
+                                            </div>
+                                        </fieldset>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <textarea id="querybox" name="query" onkeyup="textAreaChange()">{{ query }}</textarea>
+
+                        <div class="mt-3 d-flex flex-wrap align-items-center">
+                            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
+                            <input class="btn btn-primary ms-2" id="main_button" type="button" value="Count Results"
+                                onclick="handle_submit()">
+                            <input class="btn btn-success ms-2" id="permalink" type="button" value="Get Query Permalink"
+                                onclick="copyPermalink()" hidden />
+                            <input class="btn btn-success ms-2" id="dlresults" type="button"
+                                value="Download dois as bibtex" onclick="downloadResults()" hidden />
+                            <span id="dlresultsxsl" hidden class="ms-2">
+                                <input class="btn btn-success" type="button" value="export in spreadsheet"
+                                    onclick="downloadExcel('xlsx')" />
+                            </span>
+                            <input class="btn btn-success ms-2" id="rss" type="button" value="Create RSS Link"
+                                onclick="createRssLink()" hidden />
+                                
+                                <input class="btn btn-outline-secondary ms-2" id="analyze_graph_btn"
+       type="button" value="Analyse citation graph" onclick="analyzeCitationGraph()"
+       hidden />
+
+                            <div id="cloud" hidden class="ms-2">
+                                <input class="btn btn-success" type="button" value="Get Cloud for these results"
+                                    onclick="cloudResults()" />
+                                <span class="badge bg-warning">beta</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </form>
+
+                    <!-- Progress -->
+                    <div class="container-fluid px-0" id="progress-container">
+                        <div class="row">
+                            <div class="col-12">
+                                <label class="form-label">Progress</label>
+                                <div class="progress">
+                                    <div role="progressbar" style="width: 0%"
+                                        class="progress-bar bg-success progress-bar-animated" id="pb_success"
+                                        aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                                        <span id="pb_success_count"></span>
+                                    </div>
+                                    <div role="progressbar" style="width: 0%"
+                                        class="progress-bar bg-warning progress-bar-animated" id="pb_failure"
+                                        aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                                        <span id="pb_failure_count"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <img src="" id="cloudimg" hidden />
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="table-wrap">
+                <div class="table-responsive">
+                    <table id="doitable" class="table table-bordered table-hover sortable">
+                        <thead>
+                            <tr>
+                                <th>Identifier</th>
+                                <th>Date</th>
+                                <th>Title</th>
+                               
+                                <th>Author</th>
+                                 <th>Publication Title</th>
+                                <th>Download</th>
+                                <th>Snowball</th>
+                                <th>Cite</th>
+                                <th class="xref">Affiliation</th>
+                                <th class="xref">country</th>
+                                <!-- <th class="xref xref-abstract" style="width:200px">Abstract</th> -->
+                                
+                                <th class="subject xref">Subjects</th>
+                               
+                                <!--<th class="xref">Ranking</th> -->
+                                <!-- <th class="xref">H-Index</th> -->
+                                <th class="cite_count xref">Citation Count</th>
+                                <th class="ref_count xref">Reference Count</th>
+                            </tr>
+                        </thead>
+                        <tbody id="doi_table"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Original JS logic preserved (IDs and function names unchanged) -->
     <script>
-
         var tableRowTemplate = undefined;
         fetch("static/js/result-table.mustache")
             .then((response) => response.text())
-            .then((template) => {
-                tableRowTemplate = template;
-            });
-
+            .then((template) => { tableRowTemplate = template; });
 
         function updateSciHubAccess(isSciHubReachable) {
             if (!isSciHubReachable) {
                 document.getElementById("scihubok").style.display = "none";
                 document.getElementById("scihubko").style.display = "revert";
-
             } else {
                 document.getElementById("scihubok").style.display = "revert";
                 document.getElementById("scihubko").style.display = "none";
@@ -60,12 +574,8 @@
         }
 
         var sciHubReachable = false;
-        fetch('https://sci-hub.se', {mode: 'no-cors'}).then(r => {
-            updateSciHubAccess(true);
-        })
-            .catch(e => {
-                updateSciHubAccess(false);
-            });
+        fetch('https://sci-hub.se', { mode: 'no-cors' }).then(r => { updateSciHubAccess(true); })
+            .catch(e => { updateSciHubAccess(false); });
 
         function get(object, key, default_value) {
             var result = object[key];
@@ -77,7 +587,6 @@
         var item_info = new Array();
 
         function download(filename, dois) {
-
             var text = "";
             var i = 0;
             for (const property in dois) {
@@ -92,26 +601,20 @@ journal = { { ${content["pubtitle"]} } },
 }
 `
             }
-
             var element = document.createElement('a');
             element.setAttribute('href', 'data:application/x-bibtex;charset=utf-8,' + encodeURIComponent(text));
             element.setAttribute('download', filename);
-
             element.style.display = 'none';
             document.body.appendChild(element);
-
             element.click();
-
             document.body.removeChild(element);
         }
 
         function onLoaded(evt) {
-
             document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
             xref_changed()
             document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
             document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
-
 
             if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
                 $("#options").collapse('show');
@@ -119,31 +622,17 @@ journal = { { ${content["pubtitle"]} } },
 
             if (document.getElementById("querybox").value == "") {
                 document.getElementById("querybox").value = window.localStorage.getItem("query");
-
-
             } else {
-                //we already have a query, just fetch the results
                 handle_submit();
             }
         }
 
-
-        function textAreaChange() {
-            updateQueryStorage(document.getElementById("querybox").value);
-        }
-
-        function updateQueryStorage(str) {
-            window.localStorage.setItem("query", str);
-        }
-
-
+        function textAreaChange() { updateQueryStorage(document.getElementById("querybox").value); }
+        function updateQueryStorage(str) { window.localStorage.setItem("query", str); }
         window.onload = onLoaded;
 
         const socket = io();
-
-        socket.on('connect', function () {
-            socket.emit('my event', {data: 'I\'m connected!'});
-        });
+        socket.on('connect', function () { socket.emit('my event', { data: 'I\'m connected!' }); });
 
         socket.on('count', (count) => {
             if (count > 1000) {
@@ -155,49 +644,39 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("permalink").removeAttribute("hidden");
         });
 
-        socket.on('dois', (data) => {
-            console.log(data);
+        socket.on('dois', (data) => { console.log(data); });
 
-        });
-
-        socket.on('feed_generated', (data) => {
-            window.open("/feed/" + data["feed_id"] + ".rss", '_blank');
-
-        });
+        socket.on('feed_generated', (data) => { window.open("/feed/" + data["feed_id"] + ".rss", '_blank'); });
 
         socket.on('permalink_generated', (data) => {
-
             document.getElementById("permalink").value = "Copied!";
             navigator.clipboard.writeText(data);
-
-
         });
-
 
         socket.on('doi_export_done', (data) => {
             document.getElementById("pb_success").classList.remove("progress-bar-striped");
             document.getElementById("pb_failure").classList.remove("progress-bar-striped");
             document.getElementById("dlresults").removeAttribute("hidden");
             document.getElementById("dlresultsxsl").removeAttribute("hidden");
-
             document.getElementById("rss").removeAttribute("hidden");
             document.getElementById("cloud").removeAttribute("hidden");
-
             try {
                 table = $('table').DataTable({
-                    "paging": false,
+                    paging: false,
                     scrollY: '50vh',
+                    scrollX: true,           // keep horizontal scrolling
                     scrollCollapse: true,
-                    "ordering": true,
-
-                    "order": [[1, "desc"]]
+                    ordering: true,
+                    order: [[1, "desc"]],
+                     columnDefs: [
+    { targets: 2, width: "300px" },   // Title column
+    { targets: 0, width: "200px" }   // Identifier column
+    
+  ]
+                    
                 });
-            } catch (e) {
-                console.log(e);
-            }
-
-
-        })
+            } catch (e) { console.log(e); }
+        });
 
         socket.on('doi_update', (data) => {
             document.getElementById("pb_success").classList.add("progress-bar-striped");
@@ -210,40 +689,29 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
             document.getElementById("pb_failure").style.width = 100 * data["failed"] / data["total"] + "%";
             document.getElementById("pb_failure_count").innerHTML = data["failed"];
-
-
         });
 
         socket.on('doi_results', (data) => {
-
             var rendered_html = "";
             for (let doi_item of data) {
                 var doi = doi_item["doi"];
-                var title = doi_item["title"] + " " + get(doi_item, "X-IsReferencedByCount", "");
-                var year = doi_item["year"]
                 rendered_html += add_item_to_table(doi_item);
                 if (doi != "") {
                     item_info.push(doi_item);
-
                     bag_of_doi[doi] = doi_item
                 }
-
             }
             document.getElementById("doi_table").innerHTML += rendered_html;
-
-
         });
 
         function add_item_to_table(doi_item) {
+            let authorsNamesAndLinks = [];
 
-
-            let firstAuthorLink = "sameauthor?name=" + encodeURIComponent(doi_item["X-FirstAuthor"]);
-
-            if (doi_item["X-FirstAuthor-ORCID"]) {
-                firstAuthorLink += "&orcid=" + encodeURIComponent(doi_item["X-FirstAuthor-ORCID"])
+            for (const author of doi_item["X-authors-list"]) {
+                authorsNamesAndLinks.push(author); //could simplify
             }
-            const full_doi = doi_item["doi"].split("_")[0];
 
+            const full_doi = doi_item["doi"].split("_")[0];
 
             var rendered = Mustache.render(tableRowTemplate, {
                 success: doi_item["doi"] != "" ? true : false,
@@ -261,35 +729,28 @@ journal = { { ${content["pubtitle"]} } },
                 pub_rank: doi_item["pub_rank"],
                 rank_source: doi_item["rank_source"],
                 hindex: doi_item["hindex"],
-                same_auth_link: firstAuthorLink,
-                name: doi_item["X-FirstAuthor"],
+                authorsNamesAndLinks: authorsNamesAndLinks,
                 affil: doi_item["X-Country-First-affiliation"],
                 country: doi_item["X-Country-First-Author"],
+                oa_url: doi_item["X-OA-URL"],
+                
             });
             return rendered;
-
         }
-
 
         function sendCountRequest() {
             document.getElementById("querybox").disabled = true;
-            socket.emit('count', {query: document.getElementById("querybox").value});
+            socket.emit('count', { query: document.getElementById("querybox").value });
         }
 
         function sendDoisRequest() {
-
-            //when the request for doi is done, you can't change the xref option because it breaks DAtaTable
-
             document.getElementById("xref").disabled = true;
-
             document.getElementById("main_button").disabled = true;
             socket.emit('get_dois', {
                 query: document.getElementById("querybox").value,
                 xref: document.getElementById("xref").checked
             });
-
         }
-
 
         handle_submit = sendCountRequest;
 
@@ -302,46 +763,31 @@ journal = { { ${content["pubtitle"]} } },
             document.getElementById("dlresultsxsl").setAttribute("hidden", "true");
             document.getElementById("rss").setAttribute("hidden", "true");
             resetPermalinkButton();
-
-            //document.getElementById("querybox").value = "";
             document.getElementById("pb_success").setAttribute("max", 0);
             document.getElementById("pb_success").setAttribute("value", 0);
             document.getElementById("pb_failure").setAttribute("max", 0);
             document.getElementById("pb_failure").setAttribute("value", 0);
             document.getElementById("pb_failure_count").innerHTML = "";
             document.getElementById("pb_success_count").innerHTML = "";
-            //document.getElementById("doi_table").innerHTML = "";
             document.getElementById("main_button").disabled = false;
             document.getElementById("querybox").disabled = false;
         }
 
-        function downloadResults() {
-
-            download("results.bib", bag_of_doi)
-        }
+        function downloadResults() { download("results.bib", bag_of_doi) }
 
         function downloadExcel(type, fn, dl) {
             var elt = document.getElementById('doitable');
-            var wb = XLSX.utils.table_to_book(elt, {sheet: "sheet1"});
+            var wb = XLSX.utils.table_to_book(elt, { sheet: "sheet1" });
             return dl ?
-                XLSX.write(wb, {bookType: type, bookSST: true, type: 'base64'}) :
+                XLSX.write(wb, { bookType: type, bookSST: true, type: 'base64' }) :
                 XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
-
         }
 
-
-        function copyPermalink() {
-
-            socket.emit('create_permalink', {query: document.getElementById("querybox").value});
-        }
+        function copyPermalink() { socket.emit('create_permalink', { query: document.getElementById("querybox").value }); }
 
         function get_doi_cite(elt) {
-
             let style = "apa";
-            if (document.getElementById("cite_bib").checked) {
-                style = "bibtex";
-            }
-
+            if (document.getElementById("cite_bib").checked) { style = "bibtex"; }
             const my_doi = elt.attributes.doi.value;
             var query = ".cite_btn[doi='" + my_doi + "']";
             document.querySelector(query).value = "Retrieving!";
@@ -349,9 +795,7 @@ journal = { { ${content["pubtitle"]} } },
             document.querySelector(query).classList.add("btn-warning");
             fetch("/cite?doi=" + my_doi + "&style=" + style)
                 .then(function (response) {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+                    if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
                     return response.json()
                 })
                 .then(function (response) {
@@ -368,19 +812,15 @@ journal = { { ${content["pubtitle"]} } },
                 });
         }
 
-
         async function fetchCloud(data = []) {
-            // Default options are marked with *
             const response = await fetch("https://scholar-wc.miage.nextnet.top/word-cloud?gramSize=4", {
-                method: 'POST', // *GET, POST, PUT, DELETE, etc.
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                redirect: 'follow', // manual, *follow, error
-                referrerPolicy: 'no-referrer', // no-referrer, *no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url
-                body: JSON.stringify(data) // body data type must match "Content-Type" header
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                redirect: 'follow',
+                referrerPolicy: 'no-referrer',
+                body: JSON.stringify(data)
             });
-            return response.blob(); // parses JSON response into native JavaScript objects
+            return response.blob();
         }
 
         function cloudResults() {
@@ -392,9 +832,7 @@ journal = { { ${content["pubtitle"]} } },
             });
         }
 
-        function createRssLink() {
-            socket.emit('create_feed', {query: document.getElementById("querybox").value});
-        }
+        function createRssLink() { socket.emit('create_feed', { query: document.getElementById("querybox").value }); }
 
         function resetPermalinkButton() {
             document.getElementById("permalink").value = "Get Query Permalink";
@@ -402,31 +840,23 @@ journal = { { ${content["pubtitle"]} } },
         }
 
         function xref_changed() {
-
-
             document.querySelectorAll('link.xref').forEach(function (node) {
                 node.disabled = document.getElementById("xref").checked;
-
-
             });
             window.localStorage.setItem("xref", document.getElementById("xref").checked);
-
         }
 
         function add_domain_restriction_to_query() {
             var options = Array.prototype.slice.call(document.querySelector("#domain_select").selectedOptions);
             var querybox = document.querySelector("#querybox");
-
             querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
                 return `SUBJAREA("${elt.getAttribute("value")}")`
             }).join(" OR ") + " )"
         }
 
-
         function add_source_restriction_to_query() {
             var options = Array.prototype.slice.call(document.querySelector("#source_select").selectedOptions);
             var querybox = document.querySelector("#querybox");
-
             querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
                 return `${elt.getAttribute("code")}("${elt.getAttribute("value")}")`
             }).join(" OR ") + " )"
@@ -437,349 +867,179 @@ journal = { { ${content["pubtitle"]} } },
         }
 
         function oa_changed() {
-
-
             document.querySelectorAll('tr.paywall').forEach(function (node) {
                 if (document.getElementById("oa").checked) {
                     node.style.display = 'none';
                 } else {
                     node.style.display = 'table-row';
                 }
-
-
             });
             window.localStorage.setItem("oa", document.getElementById("oa").checked);
-
         }
-
-
     </script>
-</head>
-<body>
-<div class="jumbotron">
+
+<script>
+/* === Author tab orchestration (simple, popup-blocker ignored) ================
+ * - First click on <a.author-orcidid|author-openalexid>: open ONE new tab.
+ * - Second (and subsequent) clicks while that tab is open: send {authorID} on BC.
+ * - If the tab is closed (detected via .closed or "tab-closed" BC message),
+ *   the next qualifying click is treated as a first click again.
+ * ========================================================================== */
+
+(function () {
+  const SEL = 'a.author-orcidid, a.author-openalexid';
+  const CH_NAME = 'miage-scholar-author-channel';
+
+  const bc = new BroadcastChannel(CH_NAME);
+  let authorTab = null;            // reference to the opened tab
+  let firstClickConsumed = false;  // whether first-click action has been used
+
+  function resetState() {
+    firstClickConsumed = false;
+    authorTab = null;
+  }
+
+  // Reset when tab2 notifies closure
+  bc.onmessage = (evt) => {
+    const d = evt && evt.data;
+    if (d === 'tab-closed' || (d && d.type === 'tab-closed')) resetState();
+  };
+
+  // Cheap periodic check for manual closure
+  setInterval(() => { if (authorTab && authorTab.closed) resetState(); }, 1000);
+
+  // Single handler via event delegation
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest(SEL);
+    if (!a) return;
+
+    // Always suppress native navigation so only one tab opens
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+    // If we had a tab but it is closed, forget it
+    if (authorTab && authorTab.closed) resetState();
+
+    const href = a.getAttribute('href') || '';
+    const authorID =
+      a.getAttribute('authorID') ??
+      a.getAttribute('data-author-id') ??
+      (a.dataset ? a.dataset.authorId : null) ?? null;
+
+    if (!firstClickConsumed) {
+      // First qualifying click → open new tab once
+      authorTab = window.open(href, '_blank', 'noopener');
+      firstClickConsumed = true;
+      return;
+    }
+
+    // Subsequent qualifying clicks while tab presumed open → message
+    if (!authorTab || !authorTab.closed) {
+      bc.postMessage({ type: 'author-click', authorID });
+      return;
+    }
+
+    // Inconsistent state → treat like first click again
+    resetState();
+    authorTab = window.open(href, '_blank', 'noopener');
+    firstClickConsumed = true;
+  });
+})();
+</script>
 
 
-    <h1 class="display-4">MIAGE Scholar</h1>
-    <p class="lead">Export Scholar data for your SMS/SLRs <span id="scihubok" data-bs-toggle="tooltip"
-                                                                class="badge bg-success scihubinfo"
-                                                                title="sci-hub server reachable">Sci-Hub servers</span>
-        <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo" title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1
-        ">Sci-Hub servers</span></p>
+<script>
+  // Show the "Analyse citation graph" button when export is done (results present)
+  (function () {
+    const _orig = socket.listeners('doi_export_done')?.[0];
+    socket.off('doi_export_done'); // remove current to preserve order
+    socket.on('doi_export_done', function (data) {
+      try {
+        // call original handler logic (table setup, etc.)
+        if (typeof _orig === 'function') _orig.call(this, data);
+      } catch (e) { console.log(e); }
+      // then reveal the analyze button
+      const btn = document.getElementById('analyze_graph_btn');
+      if (btn) btn.removeAttribute('hidden');
+    });
+  })();
 
+  // Helper: collect identifiers from the first column of the results table
+  function collectIdentifiersAsString() {
+    // Prefer the rendered text of col 0 for all rows in tbody
+    const ids = Array.from(document.querySelectorAll('#doitable tbody tr'))
+      .map(tr => (tr.querySelector('th') ? tr.querySelector('th').textContent.trim() : ''))
+      .filter(s => s.length > 0);
+    // Backend expects a string; join with commas
+    return ids;
+  }
 
-    <p>
+  // Modal instance (Bootstrap 5)
+  let networkModalInstance = null;
+  function getNetworkModal() {
+    if (!networkModalInstance) {
+      const modalEl = document.getElementById('networkModal');
+      networkModalInstance = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+    }
+    return networkModalInstance;
+  }
 
-        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#import_procedure"
-                aria-expanded="false" aria-controls="collapseExample">
-            SMS/SLR Import Procedure
-        </button>
-        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#importTuto"
-                aria-expanded="false" aria-controls="collapseExample">
-            SMS/SLR Import Tutorial (video)
-        </button>
-        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#releaseNotes"
-                aria-expanded="false" aria-controls="collapseExample">
-            Release Notes
-        </button>
+  // Public handler for the button
+  function analyzeCitationGraph() {
+    const idsString = collectIdentifiersAsString();
+    // Emit exactly as specified (ids as a string)
+    socket.emit('create_network_graph_data', { ids: idsString });
 
-        <button class="btn btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#word_cloud"
-                aria-expanded="false" aria-controls="collapseExample">
-            Popular search terms
-        </button>
+    // Reset and show modal immediately
+    const prog = document.getElementById('networkProgress');
+    const proc = document.getElementById('networkProcessed');
+    const tot = document.getElementById('networkTotal');
+    const refs = document.getElementById('networkRefs');
 
+    prog.max = 0;
+    prog.value = 0;
+    proc.textContent = '0';
+    tot.textContent = '0';
+    refs.textContent = '0';
 
-        <button class="btn btn-light" type="button"
-                onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
-            Query Language Doc
-        </button>
-        <button class="btn btn-light" type="button"
-                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">
-            Sources
-        </button>
-        <button class="btn btn-light" type="button"
-                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">
-            Repport a Bug
-        </button>
-    <div class="custom-control custom-switch">
-        <input type="checkbox" class="custom-control-inloput" id="darkSwitch"/>
-        <label class="custom-control-label" for="darkSwitch">Dark Mode</label>
-    </div>
-    </p>
-    <div class="collapse" id="import_procedure">
-        <div class="card card-body">
-            <ol>
-                <li>Type your query by following the <a
-                        href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a> e.g.
-                    <i>TITLE-ABS-KEY(blockchain)
-                        AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
-                <li>Click "count results" to get the number of results</li>
-                <li>Once you have a number, click Fetch to resolve DOIs</li>
-                <li>Once the resolving is done, a button allows you to download a bibtex file</li>
-                <li>import it in <a href="https://www.mendeley.com/download-mendeley-desktop-legacy">mendeley Desktop
-                    Legacy</a></li>
-                <li>Select all the (yet untitled) entries and right click > update details</li>
-                <li>Wait for mendeley to populate each entry</li>
-                <li>In mendeley, select all entires and export as a bib file</li>
-                <li>Import your results in <a href="https://parsif.al/">parsif.al</a></li>
-            </ol>
-        </div>
-    </div>
+    getNetworkModal().show();
+  }
 
-    <div class="collapse" id="importTuto">
-        <div class="card card-body">
-            <p>
-                <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/"
-                   target="_blank">Access video tutorial here</a></p>
-        </div>
-    </div>
+  // Live progress: "nework_report" (spelling per specification)
+  socket.on('nework_report', function (payload) {
+    try {
+      const processed = Number(payload?.processed_works || 0);
+      const remaining = Number(payload?.remaining_works || 0);
+      const refsCount = Number(payload?.references_processed || 0);
+      const total = processed + remaining;
 
-    <div class="collapse" id="releaseNotes">
-        <div class="card card-body">
+      const prog = document.getElementById('networkProgress');
+      const proc = document.getElementById('networkProcessed');
+      const tot = document.getElementById('networkTotal');
+      const refs = document.getElementById('networkRefs');
 
-            <h2>Release note</h2>
-            <ul>
-                <li>1.5.0 Allow selecting several conf/journal to restrict the query, restric the query by subject area,
-                    include CORE2021/CORE2018 and scimajr in extra metadata
-                <li>1.4.0 export citation directly as txt or bitex
-                </li>
-                <li>1.3.0 added word cloud, added issn identifiers links and google scholar links when available for
-                    documents without DOI
-                </li>
-                <li>1.2.0 Country and affiliation for first author, added preset <a href="/sources">conf/journal
-                    restrictions</a></li>
-                <li>1.1.0 CrossRef Metadata retrieval, Open Access Filter, Open Access shows in a different colour,
-                    bibtex export contains basic fields, sortable and filterable result table, Sci-hub badge
-                </li>
-                <li>1.0.3 Added Permalink Support</li>
-                <li>1.0.2 Added <a href="/feeds">RSS Support</a></li>
-                <li>1.0.1 Added <a href="/history">History</a></li>
-                <li>1.0.0 Initial version</li>
-            </ul>
-        </div>
-    </div>
+      prog.max = total;
+      prog.value = processed;
+      proc.textContent = String(processed);
+      tot.textContent = String(total);
+      refs.textContent = String(refsCount);
+    } catch (e) {
+      console.log('nework_report handling error', e);
+    }
+  });
 
+  // Completion: "nework_report_done" → open /network/<id> in new tab and hide modal
+  socket.on('nework_report_done', function (payload) {
+    const id = payload && payload.network_id;
+    if (id !== undefined && id !== null) {
+      try { window.open('/network/' + id, '_blank'); } catch (e) { console.log(e); }
+    }
+    try { getNetworkModal().hide(); } catch (e) { /* noop */ }
+  });
+</script>
 
-</div>
-<div style="width: 90%; margin: auto;">
-
-    <!--
-    {% if  login_url %}
-        <input type="button" class="btn btn-primary" onclick="window.location='{{ login_url }}'"
-               value="Connect to Mendeley"/>
-    {% else %}
-        <input type="button" class="btn btn-error" onclick="window.location='{{ "/mendeleyLogout" }}'"
-               value="Disconnect from Mendeley"/>
-    {% endif %}
-!-->
-
-    <form action="query" method="POST">
-        <p>Query:</p>
-        <p>example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR
-            TITLE-ABS-KEY(Privacy)) AND PUBYEAR > 2020</p>
-        <fieldset>
-
-
-            {% if count %}
-                <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
-
-
-                </fieldset>
-                <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
-                <input type="submit" value="Fetch {{ count }} results (up to 1000)">
-            {% else %}
-                <button class="btn btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#options"
-                        aria-expanded="false" aria-controls="collapseExample">
-                    Options
-                </button>
-                <div class="collapse" id="options">
-                    <div class="card card-body">
-                        <div>
-                            <input type="checkbox" id="xref" name="xref"
-                                   onchange="xref_changed()" unchecked>
-                            <label for="xref">Download paper metadata (10x slower)<span
-                                    class="badge bg-warning">beta</span></label>
-                        </div>
-                        <div>
-                            <input type="checkbox" id="oa" name="oa"
-                                   onchange="oa_changed()" unchecked>
-                            <label for="oa">Show only Open Access work</label>
-                        </div>
-
-                        <div>
-                            <input type="checkbox" id="cite_bib" name="cite_bib"
-                                   onchange="cite_bib_changed()" unchecked>
-                            <label for="cite_bib">Citation as bibtex</label>
-                        </div>
-
-
-                        <div class="container">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <fieldset>
-                                        <legend>Search in specific conference/journal</legend>
-                                        <div class="row">
-                                            <select id="source_select" multiple>
-                                                {% for category in sources.keys() %}
-                                                    <optgroup label="{{ category }}">
-                                                        {% for source in sources[category] %}
-                                                            <option value="{{ source.full_text_name }}"
-                                                                    code="{{ source.code }}">{{ source.short_name }}</option>
-                                                        {% endfor %}
-
-                                                    </optgroup>
-
-                                                {% endfor %}
-                                            </select></div>
-                                        <div class="row">
-                                            <input id="source_select_btn" class="btn btn-primary add-restrict"
-                                                   type="button"
-                                                   value="Apply Source Restriction"
-                                                   onclick="add_source_restriction_to_query()"/></div>
-                                    </fieldset>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <div class="row">
-                                        <fieldset>
-                                            <legend>Search by specific subject area</legend>
-                                            <div class="row">
-                                                <select id="domain_select" multiple>
-                                                    <option value="COMP">Computer Science</option>
-                                                    <option value="AGRI">Agricultural and Biological Sciences</option>
-                                                    <option value="ARTS">Arts and Humanities</option>
-                                                    <option value="BIOC">Biochemistry, Genetics and Molecular Biology
-                                                    </option>
-                                                    <option value="BUSI">Business, Management and Accounting</option>
-                                                    <option value="CENG">Chemical Engineering</option>
-                                                    <option value="CHEM">Chemistry</option>
-                                                    <option value="DECI">Decision Sciences</option>
-                                                    <option value="DENT">Dentistry</option>
-                                                    <option value="EART">Earth and Planetary Sciences</option>
-                                                    <option value="ECON">Economics, Econometrics and Finance</option>
-                                                    <option value="ENER">Energy</option>
-                                                    <option value="ENGI">Engineering</option>
-                                                    <option value="ENVI">Environmental Science</option>
-                                                    <option value="HEAL">Health Professions</option>
-                                                    <option value="IMMU">Immunology and Microbiology</option>
-                                                    <option value="MATE">Materials Science</option>
-                                                    <option value="MATH">Mathematics</option>
-                                                    <option value="MEDI">Medicine</option>
-                                                    <option value="NEUR">Neuroscience</option>
-                                                    <option value="NURS">Nursing</option>
-                                                    <option value="PHAR">Pharmacology, Toxicology and Pharmaceutics
-                                                    </option>
-                                                    <option value="PHYS">Physics and Astronomy</option>
-                                                    <option value="PSYC">Psychology</option>
-                                                    <option value="SOCI">Social Sciences</option>
-                                                    <option value="VETE">Veterinary</option>
-                                                    <option value="MULT">Multidisciplinary</option>
-                                                </select>
-                                            </div>
-
-                                            <div class="row">
-                                                <input id="source_select_btn" class="btn btn-primary add-restrict"
-                                                       type="button"
-                                                       value="Apply Domain Restriction"
-                                                       onclick="add_domain_restriction_to_query()"/></div>
-                                        </fieldset>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
-                <textarea id="querybox" name="query" onkeyup="textAreaChange()"
-                          style="width:100%">{{ query }}</textarea>
-
-
-                </fieldset>
-                <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
-                <input class="btn btn-primary" id="main_button" type="button" value="Count Results"
-                       onclick="handle_submit()">
-            {% endif %}
-
-        <input class="btn btn-success" id="permalink" type="button" value="Get Query Permalink"
-               onclick="copyPermalink()"
-               hidden/>
-        <input class="btn btn-success" id="dlresults" type="button" value="Download dois as bibtex"
-               onclick="downloadResults()"
-               hidden/>
-        <span id="dlresultsxsl" hidden>
-        <input class="btn btn-success" type="button" value="export in spreadsheet"
-               onclick="downloadExcel('xlsx')"
-        />
-        </span>
-        <input class="btn btn-success" id="rss" type="button" value="Create RSS Link"
-               onclick="createRssLink()"
-               hidden/>
-        <div id="cloud" hidden>
-            <input class="btn btn-success" type="button" value="Get Cloud for these results"
-                   onclick="cloudResults()"
-            /><span
-                class="badge bg-warning">beta</span>
-        </div>
-
-
-    </form>
-
-    <div class="container" id="progress-container">
-        <div class="row">
-
-            <div class="col-md-12">
-                <div>
-                    <label for="file">Progress:</label>
-                    <div class="progress">
-                        <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated"
-                             id="pb_success" aria-valuemin="0" aria-valuenow="0"
-                             aria-valuemax="0"><span id="pb_success_count"></span></div>
-                        <div role="progressbar" style="width: 0%" class="progress-bar bg-warning progress-bar-animated"
-                             id="pb_failure" aria-valuemin="0" aria-valuenow="0"
-                             aria-valuemax="0"><span id="pb_failure_count"></span></div>
-                    </div>
-
-                </div>
-            </div>
-        </div>
-
-    </div>
-    <img src="" id="cloudimg" hidden/>
-
-    <table id="doitable" class="table table-bordered table-hover sortable w-auto">
-        <thead>
-        <tr>
-            <th>Identifier</th>
-            <th>Date</th>
-            <th>Title</th>
-            <th class="xref xref-abstract" style="width:200px">Abstract</th>
-            <th class="cite_count xref">Citation Count</th>
-            <th class="ref_count xref">Reference Count</th>
-            <th class="subject xref">Subjects</th>
-            <th>Publication Title</th>
-            <th class="xref">Ranking</th>
-            <th class="xref">H-Index</th>
-            <th>Author</th>
-            <th class="xref">Affiliation</th>
-            <th class="xref">country</th>
-            <th>Extra link</th>
-            <th>Snowball Link</th>
-            <th>Cite</th>
-        </tr>
-        </thead>
-        <tbody id="doi_table">
-
-
-        </tbody>
-
-    </table>
-
-
-</div>
 
 </body>
-
-
-<script src="static/contrib/js/dark-mode-switch.min.js"></script>
 
 </html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Works → Common References Graph</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --fg: #e6edf3;
+      --muted: #9fb0c0;
+      --work: #7aa2f7;       /* base color for works */
+      --ref: #f7768e;        /* base color for refs  */
+      --work-neigh: #22c55e; /* highlight for works  */
+      --ref-neigh: #f59e0b;  /* highlight for refs   */
+      --link: #6b7280;
+      --panel: #10151c;
+      --accent: #a6e3a1;
+    }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial; }
+    #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header { display: flex; gap: .75rem; align-items: center; padding: .6rem .9rem; background: var(--panel); border-bottom: 1px solid #1b2530; position: sticky; top: 0; z-index: 2; }
+    header button { background: #182330; color: var(--fg); border: 1px solid #2a394b; padding: .45rem .7rem; border-radius: .5rem; cursor: pointer; font-size: 14px; }
+    header button:hover { border-color: #3b516b; }
+    header input[type=range] { width: 240px; }
+    header .meta { font-size: 12px; color: var(--muted); margin-left: .5rem; }
+
+    #container { position: relative; }
+    svg { width: 100%; height: 100%; display: block; }
+
+    .link { stroke: var(--link); stroke-opacity: .35; }
+    .link.highlight { stroke-opacity: .85; }
+
+    .node { stroke: #0a0f14; stroke-width: 1px; cursor: grab; }
+    .node:active { cursor: grabbing; }
+    .node.work { fill: var(--work); }
+    .node.ref  { fill: var(--ref); }
+    .node.work.neighbor { fill: var(--work-neigh); }
+    .node.ref.neighbor  { fill: var(--ref-neigh); }
+
+    .label { pointer-events: none; font-size: 11px; fill: #cdd6f4; opacity: .85; }
+    .legend { position: absolute; left: 10px; bottom: 10px; background: rgba(16,21,28,.9); border: 1px solid #24303d; border-radius: 8px; padding: .5rem .7rem; font-size: 12px; }
+    .legend .swatch { width: .75rem; height: .75rem; display: inline-block; border-radius: 999px; margin-right: .35rem; vertical-align: middle; }
+
+    #tooltip { position: absolute; z-index: 10; pointer-events: none; background: #111827; color: var(--fg); border: 1px solid #253244; border-radius: .5rem; padding: .6rem .7rem; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,.35); display: none; }
+    #tooltip h3 { margin: 0 0 .35rem 0; font-size: 14px; }
+    #tooltip .row { font-size: 12px; color: var(--muted); margin-top: .25rem; }
+    #tooltip a { color: var(--accent); text-decoration: none; }
+    #tooltip a:hover { text-decoration: underline; }
+
+    .ring { fill: none; stroke: #223042; stroke-dasharray: 4 6; stroke-opacity: .5; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <button id="btn-reset" title="Reset nodes to initial layout">Reset layout</button>
+      <button id="btn-fit" title="Zoom/Pan to fit graph">Fit to view</button>
+      <label>Threshold <input id="threshold" type="range" min="1" max="20" value="5" /></label>
+      <div class="meta" id="meta">Loading…</div>
+    </header>
+    <div id="container">
+      <svg id="svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <div><span class="swatch" style="background: var(--ref)"></span>Most cited references</div>
+        <div><span class="swatch" style="background: var(--work)"></span>Input works (DOIs)</div>
+      </div>
+      <div id="tooltip"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script>
+  const svg = d3.select('#svg');
+  const width = 1200, height = 800;
+
+  const gZoom = svg.append('g');
+  const gRings = gZoom.append('g');
+  const gLinks = gZoom.append('g');
+  const gNodes = gZoom.append('g');
+  const gLabels = gZoom.append('g');
+
+  const tooltip = document.getElementById('tooltip');
+  const metaEl = document.getElementById('meta');
+  const thresholdSlider = document.getElementById('threshold');
+
+  let fullData = null;
+
+  const zoom = d3.zoom().scaleExtent([0.25, 3]).on('zoom', (ev) => { gZoom.attr('transform', ev.transform); });
+  svg.call(zoom);
+
+  const sim = d3.forceSimulation()
+    .force('charge', d3.forceManyBody().strength(-40))
+    .force('center', d3.forceCenter(width/2, height/2))
+    .force('collide', d3.forceCollide().radius(d => d.type === 'ref' ? 18 + Math.sqrt(d.count || 1)*2 : 10))
+    .alphaDecay(0.05);
+
+  function computeInitialPositions(data) {
+    const cx = width/2, cy = height/2;
+    const works = data.nodes.filter(n => n.type === 'work');
+    const refs  = data.nodes.filter(n => n.type === 'ref');
+    const R = Math.min(width, height) * 0.42;
+    works.forEach((n, i) => {
+      const theta = (i / Math.max(1, works.length)) * 2 * Math.PI;
+      const x = cx + R * Math.cos(theta);
+      const y = cy + R * Math.sin(theta);
+      n.x = n.fx = x;
+      n.y = n.fy = y;
+      n.initialX = x; n.initialY = y;
+    });
+    refs.forEach((n) => {
+      const jitter = 40;
+      n.x = cx + (Math.random()-0.5)*jitter;
+      n.y = cy + (Math.random()-0.5)*jitter;
+      n.initialX = n.x; n.initialY = n.y;
+    });
+    gRings.selectAll('circle').data([R])
+      .join('circle')
+      .attr('class', 'ring')
+      .attr('cx', cx).attr('cy', cy).attr('r', R);
+  }
+
+  function render(data, minCount) {
+    // Filter references by minCount
+    const filteredRefs = new Set(data.nodes.filter(n => n.type === 'ref' && (n.count || 0) >= minCount).map(n => n.id));
+    const filteredNodes = data.nodes.filter(n => n.type === 'work' || filteredRefs.has(n.id));
+    const filteredLinks = data.links.filter(l => filteredRefs.has(typeof l.target === 'object' ? l.target.id : l.target));
+
+    // Build adjacency maps for hover highlighting
+    const refsByWork = new Map(); // workId -> Set(refIds)
+    const worksByRef = new Map(); // refId  -> Set(workIds)
+
+    const nodeIds = new Set(filteredNodes.map(n => String(n.id)));
+
+    for (const l of filteredLinks) {
+      const s = String(typeof l.source === 'object' ? l.source.id : l.source);
+      const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+      if (!nodeIds.has(s)) continue; // safety
+      if (!refsByWork.has(s)) refsByWork.set(s, new Set());
+      if (!worksByRef.has(t)) worksByRef.set(t, new Set());
+      refsByWork.get(s).add(t);
+      worksByRef.get(t).add(s);
+    }
+
+    metaEl.textContent = `${filteredNodes.length} nodes, ${filteredLinks.length} links (threshold=${minCount})`;
+    computeInitialPositions({ nodes: filteredNodes });
+
+    const refSize = d3.scaleSqrt()
+      .domain(d3.extent(filteredNodes.filter(d => d.type === 'ref').map(d => d.count || 1)))
+      .range([8, 24]);
+
+    const link = gLinks.selectAll('line').data(filteredLinks, d => `${String(typeof d.source === 'object' ? d.source.id : d.source)}->${String(typeof d.target === 'object' ? d.target.id : d.target)}`);
+    link.join(
+      enter => enter.append('line').attr('class', 'link').attr('stroke-width', 1.2),
+      update => update,
+      exit => exit.remove()
+    );
+
+    const node = gNodes.selectAll('circle').data(filteredNodes, d => d.id);
+    node.join(
+      enter => enter.append('circle')
+        .attr('class', d => `node ${d.type}`)
+        .attr('r', d => d.type === 'ref' ? refSize(d.count || 1) : 7)
+        .call(d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended))
+        .on('mouseover', (ev, d) => { showTooltip(ev, d); applyHighlight(d, true, refsByWork, worksByRef); })
+        .on('mousemove', (ev) => { moveTooltip(ev); })
+        .on('mouseout', (ev, d) => { hideTooltip(); applyHighlight(d, false, refsByWork, worksByRef); })
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); }),
+      update => update.attr('r', d => d.type === 'ref' ? refSize(d.count || 1) : 7),
+      exit => exit.remove()
+    );
+
+    const label = gLabels.selectAll('text').data(filteredNodes.filter(d => d.type === 'ref'), d => d.id);
+    label.join(
+      enter => enter.append('text').attr('class','label').attr('text-anchor','middle')
+        .attr('dy', d => -(refSize(d.count || 1) + 6)).text(d => truncate(d.title || d.id, 36)),
+      update => update.text(d => truncate(d.title || d.id, 36)),
+      exit => exit.remove()
+    );
+
+    const refNodes = filteredNodes.filter(d => d.type === 'ref');
+    sim.nodes(refNodes).on('tick', ticked);
+
+    function ticked(){
+      gLinks.selectAll('line')
+        .attr('x1', d => nodeById(d.source, filteredNodes).x)
+        .attr('y1', d => nodeById(d.source, filteredNodes).y)
+        .attr('x2', d => nodeById(d.target, filteredNodes).x)
+        .attr('y2', d => nodeById(d.target, filteredNodes).y);
+      gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+      gLabels.selectAll('text').attr('x', d => d.x).attr('y', d => d.y - 2);
+    }
+  }
+
+  function nodeById(id, nodes){
+    const key = String(typeof id === 'object' ? id.id : id);
+    return nodes.find(n => String(n.id) === key) || { x: 0, y: 0 };
+  }
+
+  function applyHighlight(d, on, refsByWork, worksByRef){
+    gNodes.selectAll('circle').classed('neighbor', false);
+    gLinks.selectAll('line').classed('highlight', false);
+    if (!on) return;
+
+    if (d.type === 'work') {
+      const neigh = refsByWork.get(String(d.id)) || new Set();
+      gNodes.selectAll('circle')
+        .filter(n => n.type === 'ref' && neigh.has(String(n.id)))
+        .classed('neighbor', true);
+      gLinks.selectAll('line').classed('highlight', l => {
+        const s = String(typeof l.source === 'object' ? l.source.id : l.source);
+        const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+        return s === String(d.id) && neigh.has(t);
+      });
+    } else if (d.type === 'ref') {
+      const neigh = worksByRef.get(String(d.id)) || new Set();
+      gNodes.selectAll('circle')
+        .filter(n => n.type === 'work' && neigh.has(String(n.id)))
+        .classed('neighbor', true);
+      gLinks.selectAll('line').classed('highlight', l => {
+        const s = String(typeof l.source === 'object' ? l.source.id : l.source);
+        const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+        return t === String(d.id) && neigh.has(s);
+      });
+    }
+  }
+
+  function dragstarted(event, d){ if(!event.active) sim.alpha(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+  function dragged(event, d){ d.fx = event.x; d.fy = event.y; }
+  function dragended(event, d){ if(d.type === 'work'){ d.fx = d.x; d.fy = d.y; } else { d.fx = null; d.fy = null; } }
+
+  function showTooltip(ev, d){
+    const lines = [];
+    if (d.title)   lines.push(`<div class="row"><strong>Title:</strong> ${escapeHTML(d.title)}</div>`);
+    if (d.authors && d.authors.length) lines.push(`<div class="row"><strong>Authors:</strong> ${escapeHTML(d.authors.join(', '))}</div>`);
+    if (d.venue)   lines.push(`<div class="row"><strong>Venue:</strong> ${escapeHTML(d.venue)}</div>`);
+    if (d.doi)     lines.push(`<div class="row"><strong>DOI:</strong> <a href="${d.doi}" target="_blank">${escapeHTML(d.doi)}</a></div>`);
+    if (d.openalex)lines.push(`<div class="row"><strong>OpenAlex:</strong> <a href="${d.openalex}" target="_blank">${escapeHTML(d.openalex)}</a></div>`);
+    if (Number.isFinite(d.count)) lines.push(`<div class="row"><strong>Input papers citing:</strong> ${d.count}</div>`);
+    tooltip.innerHTML = `<h3>${d.type === 'work' ? 'Work' : 'Reference'}</h3>` + lines.join('');
+    tooltip.style.display = 'block';
+    moveTooltip(ev);
+  }
+  function moveTooltip(ev){ tooltip.style.left = (ev.clientX + 14) + 'px'; tooltip.style.top = (ev.clientY + 14) + 'px'; }
+  function hideTooltip(){ tooltip.style.display = 'none'; }
+
+  function copyOpenAlex(d){
+    let text = '';
+    if (d.openalex) text = d.openalex;
+    else if (String(d.id).startsWith('W')) text = `https://openalex.org/${d.id}`;
+    if (text) {
+      navigator.clipboard.writeText(text).then(() => {
+        metaEl.textContent = `Copied ${text}`;
+        setTimeout(() => { metaEl.textContent = ''; }, 2000);
+      }).catch(() => {});
+    }
+  }
+
+  document.getElementById('btn-reset').onclick = () => { if (!fullData) return; render(fullData, parseInt(thresholdSlider.value, 10)); };
+  document.getElementById('btn-fit').onclick = () => fitToView();
+  thresholdSlider.oninput = () => { if (fullData) render(fullData, parseInt(thresholdSlider.value, 10)); };
+
+  function fitToView(){
+    const pad = 40;
+    const renderedNodes = Array.from(gNodes.selectAll('circle').data());
+    if (renderedNodes.length === 0) return;
+    const xs = renderedNodes.map(d => d.x);
+    const ys = renderedNodes.map(d => d.y);
+    const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+    const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+    const widthVB = Math.max(1, maxX - minX), heightVB = Math.max(1, maxY - minY);
+    const k = Math.min(svg.node().clientWidth / widthVB, svg.node().clientHeight / heightVB);
+    svg.transition().duration(450).call(
+      zoom.transform,
+      d3.zoomIdentity
+        .translate(svg.node().clientWidth/2, svg.node().clientHeight/2)
+        .scale(isFinite(k) ? k : 1)
+        .translate(-(minX + widthVB/2), -(minY + heightVB/2))
+    );
+  }
+
+  // Initial data fetch
+  fetch('/network/compute/{{work_list_id}}')
+    .then(r => r.json())
+    .then(data => { fullData = data; render(fullData, parseInt(thresholdSlider.value, 10)); })
+    .catch(err => { metaEl.textContent = 'Error loading data: ' + err; });
+
+  // Utils
+  function truncate(s, n){ s = s || ''; return s.length > n ? s.slice(0, n-1) + '…' : s; }
+  function escapeHTML(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
+  </script>
+</body>
+</html>

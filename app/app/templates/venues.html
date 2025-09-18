@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>who publishes where?</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+  /* Highlight venues with >= 2 contributing authors */
+  tr.multi-author-row > td {
+    background-color: var(--bs-warning-bg-subtle) !important;
+  }
+  tr.multi-author-row > td.venue-col {
+    border-left: .4rem solid var(--bs-warning);
+  }
+  .badge-multi-author {
+    margin-left: .5rem;
+  }
+
+  .sticky-top-input { position: sticky; top: 0; background: var(--bs-body-bg); z-index: 5; }
+  .table-responsive { overflow: auto; }
+  th.venue-head, td.venue-col { min-width: 18rem; }
+  td.count-cell { text-align: center; vertical-align: middle; }
+  th.orcid-col { min-width: 46ch; }
+  .orcid-input[disabled], .orcid-input[readonly] { background-color: var(--bs-secondary-bg) !important; opacity: 1; }
+  .loading-badge { display: inline-flex; align-items: center; gap: .4rem; }
+  .author-label { display: block; font-size: .8rem; color: var(--bs-secondary-color); margin-top: .25rem; }
+  .years-list { font-size: 0.9em; margin-left: .25rem; white-space: nowrap; }
+  .years-list a { text-decoration: none; }
+  .id-type-badge { margin-left: .5rem; }
+  .aka-help {
+    display: inline-block;
+    font-weight: 600;
+    border-radius: 50%;
+    width: 1.05rem;
+    height: 1.05rem;
+    line-height: 1.05rem;
+    text-align: center;
+    font-size: .75rem;
+    background: var(--bs-secondary-bg);
+    color: var(--bs-secondary-color);
+    cursor: help;
+    vertical-align: middle;
+  }
+  </style>
+</head>
+<body class="bg-light">
+  <header class="bg-dark text-white py-5 mb-4">
+    <div class="container">
+      <h1 class="display-5 m-0">who publishes where?</h1>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table id="venuesTable" class="table table-bordered align-middle mb-0">
+            <thead class="table-light">
+              <tr id="inputRow" class="sticky-top-input">
+                <th class="venue-head">Venue</th>
+              </tr>
+              <tr id="orcidHeaderRow">
+                <th class="text-muted small">Acronym / Title</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <p id="statusArea" class="text-muted small mt-3 mb-0"></p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Socket.IO client (v3 to match server) -->
+  <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+  <!-- Bootstrap 5 JS (for tooltips) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    const socket = io({ autoConnect: true });
+
+    const allVenues = new Set();
+    const venueAkas = new Map();       // Map<venue, Set<string>>
+    const columns = [];
+    const tableBody = document.getElementById('tableBody');
+    const inputRow = document.getElementById('inputRow');
+    const orcidHeaderRow = document.getElementById('orcidHeaderRow');
+    const statusArea = document.getElementById('statusArea');
+
+    let activeColumnIndex = -1;
+    let tooltipInstances = [];
+    const pendingIdentifiers = []; // queue of full URLs to process sequentially
+
+    // Full URL patterns (strict)
+    const ORCID_URL_REGEX = /^https?:\/\/orcid\.org\/(\d{4}-\d{4}-\d{4}-\d{3}[\dX])$/i;
+    const OPENALEX_URL_REGEX = /^https?:\/\/openalex\.org\/(A\d+)$/i;
+
+    // Bare ID patterns (accepted from BroadcastChannel)
+    const ORCID_ID_REGEX = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/i;
+    const OPENALEX_ID_REGEX = /^A\d+$/i;
+
+    // BroadcastChannel wiring
+    const CHANNEL_NAME = 'miage-scholar-author-channel';
+    const bc = new BroadcastChannel(CHANNEL_NAME);
+
+    // Receive author selections from the first tab
+    bc.onmessage = (evt) => {
+      const data = evt?.data;
+      if (!data) return;
+
+      // { type: 'author-click', authorID: '...' }
+      if ((data.type === 'author-click' || data.type === 'author') && data.authorID) {
+        const coerced = coerceToFullUrl(String(data.authorID));
+        if (coerced) {
+          pendingIdentifiers.push(coerced);
+          setStatus(`Queued ${coerced} from BroadcastChannel.`);
+          maybeStartNext();
+        } else {
+          setStatus('Received authorID on BroadcastChannel, but it is not a valid ORCID/OpenAlex identifier.', true);
+        }
+      }
+    };
+
+    // Notify the first tab when this tab is closing
+    const notifyCloseOnce = (() => {
+      let sent = false;
+      return () => {
+        if (sent) return;
+        sent = true;
+        try { bc.postMessage('tab-closed'); } catch (_) {}
+        try { bc.postMessage({ type: 'tab-closed' }); } catch (_) {}
+      };
+    })();
+
+    // Send "tab-closed" on close/unload
+    window.addEventListener('unload', notifyCloseOnce);
+    //window.addEventListener('pagehide', notifyCloseOnce);
+
+    // Additionally, detect if the opener (first tab) has been closed while this tab remains open.
+    // If detected, publish "tab-closed" so any surviving contexts can reset their state.
+    let openerClosedNotified = false;
+    setInterval(() => {
+      try {
+        if (!openerClosedNotified && (window.opener == null || (window.opener && window.opener.closed))) {
+          openerClosedNotified = true;
+          alert(""+openerClosedNotified+" "+ window.opener + " "+window.opener.closed);
+          bc.postMessage('tab-closed');
+          bc.postMessage({ type: 'tab-closed' });
+        }
+      } catch (_) { /* cross-origin opener; ignore */ }
+    }, 1000);
+
+    addInputColumn();
+
+    // On page load, queue {{ orcid }} and {{ openalex }} (full URLs) and start processing
+    document.addEventListener('DOMContentLoaded', () => {
+      const initialOrcidUrl    = {{ orcid|tojson }};
+      const initialOpenAlexUrl = {{ openalex|tojson }};
+
+      if (typeof initialOrcidUrl === 'string' && initialOrcidUrl.trim())     pendingIdentifiers.push(initialOrcidUrl.trim());
+      if (typeof initialOpenAlexUrl === 'string' && initialOpenAlexUrl.trim()) pendingIdentifiers.push(initialOpenAlexUrl.trim());
+
+      maybeStartNext();
+    });
+
+    function maybeStartNext() {
+      if (activeColumnIndex !== -1) return;
+      if (pendingIdentifiers.length === 0) return;
+
+      const url = pendingIdentifiers.shift();
+
+      // Ensure there is an idle input column
+      let col = columns.find(c => c.state === 'idle');
+      if (!col) {
+        addInputColumn();
+        col = columns.find(c => c.state === 'idle');
+      }
+      const input = col.thInput.querySelector('input.orcid-input');
+      input.value = url;
+      col.validate();
+    }
+
+    function addInputColumn() {
+      const idx = columns.length;
+
+      const th = document.createElement('th');
+      th.className = 'orcid-col';
+      th.innerHTML = `
+        <div class="input-group">
+          <span class="input-group-text">Identifier URL</span>
+          <input type="text" class="form-control orcid-input" placeholder="https://orcid.org/0000-0003-1540-2099 or https://openalex.org/A5014807509" aria-label="Identifier URL">
+          <button class="btn btn-outline-secondary" type="button" title="Validate">⏎</button>
+        </div>
+        <div class="form-text">Full URL required (ORCID or OpenAlex).</div>
+      `;
+      inputRow.appendChild(th);
+
+      const labelTh = document.createElement('th');
+      labelTh.className = 'text-muted small text-truncate';
+      orcidHeaderRow.appendChild(labelTh);
+
+      columns.push({
+        idType: null,           // 'orcid' | 'openalex'
+        identifierUrl: null,    // full URL
+        idExtracted: null,      // id part (0000-..., A123...)
+        name: null,
+        data: new Map(),        // Map<venue, count>
+        details: new Map(),     // Map<venue, Array<{doi, year, title}>>
+        state: 'idle',
+        updates: 0,
+        thInput: th,
+        thLabel: labelTh,
+        validate: null
+      });
+
+      const input = th.querySelector('input.orcid-input');
+      const btn = th.querySelector('button');
+
+      const validate = () => {
+        if (activeColumnIndex !== -1) {
+          setStatus('A retrieval is already in progress. Wait for completion before starting another.', true);
+          return;
+        }
+        const raw = input.value.trim();
+        clearStatus();
+
+        const parsed = parseIdentifierUrl(raw);
+        if (!parsed) {
+          setStatus('Invalid identifier. Provide a FULL ORCID URL (https://orcid.org/....) or FULL OpenAlex URL (https://openalex.org/A...).', true);
+          input.focus();
+          return;
+        }
+
+        input.setAttribute('readonly', 'readonly');
+        input.disabled = true;
+        btn.disabled = true;
+
+        columns[idx].idType = parsed.type;
+        columns[idx].identifierUrl = parsed.url;
+        columns[idx].idExtracted = parsed.id;
+        columns[idx].state = 'loading';
+        columns[idx].updates = 0;
+
+        const typeBadge = parsed.type === 'orcid'
+          ? `<span class="badge bg-success id-type-badge">ORCID</span>`
+          : `<span class="badge bg-info text-dark id-type-badge">OpenAlex</span>`;
+
+        columns[idx].thLabel.innerHTML = `
+          <span class="loading-badge">
+            <a href="${parsed.url}" class="badge text-bg-secondary text-decoration-none" target="_blank" rel="noopener noreferrer">${escapeHtml(parsed.url)}</a>${typeBadge}
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="text-secondary" id="ctr-${idx}">0</span>
+          </span>
+        `;
+
+        activeColumnIndex = idx;
+
+        if (parsed.type === 'orcid') {
+          setStatus(`Requesting venues for ORCID ${parsed.id} via WebSocket…`);
+          socket.emit('get_venue', parsed.url);          // send FULL URL
+        } else {
+          setStatus(`Requesting venues for OpenAlex ${parsed.id} via WebSocket…`);
+          socket.emit('get_venue_openalex', parsed.url); // send FULL URL
+        }
+      };
+
+      columns[idx].validate = validate;
+
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          validate();
+        }
+      });
+      btn.addEventListener('click', validate);
+
+      if (idx === 0) input.focus();
+    }
+
+    // Incremental updates: {"venue":..., "doi":..., "publication_year":..., "publication_title":..., "aka": ...}
+    socket.on('venue_update', (payload) => {
+      if (activeColumnIndex === -1) return;
+      const col = columns[activeColumnIndex];
+      if (col.state !== 'loading') return;
+
+      let obj;
+      try { obj = (typeof payload === 'string') ? JSON.parse(payload) : payload; }
+      catch (e) { setStatus(`Error parsing venue_update payload: ${e.message}`, true); return; }
+
+      const venue = String(obj.venue);
+      const doi = String(obj.doi);
+      const year = String(obj.publication_year);
+      const title = String(obj.publication_title);
+
+      // aka can be string or array; normalize to array of non-empty strings
+      const akaRaw = obj.aka;
+      if (akaRaw != null) {
+        const list = Array.isArray(akaRaw) ? akaRaw : [akaRaw];
+        const trimmed = list.map(x => String(x).trim()).filter(x => x.length > 0);
+        if (trimmed.length > 0) {
+          if (!venueAkas.has(venue)) venueAkas.set(venue, new Set());
+          const s = venueAkas.get(venue);
+          trimmed.forEach(x => s.add(x));
+        }
+      }
+
+      const prev = col.data.get(venue) || 0;
+      col.data.set(venue, prev + 1);
+      allVenues.add(venue);
+
+      if (!col.details.has(venue)) col.details.set(venue, []);
+      col.details.get(venue).push({ doi, year, title });
+
+      col.updates += 1;
+      const ctrEl = document.getElementById(`ctr-${activeColumnIndex}`);
+      if (ctrEl) ctrEl.textContent = String(col.updates);
+
+      renderTable();
+    });
+
+    // Final counts: dict of {venue: count}
+    socket.on('venues', (jsonStr) => {
+      if (activeColumnIndex === -1) return;
+      const col = columns[activeColumnIndex];
+
+      try {
+        const obj = (typeof jsonStr === 'string') ? JSON.parse(jsonStr) : jsonStr;
+        const m = new Map();
+        for (const [k, v] of Object.entries(obj)) {
+          const venue = String(k);
+          const count = Number(v);
+          m.set(venue, count);
+          allVenues.add(venue);
+        }
+        col.data = m;
+      } catch (e) {
+        setStatus(`Error parsing final venues payload: ${e.message}`, true);
+      }
+
+      col.state = 'done';
+      updateColumnHeader(col);
+      renderTable();
+
+      activeColumnIndex = -1;
+      addInputColumn();  // prepare next idle column
+      setStatus(`Completed retrieval for ${col.identifierUrl}.`);
+
+      // Start next queued identifier, if any
+      maybeStartNext();
+    });
+
+    socket.on('author_name', (name) => {
+      if (activeColumnIndex === -1) return;
+      const col = columns[activeColumnIndex];
+      col.name = String(name);
+      updateColumnHeader(col);
+    });
+
+    function updateColumnHeader(col) {
+      const idx = columns.indexOf(col);
+      const typeBadge = col.idType === 'orcid'
+        ? `<span class="badge bg-success id-type-badge">ORCID</span>`
+        : `<span class="badge bg-info text-dark id-type-badge">OpenAlex</span>`;
+
+      if (col.state === 'loading') {
+        col.thLabel.innerHTML = `
+          <span class="loading-badge">
+            <a href="${col.identifierUrl}" class="badge text-bg-secondary text-decoration-none" target="_blank" rel="noopener noreferrer">${escapeHtml(col.identifierUrl)}</a>${typeBadge}
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            <span class="text-secondary" id="ctr-${idx}">${col.updates}</span>
+          </span>
+          ${col.name ? `<span class="author-label">${escapeHtml(col.name)}</span>` : ''}
+        `;
+      } else if (col.state === 'done') {
+        col.thLabel.innerHTML = `
+          <a href="${col.identifierUrl}" class="badge text-bg-primary text-decoration-none" target="_blank" rel="noopener noreferrer">${escapeHtml(col.identifierUrl)}</a>${typeBadge}
+          <span class="ms-2 text-secondary">${col.data.size} venues</span>
+          ${col.name ? `<span class="author-label">${escapeHtml(col.name)}</span>` : ''}
+        `;
+      }
+    }
+
+    function renderTable() {
+      destroyTooltips();
+
+      // Precompute contributing authors per venue and max for gradient scale
+      const contribByVenue = new Map(); // venue -> integer
+      let maxContrib = 0;
+
+      for (const venue of allVenues) {
+        let contributingAuthors = 0;
+        for (const col of columns) {
+          const count = col.data.get(venue);
+          if (Number.isFinite(count) && count > 0) contributingAuthors++;
+        }
+        contribByVenue.set(venue, contributingAuthors);
+        if (contributingAuthors > maxContrib) maxContrib = contributingAuthors;
+      }
+
+      // Sort by number of contributing authors (desc), then alphabetical (case-insensitive)
+      const venues = Array.from(allVenues).sort((a, b) => {
+        const cb = contribByVenue.get(b) || 0;
+        const ca = contribByVenue.get(a) || 0;
+        if (cb !== ca) return cb - ca;
+        return a.localeCompare(b, undefined, { sensitivity: 'base' });
+      });
+
+      tableBody.innerHTML = '';
+
+      for (const venue of venues) {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-venue', venue);
+
+        const contributingAuthors = contribByVenue.get(venue) || 0;
+
+        const tdVenue = document.createElement('td');
+        tdVenue.className = 'venue-col';
+
+        // Acronym/Title text
+        const venueLabel = document.createElement('span');
+        venueLabel.textContent = venue;
+        tdVenue.appendChild(venueLabel);
+
+        // AKA tooltip "?" if any
+        const akas = venueAkas.get(venue);
+        if (akas && akas.size > 0) {
+          const akaBtn = document.createElement('span');
+          akaBtn.className = 'aka-help ms-2';
+          akaBtn.setAttribute('data-bs-toggle', 'tooltip');
+          akaBtn.setAttribute('data-bs-placement', 'top');
+          akaBtn.setAttribute('title', Array.from(akas).join(' • '));
+          akaBtn.setAttribute('aria-label', 'also known as');
+          akaBtn.textContent = '?';
+          tdVenue.appendChild(akaBtn);
+        }
+
+        // Multi-author styling + badge with green->red gradient
+        if (contributingAuthors >= 2) {
+          tr.classList.add('multi-author-row');
+        }
+        if (contributingAuthors >= 1) {
+          const badge = document.createElement('span');
+          badge.className = 'badge badge-multi-author';
+          const bg = authorsToColor(contributingAuthors, maxContrib);
+          badge.style.backgroundColor = bg;
+          badge.style.color = '#fff';
+          badge.textContent = `${contributingAuthors} author${contributingAuthors > 1 ? 's' : ''}`;
+          tdVenue.appendChild(badge);
+        }
+
+        tr.appendChild(tdVenue);
+
+        // Populate per-author counts and details
+        columns.forEach((col) => {
+          const td = document.createElement('td');
+          td.className = 'count-cell';
+
+          const count = col.data.get(venue);
+          if (Number.isFinite(count) && count > 0) {
+            const entries = col.details.get(venue) || [];
+            const dois = entries.map(e => e.doi);
+            const encodedList = dois.map(d => encodeURIComponent(d.split("https://doi.org/")[1])).join(',');
+            const listUrl = `/dois-list?dois=${encodedList}`;
+
+            const countA = document.createElement('a');
+            countA.href = listUrl;
+            countA.target = '_blank';
+            countA.rel = 'noopener noreferrer';
+            countA.textContent = String(count);
+            td.appendChild(countA);
+
+            if (entries.length > 0) {
+              const span = document.createElement('span');
+              span.className = 'years-list';
+              span.appendChild(document.createTextNode(' ('));
+              entries.forEach((e, i) => {
+                const yearA = document.createElement('a');
+                yearA.href = e.doi;
+                yearA.target = '_blank';
+                yearA.rel = 'noopener noreferrer';
+                yearA.setAttribute('data-bs-toggle', 'tooltip');
+                yearA.setAttribute('data-bs-placement', 'top');
+                yearA.setAttribute('title', e.title);
+                yearA.textContent = e.year;
+                span.appendChild(yearA);
+                if (i !== entries.length - 1) span.appendChild(document.createTextNode(', '));
+              });
+              span.appendChild(document.createTextNode(')'));
+              td.appendChild(span);
+            }
+          } else {
+            td.textContent = '';
+          }
+
+          tr.appendChild(td);
+        });
+
+        tableBody.appendChild(tr);
+      }
+
+      enableTooltips();
+    }
+
+    function authorsToColor(n, maxN) {
+      // Linear hue scale: 1 -> green (120), max -> red (0)
+      if (!Number.isFinite(n) || n <= 1 || !Number.isFinite(maxN) || maxN <= 1) {
+        return 'hsl(120, 70%, 45%)';
+      }
+      const t = (n - 1) / (maxN - 1);
+      const hue = Math.round(120 * (1 - t)); // 120..0
+      return `hsl(${hue}, 70%, 45%)`;
+    }
+
+    function parseIdentifierUrl(input) {
+      // Normalize to https; accept only full URLs
+      let m = input.match(ORCID_URL_REGEX);
+      if (m) return { type: 'orcid', id: m[1], url: `https://orcid.org/${m[1]}` };
+      m = input.match(OPENALEX_URL_REGEX);
+      if (m) return { type: 'openalex', id: m[1].toUpperCase(), url: `https://openalex.org/${m[1].toUpperCase()}` };
+      return null;
+    }
+
+    // Accept bare IDs from BroadcastChannel and normalize to full URLs
+    function coerceToFullUrl(idOrUrl) {
+      if (ORCID_URL_REGEX.test(idOrUrl)) {
+        const m = idOrUrl.match(ORCID_URL_REGEX);
+        return `https://orcid.org/${m[1]}`;
+      }
+      if (OPENALEX_URL_REGEX.test(idOrUrl)) {
+        const m = idOrUrl.match(OPENALEX_URL_REGEX);
+        return `https://openalex.org/${m[1].toUpperCase()}`;
+      }
+      if (ORCID_ID_REGEX.test(idOrUrl)) {
+        const m = idOrUrl.match(ORCID_ID_REGEX);
+        return `https://orcid.org/${m[0]}`;
+      }
+      if (OPENALEX_ID_REGEX.test(idOrUrl)) {
+        const m = idOrUrl.match(OPENALEX_ID_REGEX);
+        return `https://openalex.org/${m[0].toUpperCase()}`;
+      }
+      return null;
+    }
+
+    function enableTooltips() {
+      tooltipInstances = Array.from(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        .map(el => new bootstrap.Tooltip(el));
+    }
+    function destroyTooltips() {
+      tooltipInstances.forEach(t => t.dispose());
+      tooltipInstances = [];
+    }
+
+    function setStatus(msg, isError = false) {
+      statusArea.textContent = msg;
+      statusArea.classList.toggle('text-danger', isError);
+      statusArea.classList.toggle('text-muted', !isError);
+    }
+    function clearStatus() { setStatus(''); }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+  </script>
+</body>
+</html>

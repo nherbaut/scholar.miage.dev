@@ -1,20 +1,95 @@
-from feedgen.feed import FeedGenerator
-from Levenshtein.StringMatcher import distance
-import requests
-import datetime
-import re
-import dateparser
-import pytz
-import urllib.parse
+# Standard library
+import pickle
 import csv
-import os
-from sqlalchemy import or_
-from requests_cache import CachedSession
-from datetime import timedelta
-from app.model import PublicationSource, Ranking
-from app.main import SCPUS_BACKEND, SCPUS_ABTRACT_BACKEND, API_KEY, ROOT_URL, SHLINK_API_KEY, REDIS_URL, db
-import pycountry
+import datetime
+from datetime import timedelta, timezone
+import json
 import logging
+import os
+import re
+import urllib.parse
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Iterable, List, Set, Tuple
+from urllib.error import HTTPError
+
+# Third-party libraries
+import dateparser
+import pycountry
+import pytz
+import requests
+from Levenshtein.StringMatcher import distance
+from feedgen.feed import FeedGenerator
+from flask import copy_current_request_context
+from requests_cache import CachedSession, FileCache, RedisCache
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.exc import MultipleResultsFound
+from sqlalchemy import or_
+from urllib3.util import Retry
+
+# pyalex (third-party, grouped separately for clarity)
+import pyalex
+from pyalex import Authors, Funders, Institutions, Publishers, Sources, Topics, Works, config as pyalex_config
+
+# Local application
+from app.cache import session_scpus, session_xref
+from app.main import (
+    API_KEY,
+    ROOT_URL,
+    SCPUS_ABTRACT_BACKEND,
+    SCPUS_BACKEND,
+    SHLINK_API_KEY,
+    db,
+)
+from app.model import PublicationSource, Ranking, NetworkData
+
+pyalex_config.email = os.getenv("PYALEX_EMAIL","nico@scholar.miage.dev")
+pyalex_config.max_retries = 3
+pyalex_config.retry_backoff_factor = 0.2
+pyalex_config.retry_http_codes = [429, 500, 503]
+
+executor_openAlex = ThreadPoolExecutor(max_workers=9)
+executor_scopus = ThreadPoolExecutor(max_workers=9)
+
+_DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
+_OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
+
+
+def _cached_requests_session():
+    REDIS_URL = os.environ.get("REDIS_URL", "")
+
+    if REDIS_URL:
+        redis_host, redis_port = REDIS_URL.split(":")
+        s = CachedSession(
+            'openAlexCAche',
+            backend='redis',
+            host=redis_host,
+            port=redis_port,
+            expire_after=timedelta(days=365),
+            allowable_methods=['GET'],
+            stale_if_error=True,
+        )
+    else:
+        s = CachedSession(
+            backend=FileCache(),
+            expire_after=timedelta(days=1),
+            allowable_methods=['GET'],
+            stale_if_error=True,
+        )
+
+    retries = Retry(
+        total=pyalex.config.max_retries,
+        backoff_factor=pyalex.config.retry_backoff_factor,
+        status_forcelist=pyalex.config.retry_http_codes,
+        allowed_methods=frozenset({"GET"}),
+    )
+    s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retries))
+    return s
+
+
+pyalex._get_requests_session = _cached_requests_session
+
+
 
 logger = logging.getLogger('business')
 
@@ -32,66 +107,10 @@ def get_sources():
     return res
 
 
-def setup_redis_cache(redis_host, redis_port):
-    logger.info(f"setting up redis {redis_host} {redis_port}")
-    session_xref = CachedSession(
-        'xrefCache',
-        backend='redis',
-        host=redis_host,
-        port=redis_port,
-        expire_after=timedelta(days=365),
-        allowable_methods=['GET'],
-        stale_if_error=True,
-    )
-    session_scpus = CachedSession(
-        'scpusCache',
-        host=redis_host,
-        port=redis_port,
-        backend='redis',
-        use_cache_dir=True,
-        expire_after=timedelta(days=1),
-        stale_if_error=True,
-    )
-
-    return session_xref, session_scpus
-
-
-def setup_fs_cache():
-    session_xref = CachedSession(
-        'xrefCache',
-        backend='filesystem',
-        use_cache_dir=True,
-        expire_after=timedelta(days=365),
-        allowable_methods=['GET'],
-        stale_if_error=True,
-    )
-    session_scpus = CachedSession(
-        'scpusCache',
-        backend='filesystem',
-        use_cache_dir=True,
-        expire_after=timedelta(days=1),
-        stale_if_error=True,
-    )
-
-    return session_xref, session_scpus
-
-
-try:
-    if REDIS_URL != "":
-        redis_host, redis_port = REDIS_URL.split(":")
-        session_xref, session_scpus = setup_redis_cache(redis_host, redis_port)
-        logger.info("using redis cache")
-    else:
-        session_xref, session_scpus = setup_fs_cache()
-        logger.info("using rs cache")
-except:
-    session_xref, session_scpus = setup_fs_cache()
-    logger.info("using rs cache")
-
-
 def generate_rss(feed_items, id="id", query="query"):
     fg = FeedGenerator()
-    for item in feed_items:
+    for item in reversed(feed_items):
+        print(item["pubdate"])
         fe = fg.add_entry()
         for key, value in item.items():
             if key.startswith("x-"):
@@ -103,9 +122,11 @@ def generate_rss(feed_items, id="id", query="query"):
                     setter(value_item)
             else:
                 setter(value)
+        fe.content(item["description"])
     fg.title(f"Bibliography Feed {id}")
     fg.link({"href": f'{ROOT_URL}/feed/{id}.rss', "rel": 'alternate'})
     fg.description(f"results for query: {query}")
+
     return fg.rss_str()
 
 
@@ -113,22 +134,31 @@ def update_feed(dois, feed_content):
     for item in dois:
         if item["doi"] != "" and item["doi"] not in feed_content:
             doi = item["doi"]
-            feed_content[item["doi"]] = {"content": "https://doi.org/" + doi,
-                                         "link": [{"href": "https://doi.org/" + doi,
+            access_link = ""
+            if "X-OA-URL" in item and item["X-OA-URL"] and len(item["X-OA-URL"]) > 0:
+                access_link = item["X-OA-URL"]
+                item["X-OA"] = True
+                description = f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']}. \n We think we have found an OA link here:  <a href='{access_link}'>this site</a>"
+            else:
+                access_link = f"https://scholar.google.com/scholar?q={item['title']}"
+                description = f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']}\n We didn't find an OA link, try to find a OA version on <a href='{access_link}'>Google Scholar</a>"
+
+            feed_content[item["doi"]] = {"content":  doi,
+                                         "link": [{"href": doi,
                                                    "rel": "alternate",
                                                    "title": "publisher's site"},
                                                   {"href": ROOT_URL,
                                                    "rel": "via",
                                                    "title": "Authoring search engine"},
-                                                  {"href": "https://sci-hub.se/" + doi,
+                                                  {"href": f"https://scholar.google.com/scholar?q={item['title']}",
                                                    "rel": "related",
-                                                   "title": "SciHub link"}
+                                                   "title": "Google Scholar link"}
                                                   ],
-                                         "title": (" " if item["X-OA"] else "") + item["title"],
-                                         "pubdate": item["x-precise-date"],
+                                         "title": (" [PDF] " if item["X-OA"] else "") + item["title"],
+                                         "pubdate": dateparser.parse(item["x-precise-date"]).replace(tzinfo=timezone.utc),
                                          "author": {"email": item["pubtitle"], "name": item["X-authors"]},
-                                         "x-added-on": datetime.datetime.utcnow(),
-                                         "description": f"{item.get('X-abstract', '')} \n written by {item['X-authors']}  Published by {item['pubtitle']} try to access it on <a href='{'https://sci-hub.se/' + doi}'>scihub here</a>"}
+                                         "x-added-on": datetime.datetime.now(),
+                                         "description": description}
 
 
 def get_blank_ranking():
@@ -167,7 +197,7 @@ def get_ranking(conf_or_journal):
     rank_dto_title = get_blank_ranking()
     ranks = ranks.order_by(Ranking.source.desc()).all()
     for rank in ranks:
-        rank_title=rank.title.lower().replace("proceedings of","")
+        rank_title = rank.title.lower().replace("proceedings of", "")
         if rank_title in conf_or_journal_lower or conf_or_journal_lower in rank_title or distance(conf_or_journal_lower, rank_title) < 5:
             rank_dto_title = rank_dto_converter(rank)
             break
@@ -181,7 +211,8 @@ def get_ranking_by_acronym(conf_or_journal):
     acrs.update(re.findall("\(([A-Za-z]+)\)", conf_or_journal))
     # acrs.update(re.findall("([A-Za-z]{3,})(?:\s|$)", conf_or_journal))
     if len(acrs) > 0:
-        ranks = db.session.query(Ranking).filter(or_(Ranking.acr == v for v in acrs)).all()
+        ranks = db.session.query(Ranking).filter(
+            or_(Ranking.acr == v for v in acrs)).all()
         if len(ranks) > 0:
             return rank_dto_converter(ranks[0])
     return {}
@@ -191,7 +222,8 @@ def refresh_ranking():
     for rank in db.session.query(Ranking).all():
         db.session.delete(rank)
     db.session.commit()
-    base_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ranking")
+    base_folder = os.path.join(os.path.dirname(
+        os.path.abspath(__file__)), "ranking")
     with open(os.path.join(base_folder, 'CORE2021.csv'), newline='\n') as csvfile:
         core_conf_reader = csv.reader(csvfile, delimiter=',')
         for row in core_conf_reader:
@@ -234,16 +266,16 @@ def refresh_ranking():
 
 
 def get_ref_for_doi(doi):
-    resp = requests.get(SCPUS_ABTRACT_BACKEND % doi, headers={"Accept": "application/json"})
+    resp = requests.get(SCPUS_ABTRACT_BACKEND %
+                        doi, headers={"Accept": "application/json"})
     result = resp.json()
     print(result)
 
 
-def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
+def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
     dois = []
 
-    failed = 0
-    success = 0
+    context = type('', (object,), {"success": 0, "failed": 0})()
     client_results_bucket_size = min(max(10, count / 20), 200)
     client_bucket = []
     for i in range(0, min(MAX_RESULTS_QUERY, count), 25):
@@ -251,26 +283,27 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
         print(f"SCPUS_BACKEND {SCPUS_BACKEND}")
         partial_results = session_scpus.get(
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
-        for entry in partial_results["search-results"]["entry"]:
-            if "prism:doi" in entry:
-                success += 1
-            else:
-                failed += 1
 
-            doi = entry.get("prism:doi", "")
-            if doi != "" and xref:
-                xref_response = session_xref.get(f"https://api.crossref.org/works/{doi}")
-                if xref_response.status_code == 200:
-                    xref_json_resp = xref_response.json()["message"]
-                    try:
-                        load_response_from_xref(bucket, xref_json_resp, entry)
-                    except:
-                        load_response_from_scpus(bucket, entry)
-                else:
-                    load_response_from_scpus(bucket, entry)
-            else:
-                load_response_from_scpus(bucket, entry)
-        emitt('doi_update', {"total": count, "done": success, "failed": failed})
+        entries = partial_results["search-results"]["entry"]
+
+        @copy_current_request_context
+        def call_back(success, failure):
+            emitt('doi_update', {"total": count,
+                  "done": success, "failed": failure})
+
+        if xref:
+            futures = [
+                executor_openAlex.submit(extract_data_openalex, bucket,
+                                         entry, context, call_back)
+                for entry in entries
+            ]
+
+            for f in futures:
+                f.result()
+        else:
+            for entry in entries:
+                extract_data_scopus(bucket, entry, context, call_back)
+
         client_bucket += bucket
         if len(client_bucket) > client_results_bucket_size:
             emitt('doi_results', client_bucket)
@@ -279,6 +312,69 @@ def get_results_for_query(count, query, xref, emitt=lambda *args, **kwargs: None
     emitt('doi_results', client_bucket)
     emitt('doi_export_done', dois)
     return dois
+
+
+def complete_scopus_extraction(scopus_partial_data, r):
+
+    oa_url = (r.get("open_access") or {}).get("oa_url", None)
+
+    scopus_partial_data["doi"] = r["id"]
+    scopus_partial_data["X-OA"] = r["open_access"]["is_oa"]
+    scopus_partial_data["X-IsReferencedByCount"] = r["cited_by_count"]
+    scopus_partial_data["X-subject"] = (r["primary_topic"] if "primary_topic" in r and r["primary_topic"]
+                                        and len(r["primary_topic"]) else {}).get("display_name", "")
+    scopus_partial_data["X-refcount"] = r["referenced_works_count"]
+    scopus_partial_data["X-authors"] = ", ".join(
+        [a["author"]["display_name"] for a in r["authorships"]])
+    scopus_partial_data["X-authors-list"] = [{"display_name": a["author"]["display_name"], "orcid": a["author"]
+                                              ["orcid"] if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]]
+    scopus_partial_data["X-OA-URL"] = oa_url
+
+
+def extract_data_openalex(bucket, entry, context, call_back):
+    if "prism:doi" in entry:
+        context.success += 1
+    else:
+        context.failed += 1
+
+    doi = entry.get("prism:doi", "")
+
+    if len(doi) > 0:
+        try:
+            oa_response = Works()[f"https://doi.org/{doi}"]
+            load_response_from_openAlex(bucket, oa_response, entry)
+        except Exception as e:
+            print(e)
+            load_response_from_scpus(bucket, entry)
+    else:
+        try:
+            oa_responses = Works().filter(
+                title={"search": entry.get('prism:publicationName', "")}).get()
+            if len(oa_responses) > 1:
+                load_response_from_scpus(bucket, entry)
+                complete_scopus_extraction(bucket[-1], oa_responses[1])
+        except Exception as e:
+            # something work with the openalex query, not much we can do now
+            pass
+
+    try:
+        call_back(context.success, context.failed)
+    except:
+        pass
+
+
+def extract_data_scopus(bucket, entry, context, call_back):
+    if "prism:doi" in entry:
+        context.success += 1
+    else:
+        context.failed += 1
+
+    load_response_from_scpus(bucket, entry)
+
+    try:
+        call_back(context.success, context.failed)
+    except:
+        pass
 
 
 def load_response_from_scpus(bucket, entry):
@@ -300,8 +396,9 @@ def load_response_from_scpus(bucket, entry):
     if not issn:
         issn = entry.get("prism:eIssn", "")
 
+    authors_list = [{"display_name": entry.get('dc:creator', "unknown")}]
     bucket.append(
-        {"doi": entry.get("prism:doi", ""), "issn": issn, "title": entry.get("dc:title", "-"),
+        {"doi": "https://doi.org/"+entry.get("prism:doi", ""), "issn": issn, "title": entry.get("dc:title", "-"),
          "year": year,
          "x-precise-date": str(coverDate),
          "pubtitle": entry.get('prism:publicationName', ""),
@@ -312,7 +409,8 @@ def load_response_from_scpus(bucket, entry):
          "X-Country-First-affiliation": first_affiliation,
          "X-FirstAuthor-ORCID": "",
          "X-authors": entry.get('dc:creator', "unknown"),
-         });
+         "X-authors-list": authors_list
+         })
 
 
 def get_first_auth_affil(entry):
@@ -324,7 +422,8 @@ def get_first_auth_affil(entry):
 
 
 def get_first_auth_country(entry):
-    country = entry.get("affiliation", [{}])[0].get("affiliation-country", None)
+    country = entry.get("affiliation", [{}])[
+        0].get("affiliation-country", None)
     if country:
         try:
             fuzzy_country_list = pycountry.countries.search_fuzzy(country)
@@ -336,9 +435,41 @@ def get_first_auth_country(entry):
     return "xxx"
 
 
+def load_response_from_openAlex(bucket, r, entry):
+
+    oa_url = (r.get("open_access") or {}).get("oa_url", None)
+
+    bucket.append({"doi": r["doi"], "title": r["title"],
+                   "year": r["publication_year"],
+                   "x-precise-date": r["publication_date"],
+                   "pubtitle": entry.get('prism:publicationName', ""),
+                   "pub_rank": "",
+                   "rank_source": "",
+                   "hindex": "",
+                   "X-OA": r["open_access"]["is_oa"],
+                   "X-FirstAuthor": "",
+                   "X-Country-First-Author": get_first_auth_country(entry),
+                   "X-Country-First-affiliation": get_first_auth_affil(entry),
+                   "X-FirstAuthor-ORCID": "",
+                   "X-FirstAuthor-OpenAlex": "",
+                   "X-IsReferencedByCount": r["cited_by_count"],
+                   "X-subject": (r["primary_topic"] if "primary_topic" in r and r["primary_topic"] and len(r["primary_topic"]) else {}).get("display_name", ""),
+                   "X-refcount": r["referenced_works_count"],
+                   "X-abstract": "",
+                   "X-authors": ", ".join([a["author"]["display_name"] for a in r["authorships"]]),
+                   "X-authors-list": [{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"] if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]],
+                   "X-OA-URL": oa_url or ""
+
+                   })
+
+
 def load_response_from_xref(bucket, xref_json_resp, entry):
-    first_author = [a for a in xref_json_resp.get("author", []) if a.get("sequence", "") == "first"]
-    authors = " and ".join([a.get("family", "") + ", " + a.get("given", "") for a in xref_json_resp.get("author", [])])
+    first_author = [a for a in xref_json_resp.get(
+        "author", []) if a.get("sequence", "") == "first"]
+    authors = " and ".join([a.get("family", "") + ", " + a.get("given", "")
+                           for a in xref_json_resp.get("author", [])])
+    authors_list = [{"display_name": a.get("family", "")+", " + a.get("given", "")[0], "orcid": a.get(
+        "ORCID")} for a in xref_json_resp.get("author", [])]
 
     first_author_country = get_first_auth_country(entry)
     first_affiliation = get_first_auth_affil(entry)
@@ -378,7 +509,8 @@ def load_response_from_xref(bucket, xref_json_resp, entry):
                    "X-subject": ", ".join(xref_json_resp.get("subject", [])),
                    "X-refcount": xref_json_resp.get("reference-count", ""),
                    "X-abstract": xref_json_resp.get("abstract", ""),
-                   "X-authors": authors
+                   "X-authors": authors,
+                   "X-authors-list": authors_list
                    })
 
 
@@ -388,7 +520,8 @@ def escape_query(query):
 
 def count_results_for_query(query):
     print(f"query with {API_KEY} API_KEY")
-    response = session_scpus.get(SCPUS_BACKEND % (0, 1, escape_query(query))).json()
+    response = session_scpus.get(SCPUS_BACKEND %
+                                 (0, 1, escape_query(query))).json()
 
     if "search-results" in response:
 
@@ -416,9 +549,177 @@ def create_short_link(query):
         "crawlable": False
     }
     headers = {'X-Api-Key': SHLINK_API_KEY, "Content-type": "application/json"}
-    resp = requests.post("https://s.miage.nextnet.top/rest/v2/short-urls", json=body, headers=headers)
+    resp = requests.post(
+        "https://s.miage.nextnet.top/rest/v2/short-urls", json=body, headers=headers)
     if resp.status_code == 200:
         result_url = resp.json().get("shortUrl")
     else:
         result_url = long_url
     return result_url
+
+
+# NETWORK (BETA)
+
+
+# -------------------------------------
+# Helpers
+# -------------------------------------
+def net_normalize_input(s: str) -> str:
+    s = s.strip()
+    if _DOI_PREFIX_RE.match(s):
+        return s
+    elif _OA_PREFIX_RE.match(s):
+        return s.rsplit("/", 1)[-1]  # return bare W-id
+    elif s.upper().startswith("W"):
+        return s  # bare OpenAlex ID
+    else:
+        return f"https://doi.org/{s}"
+
+
+def net_fetch_work(identifier: str) -> dict | None:
+    """Fetch a single work by DOI URL or OpenAlex ID."""
+    try:
+        return Works()[identifier]
+    except Exception:
+        return None
+
+
+def net_work_metadata(w: dict) -> Tuple[str, List[str], str, str, str]:
+    """Extract title, authors, venue, doi_url, openalex_url."""
+    if not w:
+        return "", [], "", "", ""
+    title = w.get("title") or ""
+    authors = []
+    for a in (w.get("authorships") or []):
+        ao = a.get("author") if isinstance(a, dict) else None
+        nm = ""
+        if isinstance(ao, dict):
+            nm = ao.get("display_name") or ""
+        if not nm:
+            nm = a.get("raw_author_name") or ""
+        if nm:
+            authors.append(nm)
+    venue = ""
+    hv = w.get("host_venue") or {}
+    if isinstance(hv, dict):
+        venue = hv.get("display_name") or ""
+    if not venue:
+        pl = w.get("primary_location") or {}
+        if isinstance(pl, dict):
+            src = pl.get("source") or {}
+            if isinstance(src, dict):
+                venue = src.get("display_name") or ""
+    doi_url = None
+    ids = w.get("ids") or {}
+    if isinstance(ids, dict):
+        doi_url = ids.get("doi")
+    openalex_url = w.get("id") or ""
+    return title, authors, venue, doi_url, openalex_url
+
+
+def net_referenced_ids(w: dict) -> List[str]:
+    """Return referenced work IDs (bare W-ids)."""
+    out = []
+    for r in (w.get("referenced_works") or []):
+        if isinstance(r, str) and "/" in r:
+            out.append(r.rsplit("/", 1)[-1])
+    return out
+
+
+def net_get_graph_data(id):
+    try:
+        network_data = db.session.query(
+            NetworkData).where(NetworkData.id == id).one()
+        return pickle.loads(network_data.network_data)
+    except MultipleResultsFound as e:
+        return None, "Too many results"
+    except NoResultFound as e:
+        return None, "Not Found"
+    
+
+    
+    
+
+# -------------------------------------
+# Main function
+# -------------------------------------
+def net_build_graph(dois_or_ids: Iterable[str], min_count: int = 2,emitt=lambda *args, **kwargs: None) -> dict:
+    # Resolve input works
+    works: Dict[str, dict] = {}
+    missed=0
+    for raw in dois_or_ids:
+        ident = net_normalize_input(raw)
+        w = net_fetch_work(ident)
+        emitt({"processed_works":len(works)+missed,"remaining_works":len(dois_or_ids)-len(works)-missed,"references_processed":0})
+        if not w:
+            missed+=1
+            continue
+        wid = w["id"].rsplit("/", 1)[-1]
+        works[wid] = w
+
+    # Collect reference counts and per-link mapping
+    counts = Counter()
+    links = []
+    for wid, w in works.items():
+        
+        refs = set(net_referenced_ids(w))
+        for rid in refs:
+            emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())})
+            counts[rid] += 1
+            links.append(
+                {"source": f"doi:{w.get('ids',{}).get('doi', wid)}", "target": rid})
+            
+
+    # Build nodes: works
+    nodes = []
+    for wid, w in works.items():
+        emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())+len(nodes)})
+        title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+        nodes.append({
+            "id": f"doi:{doi_url}" if doi_url else wid,
+            "type": "work",
+            "title": title,
+            "authors": authors,
+            "venue": venue,
+            "doi": doi_url,
+            "openalex": openalex_url,
+        })
+
+    # Build nodes: references above threshold
+    reference=0
+    for rid, c in counts.items():
+        
+        if c < min_count or rid=="W4285719527":
+            continue
+        w = net_fetch_work(rid)
+        reference+=1
+        emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())+len(nodes)+reference})
+        if not w:
+            continue
+        title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+        nodes.append({
+            "id": rid,
+            "type": "ref",
+            "title": title,
+            "authors": authors,
+            "venue": venue,
+            "doi": doi_url,
+            "openalex": openalex_url,
+            "count": c,
+        })
+
+    # Filter links: keep only those pointing to retained refs
+    ref_ids_kept = {n["id"] for n in nodes if n["type"] == "ref"}
+    links = [l for l in links if l["target"] in ref_ids_kept]
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "meta": {
+            "generated_at": datetime.date.today().isoformat(),
+            "min_count": min_count,
+            "input_size": len(dois_or_ids),
+            "works_kept": len(works),
+            "refs_kept": len(ref_ids_kept),
+        },
+    }

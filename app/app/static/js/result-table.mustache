@@ -1,8 +1,6 @@
 <tr
 
-    {{^success}}
-    class="table-danger"
-    {{/success}}
+    
 
     {{#openaccess}}
     class="table-success openaccess"
@@ -12,60 +10,115 @@
     {{/openaccess}}
 >
 
-    {{#success}}
-        <th scope="row"><a target="_blank" href="https://www.doi.org/{{doi}}">{{doi}}</a></th>
-    {{/success}}
-    {{^success}}
-        <th scope="row"><a target="_blank" href="https://portal.issn.org/resource/ISSN/{{issn}}">{{issn}}</a></th>
-    {{/success}}
+    
+        <th scope="row"><a target="_blank" href="{{doi}}">{{doi}}</a></th>
+    
+    
     <td>{{year}}</td>
     <td>{{title}}</td>
-    {{#success}}
-        <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td>
-        <td class="cite_count xref">{{cite_count}}</td>
-        <td class="ref_count xref">{{ref_count}}</td>
-        <td class="subject xref">{{subject}}</td>
-        <td>{{pub_title}}</td>
-    {{#rank_source}}
-        <td class="xref">{{pub_rank}} ({{rank_source}})</td>
-    {{/rank_source}}
-    {{^rank_source}}
-        <td class="xref"></td>
-    {{/rank_source}}
-        <td class="xref">{{hindex}}</td>
-        <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
-        <td class="xref">{{affil}}</td>
-        <td class="xref"><span class="flag-icon flag-icon-{{country}}"></span>({{country}})</td>
+    
+
+<!--------------------- Authors -------------------->
+    <td> {{#authorsNamesAndLinks}}
+            <a  href="{{link}}">{{display_name}}</a>
+            {{#orcid}}
+            <a class="author-orcidid" href="/venues?orcid={{orcid}}" authorID="{{orcid}}" target="_blank" rel="noopener noreferrer">
+  <img src="/static/img/orcid.svg" alt="ORCID" style="width:20px; height:20px; vertical-align:middle;">
+</a>
+
+            {{/orcid}}
+            {{#openalex}}
+            <a class="author-openalexid" href="/venues?openalex={{openalex}}" authorID="{{openalex}}" target="_blank" rel="noopener noreferrer">
+  <img src="/static/img/openalex.png" alt="openalex" style="width:20px; height:20px; vertical-align:middle;">
+</a>
+
+            {{/openalex}}
+            
+        {{/authorsNamesAndLinks}}
+</td>
+<!--------------------- Publication Title -------------------->
+
+ <td>{{pub_title}}</td>
+
+
+
+<!--------------------- Download Links -------------------->
+
+ <td>
+      
+            {{#oa_url}}
+            <a target="_blank" href="{{oa_url}}">Open Access version</a>
+            {{/oa_url}}
+            {{^oa_url}}
+            <a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">No OA Found, check Google Scholar</a>
+            {{/oa_url}}</td>
+
+<!--------------------- Snowball  -------------------->    
+
+<td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
+
+<!--------------------- Copy reference  -------------------->    
+
     <td>
-        {{#openaccess}}
-            <a target="_blank" href="https://www.doi.org/{{doi}}">Open Access!</a></td>
-        {{/openaccess}}
-        {{^openaccess}}
-            <a target="_blank" href="https://sci-hub.se/{{full_doi}}" class="hacker">Paywall</a>/<a
-                href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar</a></td>
-        {{/openaccess}}
-        <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
-        <td>
 
             <input class="btn btn-info cite_btn" doi="{{doi}}" id="permalink" type="button" value="Copy Citation"
                    onclick="get_doi_cite(this)"
             />
 
         </td>
-    {{/success}}
-    {{^success}}
-        <td class="xref xref-abstract" style="width: 50%"></td>
-        <td class="cite_count xref"></td>
-        <td class="ref_count xref"></td>
-        <td class="subject xref"></td>
-        <td>{{pub_title}}</td>
-        <td class="xref"></td>
-        <td class="xref"></td>
-        <td><a target="_blank" href="{{same_auth_link}}">{{name}}</a></td>
-        <td class="xref"></td>
-        <td class="xref"></td>
-        <td><a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">Google Scholar Link</a></td>
-        <td><a target="_blank" href="/snowball?title={{title}}">Snowball</a></td>
-        <td>-</td>
-    {{/success}}
+<!--------------------- Affiliation  -------------------->   
+
+        <td class="xref">{{affil}}</td>
+
+<!--------------------- Country For Affiliation  -------------------->      
+
+
+<td class="xref"><span class="flag-icon flag-icon-{{country}}"></span>({{country}})</td>
+
+<!--------------------- abstract  -------------------->      
+
+<!-- <td class="xref xref-abstract" style="width: 50%">{{abstract}}</td> -->
+
+<!--------------------- Publication Subject  -------------------->      
+
+<td class="subject xref">{{subject}}</td>
+
+
+<!--------------------- Ranking  -------------------->      
+
+    {{#rank_source}}
+<!--        <td class="xref">{{pub_rank}} ({{rank_source}})</td> -->
+    {{/rank_source}}
+
+
+<!--------------------- Publication H-Index  -------------------->      
+
+<!-- <td class="xref">{{hindex}}</td> -->
+
+
+        
+
+        
+       
+
+ 
+ 
+        
+        <!-- Citation number -->
+        <td class="cite_count xref">{{cite_count}}</td>
+        <!-- Reference Number -->
+        <td class="ref_count xref">{{ref_count}}</td>
+      
+        
+    
+    
+
+
+
+
+
+
+
+
+
 </tr>
