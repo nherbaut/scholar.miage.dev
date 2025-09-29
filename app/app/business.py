@@ -12,6 +12,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Iterable, List, Set, Tuple
 from urllib.error import HTTPError
+from concurrent.futures import as_completed
 
 # Third-party libraries
 import dateparser
@@ -43,7 +44,7 @@ from app.main import (
 )
 from app.model import PublicationSource, Ranking, NetworkData
 
-pyalex_config.email = os.getenv("PYALEX_EMAIL","nico@scholar.miage.dev")
+pyalex_config.email = os.getenv("PYALEX_EMAIL", "nico@scholar.miage.dev")
 pyalex_config.max_retries = 3
 pyalex_config.retry_backoff_factor = 0.2
 pyalex_config.retry_http_codes = [429, 500, 503]
@@ -90,7 +91,6 @@ def _cached_requests_session():
 pyalex._get_requests_session = _cached_requests_session
 
 
-
 logger = logging.getLogger('business')
 
 MAX_RESULTS_QUERY = 1000
@@ -110,7 +110,6 @@ def get_sources():
 def generate_rss(feed_items, id="id", query="query"):
     fg = FeedGenerator()
     for item in reversed(feed_items):
-        print(item["pubdate"])
         fe = fg.add_entry()
         for key, value in item.items():
             if key.startswith("x-"):
@@ -272,7 +271,7 @@ def get_ref_for_doi(doi):
     print(result)
 
 
-def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs: None):
+def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs: None, existing_data={}):
     dois = []
 
     context = type('', (object,), {"success": 0, "failed": 0})()
@@ -285,6 +284,11 @@ def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs:
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
 
         entries = partial_results["search-results"]["entry"]
+        
+        entries=[entry for entry in entries if (entry.get('prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
+        
+        if len(entries)==0:
+            break
 
         @copy_current_request_context
         def call_back(success, failure):
@@ -635,48 +639,160 @@ def net_get_graph_data(id):
         return None, "Too many results"
     except NoResultFound as e:
         return None, "Not Found"
-    
 
-    
-    
 
 # -------------------------------------
 # Main function
 # -------------------------------------
-def net_build_graph(dois_or_ids: Iterable[str], min_count: int = 2,emitt=lambda *args, **kwargs: None) -> dict:
-    # Resolve input works
+
+
+def net_build_graph(
+    dois_or_ids: Iterable[str],
+    min_count: int = 2,
+    emitt=lambda *args, **kwargs: None,
+    executor: ThreadPoolExecutor = executor_openAlex,
+    cites_limit_per_work: int = 200,   # cap for backward refs per input work
+) -> dict:
+    """
+    Parallel implementation with forward and backward references.
+
+    - Forward references: OpenAlex 'referenced_works' of each input work.
+      Retain refs cited by >= min_count input works. Nodes: type="ref".
+    - Backward references (NEW): works that cite an input work (OpenAlex 'cites' query).
+      Retain citing works that cite >= min_count input works. Nodes: type="ref_back".
+      NOTE: a work may appear as both a 'work' and as a 'ref'/'ref_back' (duplicated on purpose).
+
+    The 'links' array uses:
+        {"source": <work_node_id>, "target": <ref_id>, "kind": "forward" | "back"}
+
+    IMPORTANT FIX:
+    Link sources now reuse the exact node id assigned to each input work,
+    so frontend hover adjacency works reliably.
+    """
+    # -------------------------
+    # Phase 1: fetch input works in parallel
+    # -------------------------
+    normalized_idents: List[str] = [
+        net_normalize_input(raw) for raw in dois_or_ids]
+    total_inputs = len(normalized_idents)
+
     works: Dict[str, dict] = {}
-    missed=0
-    for raw in dois_or_ids:
-        ident = net_normalize_input(raw)
-        w = net_fetch_work(ident)
-        emitt({"processed_works":len(works)+missed,"remaining_works":len(dois_or_ids)-len(works)-missed,"references_processed":0})
+    missed = 0
+
+    futures_in = {executor.submit(
+        net_fetch_work, ident): ident for ident in normalized_idents}
+
+    emitt({"processed_works": 0, "remaining_works": total_inputs,
+          "references_processed": 0})
+
+    processed_inputs = 0
+    for fut in as_completed(futures_in):
+        ident = futures_in[fut]
+        try:
+            w = fut.result()
+        except Exception:
+            w = None
+
+        processed_inputs += 1
         if not w:
-            missed+=1
-            continue
-        wid = w["id"].rsplit("/", 1)[-1]
-        works[wid] = w
+            missed += 1
+        else:
+            wid = w["id"].rsplit("/", 1)[-1]  # bare W-id
+            works[wid] = w
 
-    # Collect reference counts and per-link mapping
-    counts = Counter()
-    links = []
+        emitt({
+            "processed_works": processed_inputs,
+            "remaining_works": total_inputs - processed_inputs,
+            "references_processed": 0
+        })
+
+    # -----------------------------------
+    # Phase 2a: build consistent work node IDs (FIX)
+    # -----------------------------------
+    # Each input work gets ONE node id. If it has a DOI, we use "doi:<doi_url>", else the W-id.
+    # All links referencing this work MUST use this exact id as 'source'.
+    work_node_id: Dict[str, str] = {}
     for wid, w in works.items():
-        
-        refs = set(net_referenced_ids(w))
+        doi_url = (w.get("ids") or {}).get("doi")
+        node_id = f"doi:{doi_url}" if doi_url else wid
+        work_node_id[wid] = node_id
+
+    # -------------------------
+    # Phase 2b: collect FORWARD references (counts and raw links)
+    # -------------------------
+    from collections import Counter
+    counts_forward = Counter()
+    links_forward: List[Dict[str, str]] = []
+
+    for wid, w in works.items():
+        refs = set(net_referenced_ids(w))  # set: referenced W-ids
+        # FIX: exact node id used as link source
+        src = work_node_id[wid]
         for rid in refs:
-            emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())})
-            counts[rid] += 1
-            links.append(
-                {"source": f"doi:{w.get('ids',{}).get('doi', wid)}", "target": rid})
-            
+            counts_forward[rid] += 1
+            links_forward.append(
+                {"source": src, "target": rid, "kind": "forward"})
 
-    # Build nodes: works
-    nodes = []
+    # -------------------------
+    # Phase 2c: collect BACKWARD references (citing works)
+    # -------------------------
+    # For each input work wid, fetch works that cite wid: Works().filter(cites=wid)
+    # Aggregate per citing work ID how many input works it cites; keep >= min_count.
+    def _fetch_citers_of_wid(wid: str, limit: int) -> Set[str]:
+        """Return a set of W-ids of works that cite wid (capped to 'limit')."""
+        try:
+            # net_fetch_work_list_citers is not given; implement inline via pyalex Works() if available
+            # Use server-side filtering: 'cites' returns works whose referenced_works includes wid
+            # Paginate up to 'limit'
+            citer_ids: Set[str] = set()
+
+            # Simple capped iteration
+            for item in list(Works().filter(cites=f"https://openalex.org/{wid}").get())[:200]:
+                if isinstance(item, dict) and "id" in item:
+                    citer_ids.add(item["id"].rsplit("/", 1)[-1])
+            return citer_ids
+        except Exception as e:
+            print(e)
+            return set()
+
+    futures_citers = {executor.submit(
+        _fetch_citers_of_wid, wid, cites_limit_per_work): wid for wid in works.keys()}
+    counts_back = Counter()
+    raw_backlinks: List[Tuple[str, str]] = []  # (work_node_id, citing_wid)
+
+    for fut in as_completed(futures_citers):
+        wid = futures_citers[fut]
+        try:
+            citers = fut.result()
+        except Exception:
+            citers = set()
+
+        # use the exact node id of the input work for links
+        src = work_node_id[wid]
+        # Unique per input work to avoid double counting within the same citing list
+        for citer_wid in set(citers):
+            counts_back[citer_wid] += 1
+            raw_backlinks.append((src, citer_wid))
+
+        # progress (approximate)
+        emitt({
+            "processed_works": len(works) + missed,
+            "remaining_works": 0,
+            "references_processed": len(counts_forward) + len(counts_back)
+        })
+
+    # -------------------------
+    # Phase 3: build "work" nodes (inputs)
+    # -------------------------
+    nodes: List[Dict[str, object]] = []
+    references_processed = 0
+
     for wid, w in works.items():
-        emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())+len(nodes)})
         title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+        # FIX: reuse the canonical id we decided earlier
+        node_id = work_node_id[wid]
         nodes.append({
-            "id": f"doi:{doi_url}" if doi_url else wid,
+            "id": node_id,
             "type": "work",
             "title": title,
             "authors": authors,
@@ -684,34 +800,108 @@ def net_build_graph(dois_or_ids: Iterable[str], min_count: int = 2,emitt=lambda 
             "doi": doi_url,
             "openalex": openalex_url,
         })
-
-    # Build nodes: references above threshold
-    reference=0
-    for rid, c in counts.items():
-        
-        if c < min_count or rid=="W4285719527":
-            continue
-        w = net_fetch_work(rid)
-        reference+=1
-        emitt({"processed_works":len(works)+missed,"remaining_works":0,"references_processed":sum(counts.values())+len(nodes)+reference})
-        if not w:
-            continue
-        title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
-        nodes.append({
-            "id": rid,
-            "type": "ref",
-            "title": title,
-            "authors": authors,
-            "venue": venue,
-            "doi": doi_url,
-            "openalex": openalex_url,
-            "count": c,
+        references_processed = len(counts_forward) + len(nodes)
+        emitt({
+            "processed_works": len(works) + missed,
+            "remaining_works": 0,
+            "references_processed": references_processed
         })
 
-    # Filter links: keep only those pointing to retained refs
-    ref_ids_kept = {n["id"] for n in nodes if n["type"] == "ref"}
-    links = [l for l in links if l["target"] in ref_ids_kept]
+    # -------------------------
+    # Phase 4a: fetch retained FORWARD reference works in parallel
+    # -------------------------
+    retained_forward_rids: List[str] = [
+        rid for rid, c in counts_forward.items()
+        if c >= min_count and rid != "W4285719527"
+    ]
+    futures_refs_fwd = {executor.submit(
+        net_fetch_work, rid): rid for rid in retained_forward_rids}
 
+    added_refs_fwd = 0
+    for fut in as_completed(futures_refs_fwd):
+        rid = futures_refs_fwd[fut]
+        try:
+            w = fut.result()
+        except Exception:
+            w = None
+
+        if w:
+            title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+            nodes.append({
+                "id": rid,
+                "type": "ref",  # forward reference (center cluster in UI)
+                "title": title,
+                "authors": authors,
+                "venue": venue,
+                "doi": doi_url,
+                "openalex": openalex_url,
+                "count": counts_forward[rid],
+            })
+        added_refs_fwd += 1
+        emitt({
+            "processed_works": len(works) + missed,
+            "remaining_works": 0,
+            "references_processed": sum(counts_forward.values()) + len(nodes) + added_refs_fwd
+        })
+
+    # -------------------------
+    # Phase 4b: fetch retained BACKWARD reference works in parallel (NEW)
+    # -------------------------
+    retained_back_rids: List[str] = [
+        rid for rid, c in counts_back.items()
+        if rid != "W4285719527"
+    ]
+    futures_refs_back = {executor.submit(
+        net_fetch_work, rid): rid for rid in retained_back_rids}
+
+    added_refs_back = 0
+    for fut in as_completed(futures_refs_back):
+        rid = futures_refs_back[fut]
+        try:
+            w = fut.result()
+        except Exception:
+            w = None
+
+        if w:
+            title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+            nodes.append({
+                "id": rid,
+                "type": "ref_back",  # backward reference (outside ring in UI)
+                "title": title,
+                "authors": authors,
+                "venue": venue,
+                "doi": doi_url,
+                "openalex": openalex_url,
+                "count": counts_back[rid],
+            })
+        added_refs_back += 1
+        emitt({
+            "processed_works": len(works) + missed,
+            "remaining_works": 0,
+            "references_processed": sum(counts_forward.values()) + sum(counts_back.values()) + len(nodes) + added_refs_back + added_refs_fwd
+        })
+
+    # -------------------------
+    # Phase 5: filter/assemble links
+    # -------------------------
+    # Keep only links that target retained forward/backward refs
+    ref_fwd_kept: Set[str] = {n["id"] for n in nodes if n.get("type") == "ref"}
+    ref_back_kept: Set[str] = {n["id"]
+                               for n in nodes if n.get("type") == "ref_back"}
+
+    # Forward links
+    links_fwd = [dict(source=src_tgt["source"], target=src_tgt["target"], kind="forward")
+                 for src_tgt in links_forward if src_tgt["target"] in ref_fwd_kept]
+
+    # Backward links: build from raw_backlinks, keep only targets we retained
+    links_back = [dict(source=src, target=citer, kind="back")
+                  for (src, citer) in raw_backlinks if citer in ref_back_kept]
+
+    links = links_fwd + links_back
+
+    # -------------------------
+    # Return graph
+    # -------------------------
     return {
         "nodes": nodes,
         "links": links,
@@ -720,6 +910,8 @@ def net_build_graph(dois_or_ids: Iterable[str], min_count: int = 2,emitt=lambda 
             "min_count": min_count,
             "input_size": len(dois_or_ids),
             "works_kept": len(works),
-            "refs_kept": len(ref_ids_kept),
+            "refs_kept_forward": len(ref_fwd_kept),
+            "refs_kept_backward": len(ref_back_kept),
+            "cites_limit_per_work": cites_limit_per_work,
         },
     }

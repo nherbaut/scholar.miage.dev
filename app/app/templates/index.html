@@ -2,202 +2,83 @@
 <html lang="en" data-theme="light">
 
 <head>
-    <meta charset="UTF-8">
-    <title>MIAGE Scholar</title>
+  <meta charset="UTF-8">
+  <title>MIAGE Scholar</title>
 
-    <!-- Bootstrap + Vendors -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+  <!-- Bootstrap + Vendors -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
         integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-    <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
-    <link rel="stylesheet" href="static/css/flag-icon.css">
-    <link rel="stylesheet" href="static/css/xref.css" class="xref">
-    <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
-    <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
-    <link rel="stylesheet" href="static/css/style.css">
+  <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="static/css/flag-icon.css">
+  <link rel="stylesheet" href="static/css/xref.css" class="xref">
+  <link rel="stylesheet" href="static/css/oa.css" class="oa" disabled>
+  <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
+  <link rel="stylesheet" href="static/css/style.css">
 
-    <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
-        title="MIAGE Scholar">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
+  <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml" title="MIAGE Scholar">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
 
-    <!-- Aesthetic overrides (no functional change) -->
-    <style>
-        :root {
-            --ms-bg: #0d1117;
-            --ms-bg-2: #161b22;
-            --ms-accent: #0d6efd;
-            --ms-muted: #6c757d;
-            --ms-border: rgba(0, 0, 0, .08);
-        }
+  <!-- Aesthetic overrides -->
+  <style>
+    :root {
+      --ms-bg: #0d1117;
+      --ms-bg-2: #161b22;
+      --ms-accent: #0d6efd;
+      --ms-muted: #6c757d;
+      --ms-border: rgba(0, 0, 0, .08);
+    }
+    body { background-color: #f7f9fc; }
+    .navbar { box-shadow: 0 2px 10px rgba(0, 0, 0, .06); }
+    .hero {
+      background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%);
+      border-bottom: 1px solid var(--ms-border);
+    }
+    .hero .display-6 { letter-spacing: .2px; }
+    .info-badges .badge { font-weight: 500; }
+    .card { border: 1px solid var(--ms-border); border-radius: 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); }
+    .card .card-header { background-color: transparent; border-bottom: 1px dashed var(--ms-border); font-weight: 600; }
+    .section-title { font-weight: 600; margin-bottom: .25rem; }
+    textarea#querybox {
+      width: 100%; min-height: 120px; resize: vertical; border-radius: .75rem;
+      border: 1px solid var(--ms-border); padding: .75rem 1rem; background: #fff;
+    }
+    .btn+.btn { margin-left: .5rem; }
+    #progress-container .progress { height: 1rem; border-radius: 999px; background-color: #e9ecef; }
+    .table-wrap { border: 1px solid var(--ms-border); border-radius: .75rem; background: #fff; padding: .5rem; }
+    table#doitable { width: 100% !important; table-layout: fixed; white-space: normal; }
+    table#doitable thead th { position: sticky; top: 0; background: #fff; z-index: 5; box-shadow: 0 1px 0 var(--ms-border); }
+    #doitable th.wrap-200, #doitable td.wrap-200 { max-width: 200px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+    #doitable th.nowrap, #doitable td.nowrap { white-space: nowrap; }
+    div.dataTables_wrapper { width: 100%; }
+    .collapse .card.card-body { border-radius: .75rem; }
+    .muted { color: var(--ms-muted); }
+    .icon-btn { display: inline-flex; align-items: center; gap: .5rem; }
+    html.dark-mode body { background: var(--ms-bg); }
+    html.dark-mode .hero { background: linear-gradient(180deg, var(--ms-bg) 0%, var(--ms-bg-2) 100%); border-bottom-color: rgba(255, 255, 255, .08); }
+    html.dark-mode .table-wrap, html.dark-mode textarea#querybox, html.dark-mode .card { background: var(--ms-bg-2); border-color: rgba(255, 255, 255, .08); color: #e6edf3; }
+    html.dark-mode table#doitable thead th { background: var(--ms-bg-2); box-shadow: 0 1px 0 rgba(255, 255, 255, .08); }
+  </style>
 
-        body {
-            background-color: #f7f9fc;
-        }
+  <!-- Scripts -->
+  <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
+          integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
+          integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+          integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+          crossorigin="anonymous"></script>
 
-        .navbar {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, .06);
-        }
+  <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
 
-        .hero {
-            background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%);
-            border-bottom: 1px solid var(--ms-border);
-        }
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="/static/contrib/js/mustache.js"></script>
 
-        .hero .display-6 {
-            letter-spacing: .2px;
-        }
-
-        .info-badges .badge {
-            font-weight: 500;
-        }
-
-        .card {
-            border: 1px solid var(--ms-border);
-            border-radius: 1rem;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
-        }
-
-        .card .card-header {
-            background-color: transparent;
-            border-bottom: 1px dashed var(--ms-border);
-            font-weight: 600;
-        }
-
-        .section-title {
-            font-weight: 600;
-            margin-bottom: .25rem;
-        }
-
-        textarea#querybox {
-            width: 100%;
-            min-height: 120px;
-            resize: vertical;
-            border-radius: .75rem;
-            border: 1px solid var(--ms-border);
-            padding: .75rem 1rem;
-            background: #fff;
-        }
-
-        .btn+.btn {
-            margin-left: .5rem;
-        }
-
-        /* Progress */
-        #progress-container .progress {
-            height: 1rem;
-            border-radius: 999px;
-            background-color: #e9ecef;
-        }
-
-        /* Table enhancements */
-        .table-wrap {
-            border: 1px solid var(--ms-border);
-            border-radius: .75rem;
-            background: #fff;
-            padding: .5rem;
-        }
-
-        table#doitable {
-            
-            width: 100% !important;
-        }
-
-        table#doitable thead th {
-            position: sticky;
-            top: 0;
-            background: #fff;
-            z-index: 5;
-            box-shadow: 0 1px 0 var(--ms-border);
-        }
-
-        /* Honor explicit widths and allow wrapping */
-table#doitable {
-  table-layout: fixed;
-  width: 100% !important;
-  white-space: normal;            /* override the previous nowrap */
-}
-
-/* Wrap and clamp cells to 200px (apply via class or columnDefs) */
-#doitable th.wrap-200,
-#doitable td.wrap-200 {
-  max-width: 200px;
-  white-space: normal;            /* multi-line wrapping */
-  word-break: break-word;         /* break long tokens (DOIs, URLs) */
-  overflow-wrap: anywhere;        /* allow breaks almost anywhere */
-}
-
-/* Optional: keep some columns on one line (e.g., identifiers) */
-#doitable th.nowrap,
-#doitable td.nowrap {
-  white-space: nowrap;
-}
-
-        /* DataTables alignment fix when scrollX */
-        div.dataTables_wrapper {
-            width: 100%;
-        }
-
-        /* Collapsible groups spacing */
-        .collapse .card.card-body {
-            border-radius: .75rem;
-        }
-
-        /* Utility */
-        .muted {
-            color: var(--ms-muted);
-        }
-
-        .icon-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: .5rem;
-        }
-
-        /* Dark mode small tweaks (let existing dark-mode.css do most) */
-        html.dark-mode body {
-            background: var(--ms-bg);
-        }
-
-        html.dark-mode .hero {
-            background: linear-gradient(180deg, var(--ms-bg) 0%, var(--ms-bg-2) 100%);
-            border-bottom-color: rgba(255, 255, 255, .08);
-        }
-
-        html.dark-mode .table-wrap,
-        html.dark-mode textarea#querybox,
-        html.dark-mode .card {
-            background: var(--ms-bg-2);
-            border-color: rgba(255, 255, 255, .08);
-            color: #e6edf3;
-        }
-
-        html.dark-mode table#doitable thead th {
-            background: var(--ms-bg-2);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, .08);
-        }
-    </style>
-
-    <!-- Scripts -->
-    <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
-        integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
-        integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
-        integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
-        crossorigin="anonymous"></script>
-
-    <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
-
-    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="static/contrib/js/mustache.js"></script>
-
-    <!-- Keep existing dark-mode switch -->
-    <script src="static/contrib/js/dark-mode-switch.min.js" defer></script>
-
+  <!-- Dark-mode switch -->
+  <script src="/static/contrib/js/dark-mode-switch.min.js" defer></script>
 </head>
-
 
 <!-- Network progress modal -->
 <div class="modal fade" id="networkModal" tabindex="-1" aria-labelledby="networkModalLabel" aria-hidden="true">
@@ -215,10 +96,7 @@ table#doitable {
             <span id="networkProcessed">0</span> / <span id="networkTotal">0</span> works processed
           </div>
         </div>
-        <div>
-          <span class="fw-semibold">References processed:</span>
-          <span id="networkRefs">0</span>
-        </div>
+        <div><span class="fw-semibold">References processed:</span> <span id="networkRefs">0</span></div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Hide</button>
@@ -227,371 +105,424 @@ table#doitable {
   </div>
 </div>
 
-
 <body>
-
-    <!-- Top Nav -->
+  <!-- Top Nav -->
     <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="#">
-                <span class="text-primary">MIAGE</span> Scholar
-            </a>
-            <div class="ms-auto d-flex align-items-center gap-3">
-                <div class="form-check form-switch m-0">
-                    <input class="form-check-input" type="checkbox" id="darkSwitch">
-                    <label class="form-check-label" for="darkSwitch">Dark mode</label>
-                </div>
-            </div>
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav"
+              aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="msNav">
+        <ul class="navbar-nav ms-3">
+          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
+          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
+          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
+          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
+          <li class="nav-item"><a class="nav-link" href="/stars">Stars</a></li>
+        </ul>
+      </div>
+
+
+    </div>
+  </nav>
+
+  <!-- Hero / Header -->
+  <header class="hero py-5">
+    <div class="container">
+      <div class="row align-items-center g-4">
+        <div class="col-lg-8">
+          <h1 class="display-6 mb-2">Export Scholar data for SMS/SLRs</h1>
+          <p class="muted mb-3">Search, fetch DOIs, export BibTeX/Excel, and generate RSS or word clouds.</p>
+          <div class="info-badges d-flex align-items-center gap-2">
+            <span id="scihubok" data-bs-toggle="tooltip" class="badge bg-success scihubinfo" title="sci-hub server reachable">Sci-Hub servers</span>
+            <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo"
+                  title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1">Sci-Hub servers</span>
+          </div>
         </div>
-    </nav>
-
-    <!-- Hero / Header -->
-    <header class="hero py-5">
-        <div class="container">
-            <div class="row align-items-center g-4">
-                <div class="col-lg-8">
-                    <h1 class="display-6 mb-2">Export Scholar data for SMS/SLRs</h1>
-                    <p class="muted mb-3">Search, fetch DOIs, export BibTeX/Excel, and generate RSS or word clouds.</p>
-                    <div class="info-badges d-flex align-items-center gap-2">
-                        <span id="scihubok" data-bs-toggle="tooltip" class="badge bg-success scihubinfo"
-                            title="sci-hub server reachable">Sci‑Hub servers</span>
-                        <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo"
-                            title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1">Sci‑Hub
-                            servers</span>
-                    </div>
-                </div>
-                <div class="col-lg-4 text-lg-end">
-                    <div class="btn-toolbar justify-content-lg-end" role="toolbar" aria-label="Toolbar">
-                        <div class="btn-group me-2" role="group" aria-label="Help">
-                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#import_procedure" aria-expanded="false">
-                                <i class="fas fa-list-ul"></i><span>Import Procedure</span>
-                            </button>
-                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#importTuto" aria-expanded="false">
-                                <i class="fas fa-video"></i><span>Tutorial</span>
-                            </button>
-                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#releaseNotes" aria-expanded="false">
-                                <i class="fas fa-bullhorn"></i><span>Release Notes</span>
-                            </button>
-                            <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#word_cloud" aria-expanded="false">
-                                <i class="fas fa-cloud"></i><span>Popular terms</span>
-                            </button>
-                        </div>
-                        <div class="btn-group" role="group" aria-label="Links">
-                            <button class="btn btn-light" type="button"
-                                onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">
-                                Query Language
-                            </button>
-                            <button class="btn btn-light" type="button"
-                                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">
-                                Sources
-                            </button>
-                            <button class="btn btn-light" type="button"
-                                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">
-                                Report a Bug
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <div class="col-lg-4 text-lg-end">
+          <div class="btn-toolbar justify-content-lg-end" role="toolbar" aria-label="Toolbar">
+            <div class="btn-group me-2" role="group" aria-label="Help">
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#import_procedure" aria-expanded="false">
+                <i class="fas fa-list-ul"></i><span>Import Procedure</span>
+              </button>
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#importTuto" aria-expanded="false">
+                <i class="fas fa-video"></i><span>Tutorial</span>
+              </button>
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#releaseNotes" aria-expanded="false">
+                <i class="fas fa-bullhorn"></i><span>Release Notes</span>
+              </button>
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#word_cloud" aria-expanded="false">
+                <i class="fas fa-cloud"></i><span>Popular terms</span>
+              </button>
             </div>
-
-            <!-- Collapsibles -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <div class="collapse" id="import_procedure">
-                        <div class="card card-body">
-                            <ol class="mb-0">
-                                <li>Type a query following the <a
-                                        href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a>,
-                                    e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND
-                                        (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
-                                <li>Click “Count Results”.</li>
-                                <li>Click “Fetch” to resolve DOIs.</li>
-                                <li>Download the BibTeX file.</li>
-                                <li>Import into Mendeley Desktop Legacy.</li>
-                                <li>Update details in Mendeley and re‑export as .bib.</li>
-                                <li>Import into <a href="https://parsif.al/">parsif.al</a>.</li>
-                            </ol>
-                        </div>
-                    </div>
-                    <div class="collapse" id="importTuto">
-                        <div class="card card-body">
-                            <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/"
-                                target="_blank">Access video tutorial here</a>
-                        </div>
-                    </div>
-                    <div class="collapse" id="releaseNotes">
-                        <div class="card card-body">
-                            <h2 class="h5 section-title">Release notes</h2>
-                            <ul class="mb-0">
-                                <li>1.5.0 Subject area/journal restriction; CORE2021/2018 &amp; SCImago metadata.</li>
-                                <li>1.4.0 Citation export to txt or BibTeX.</li>
-                                <li>1.3.0 Word cloud; ISSN and Google Scholar links for items without DOI.</li>
-                                <li>1.2.0 Country/affiliation for first author; <a href="/sources">presets</a>.</li>
-                                <li>1.1.0 CrossRef metadata; OA filter; sortable/filterable table; Sci‑hub badge.</li>
-                                <li>1.0.3 Permalink support.</li>
-                                <li>1.0.2 RSS support.</li>
-                                <li>1.0.1 History.</li>
-                                <li>1.0.0 Initial version.</li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="collapse" id="word_cloud">
-                        <div class="card card-body">
-                            <span class="text-muted">Generate a word cloud after fetching results.</span>
-                        </div>
-                    </div>
-                </div>
+            <div class="btn-group" role="group" aria-label="Links">
+              <button class="btn btn-light" type="button" onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">Query Language</button>
+              <button class="btn btn-light" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">Sources</button>
+              <button class="btn btn-light" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">Report a Bug</button>
             </div>
+          </div>
         </div>
-    </header>
+      </div>
 
-    <main class="py-4">
-        <div class="container">
-
-            <!-- Query Form -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <span>Query</span>
-                        <small class="text-muted">Example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND
-                            (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy)) AND PUBYEAR &gt; 2020</small>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <form action="query" method="POST" class="mb-2">
-                        <fieldset>
-
-                            {% if count %}
-                            <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
-                        </fieldset>
-                        <div class="mt-3 d-flex flex-wrap align-items-center">
-                            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
-                            <input class="btn btn-primary ms-2" type="submit"
-                                value="Fetch {{ count }} results (up to 1000)">
-                        </div>
-                        {% else %}
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse"
-                                data-bs-target="#options" aria-expanded="false" aria-controls="collapseExample">
-                                Options
-                            </button>
-                        </div>
-
-                        <div class="collapse" id="options">
-                            <div class="card card-body mb-3">
-                                <div class="row g-4">
-                                    <div class="col-lg-4">
-                                        <div class="form-check">
-                                            <input type="checkbox" class="form-check-input" id="xref" name="xref"
-                                                onchange="xref_changed()" unchecked>
-                                            <label class="form-check-label" for="xref">Download paper metadata <span
-                                                    class="badge bg-warning">beta</span></label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input type="checkbox" class="form-check-input" id="oa" name="oa"
-                                                onchange="oa_changed()" unchecked>
-                                            <label class="form-check-label" for="oa">Show only Open Access work</label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input type="checkbox" class="form-check-input" id="cite_bib"
-                                                name="cite_bib" onchange="cite_bib_changed()" unchecked>
-                                            <label class="form-check-label" for="cite_bib">Citation as BibTeX</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-4">
-                                        <fieldset>
-                                            <legend class="h6">Search in specific conference/journal</legend>
-                                            <select id="source_select" multiple class="form-select" size="10">
-                                                {% for category in sources.keys() %}
-                                                <optgroup label="{{ category }}">
-                                                    {% for source in sources[category] %}
-                                                    <option value="{{ source.full_text_name }}"
-                                                        code="{{ source.code }}">{{ source.short_name }}</option>
-                                                    {% endfor %}
-                                                </optgroup>
-                                                {% endfor %}
-                                            </select>
-                                            <div class="mt-2">
-                                                <input id="source_select_btn" class="btn btn-primary add-restrict"
-                                                    type="button" value="Apply Source Restriction"
-                                                    onclick="add_source_restriction_to_query()" />
-                                            </div>
-                                        </fieldset>
-                                    </div>
-                                    <div class="col-lg-4">
-                                        <fieldset>
-                                            <legend class="h6">Search by specific subject area</legend>
-                                            <select id="domain_select" multiple class="form-select" size="10">
-                                                <option value="COMP">Computer Science</option>
-                                                <option value="AGRI">Agricultural and Biological Sciences</option>
-                                                <option value="ARTS">Arts and Humanities</option>
-                                                <option value="BIOC">Biochemistry, Genetics and Molecular Biology
-                                                </option>
-                                                <option value="BUSI">Business, Management and Accounting</option>
-                                                <option value="CENG">Chemical Engineering</option>
-                                                <option value="CHEM">Chemistry</option>
-                                                <option value="DECI">Decision Sciences</option>
-                                                <option value="DENT">Dentistry</option>
-                                                <option value="EART">Earth and Planetary Sciences</option>
-                                                <option value="ECON">Economics, Econometrics and Finance</option>
-                                                <option value="ENER">Energy</option>
-                                                <option value="ENGI">Engineering</option>
-                                                <option value="ENVI">Environmental Science</option>
-                                                <option value="HEAL">Health Professions</option>
-                                                <option value="IMMU">Immunology and Microbiology</option>
-                                                <option value="MATE">Materials Science</option>
-                                                <option value="MATH">Mathematics</option>
-                                                <option value="MEDI">Medicine</option>
-                                                <option value="NEUR">Neuroscience</option>
-                                                <option value="NURS">Nursing</option>
-                                                <option value="PHAR">Pharmacology, Toxicology and Pharmaceutics</option>
-                                                <option value="PHYS">Physics and Astronomy</option>
-                                                <option value="PSYC">Psychology</option>
-                                                <option value="SOCI">Social Sciences</option>
-                                                <option value="VETE">Veterinary</option>
-                                                <option value="MULT">Multidisciplinary</option>
-                                            </select>
-                                            <div class="mt-2">
-                                                <input class="btn btn-primary add-restrict" type="button"
-                                                    value="Apply Domain Restriction"
-                                                    onclick="add_domain_restriction_to_query()" />
-                                            </div>
-                                        </fieldset>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <textarea id="querybox" name="query" onkeyup="textAreaChange()">{{ query }}</textarea>
-
-                        <div class="mt-3 d-flex flex-wrap align-items-center">
-                            <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
-                            <input class="btn btn-primary ms-2" id="main_button" type="button" value="Count Results"
-                                onclick="handle_submit()">
-                            <input class="btn btn-success ms-2" id="permalink" type="button" value="Get Query Permalink"
-                                onclick="copyPermalink()" hidden />
-                            <input class="btn btn-success ms-2" id="dlresults" type="button"
-                                value="Download dois as bibtex" onclick="downloadResults()" hidden />
-                            <span id="dlresultsxsl" hidden class="ms-2">
-                                <input class="btn btn-success" type="button" value="export in spreadsheet"
-                                    onclick="downloadExcel('xlsx')" />
-                            </span>
-                            <input class="btn btn-success ms-2" id="rss" type="button" value="Create RSS Link"
-                                onclick="createRssLink()" hidden />
-                                
-                                <input class="btn btn-outline-secondary ms-2" id="analyze_graph_btn"
-       type="button" value="Analyse citation graph" onclick="analyzeCitationGraph()"
-       hidden />
-
-                            <div id="cloud" hidden class="ms-2">
-                                <input class="btn btn-success" type="button" value="Get Cloud for these results"
-                                    onclick="cloudResults()" />
-                                <span class="badge bg-warning">beta</span>
-                            </div>
-                        </div>
-                        {% endif %}
-                    </form>
-
-                    <!-- Progress -->
-                    <div class="container-fluid px-0" id="progress-container">
-                        <div class="row">
-                            <div class="col-12">
-                                <label class="form-label">Progress</label>
-                                <div class="progress">
-                                    <div role="progressbar" style="width: 0%"
-                                        class="progress-bar bg-success progress-bar-animated" id="pb_success"
-                                        aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
-                                        <span id="pb_success_count"></span>
-                                    </div>
-                                    <div role="progressbar" style="width: 0%"
-                                        class="progress-bar bg-warning progress-bar-animated" id="pb_failure"
-                                        aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
-                                        <span id="pb_failure_count"></span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <img src="" id="cloudimg" hidden />
-                </div>
+      <!-- Collapsibles -->
+      <div class="row mt-4">
+        <div class="col-12">
+          <div class="collapse" id="import_procedure">
+            <div class="card card-body">
+              <ol class="mb-0">
+                <li>Type a query following the <a href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a>,
+                    e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
+                <li>Click “Count Results”.</li>
+                <li>Click “Fetch” to resolve DOIs.</li>
+                <li>Download the BibTeX file.</li>
+                <li>Import into Mendeley Desktop Legacy.</li>
+                <li>Update details in Mendeley and re-export as .bib.</li>
+                <li>Import into <a href="https://parsif.al/">parsif.al</a>.</li>
+              </ol>
             </div>
-
-            <!-- Results Table -->
-            <div class="table-wrap">
-                <div class="table-responsive">
-                    <table id="doitable" class="table table-bordered table-hover sortable">
-                        <thead>
-                            <tr>
-                                <th>Identifier</th>
-                                <th>Date</th>
-                                <th>Title</th>
-                               
-                                <th>Author</th>
-                                 <th>Publication Title</th>
-                                <th>Download</th>
-                                <th>Snowball</th>
-                                <th>Cite</th>
-                                <th class="xref">Affiliation</th>
-                                <th class="xref">country</th>
-                                <!-- <th class="xref xref-abstract" style="width:200px">Abstract</th> -->
-                                
-                                <th class="subject xref">Subjects</th>
-                               
-                                <!--<th class="xref">Ranking</th> -->
-                                <!-- <th class="xref">H-Index</th> -->
-                                <th class="cite_count xref">Citation Count</th>
-                                <th class="ref_count xref">Reference Count</th>
-                            </tr>
-                        </thead>
-                        <tbody id="doi_table"></tbody>
-                    </table>
-                </div>
+          </div>
+          <div class="collapse" id="importTuto">
+            <div class="card card-body">
+              <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/" target="_blank">Access video tutorial here</a>
             </div>
-
+          </div>
+          <div class="collapse" id="releaseNotes">
+            <div class="card card-body">
+              <h2 class="h5 section-title">Release notes</h2>
+              <ul class="mb-0">
+                <li>2.0.0 Open Alex integration, Citation Network creation, Author's publication tracking, minor UI changes</li>
+                <li>1.5.0 Subject area/journal restriction; CORE2021/2018 &amp; SCImago metadata.</li>
+                <li>1.4.0 Citation export to txt or BibTeX.</li>
+                <li>1.3.0 Word cloud; ISSN and Google Scholar links for items without DOI.</li>
+                <li>1.2.0 Country/affiliation for first author; <a href="/sources">presets</a>.</li>
+                <li>1.1.0 CrossRef metadata; OA filter; sortable/filterable table; Sci-hub badge.</li>
+                <li>1.0.3 Permalink support.</li>
+                <li>1.0.2 RSS support.</li>
+                <li>1.0.1 History.</li>
+                <li>1.0.0 Initial version.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="collapse" id="word_cloud">
+            <div class="card card-body">
+              <span class="text-muted">Generate a word cloud after fetching results.</span>
+            </div>
+          </div>
         </div>
-    </main>
+      </div>
+    </div>
+  </header>
 
-    <!-- Original JS logic preserved (IDs and function names unchanged) -->
-    <script>
-        var tableRowTemplate = undefined;
-        fetch("static/js/result-table.mustache")
-            .then((response) => response.text())
-            .then((template) => { tableRowTemplate = template; });
+  <main class="py-4">
+    <div class="container">
+      <!-- Query Form -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <div class="d-flex align-items-center justify-content-between">
+            <span>Query</span>
+            <small class="text-muted">Example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy)) AND PUBYEAR &gt; 2020</small>
+          </div>
+        </div>
+        <div class="card-body">
+          <form action="query" method="POST" class="mb-2">
+            <fieldset>
+              {% if count %}
+              <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+            </fieldset>
+            <div class="mt-3 d-flex flex-wrap align-items-center">
+              <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
+              <input class="btn btn-primary ms-2" type="submit" value="Fetch {{ count }} results (up to 1000)">
+            </div>
+              {% else %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#options" aria-expanded="false" aria-controls="collapseExample">
+                Options
+              </button>
+            </div>
 
-        function updateSciHubAccess(isSciHubReachable) {
-            if (!isSciHubReachable) {
-                document.getElementById("scihubok").style.display = "none";
-                document.getElementById("scihubko").style.display = "revert";
-            } else {
-                document.getElementById("scihubok").style.display = "revert";
-                document.getElementById("scihubko").style.display = "none";
-            }
-        }
+            <div class="collapse" id="options">
+              <div class="card card-body mb-3">
+                <div class="row g-4">
+                  <div class="col-lg-4">
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="xref" name="xref" onchange="xref_changed()" unchecked>
+                      <label class="form-check-label" for="xref">Download paper metadata <span class="badge bg-warning">beta</span></label>
+                    </div>
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="oa" name="oa" onchange="oa_changed()" unchecked>
+                      <label class="form-check-label" for="oa">Show only Open Access work</label>
+                    </div>
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="cite_bib" name="cite_bib" onchange="cite_bib_changed()" unchecked>
+                      <label class="form-check-label" for="cite_bib">Citation as BibTeX</label>
+                    </div>
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="completion" name="completion" onchange="completion_changed()" checked>
+                      <label class="form-check-label" for="completion">Enable query completion</label>
+                    </div>
+                  </div>
+                  <div class="col-lg-4">
+                    <fieldset>
+                      <legend class="h6">Search in specific conference/journal</legend>
+                      <select id="source_select" multiple class="form-select" size="10">
+                        {% for category in sources.keys() %}
+                        <optgroup label="{{ category }}">
+                          {% for source in sources[category] %}
+                          <option value="{{ source.full_text_name }}" code="{{ source.code }}">{{ source.short_name }}</option>
+                          {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                      </select>
+                      <div class="mt-2">
+                        <input id="source_select_btn" class="btn btn-primary add-restrict" type="button" value="Apply Source Restriction" onclick="add_source_restriction_to_query()" />
+                      </div>
+                    </fieldset>
+                  </div>
+                  <div class="col-lg-4">
+                    <fieldset>
+                      <legend class="h6">Search by specific subject area</legend>
+                      <select id="domain_select" multiple class="form-select" size="10">
+                        <option value="COMP">Computer Science</option>
+                        <option value="AGRI">Agricultural and Biological Sciences</option>
+                        <option value="ARTS">Arts and Humanities</option>
+                        <option value="BIOC">Biochemistry, Genetics and Molecular Biology</option>
+                        <option value="BUSI">Business, Management and Accounting</option>
+                        <option value="CENG">Chemical Engineering</option>
+                        <option value="CHEM">Chemistry</option>
+                        <option value="DECI">Decision Sciences</option>
+                        <option value="DENT">Dentistry</option>
+                        <option value="EART">Earth and Planetary Sciences</option>
+                        <option value="ECON">Economics, Econometrics and Finance</option>
+                        <option value="ENER">Energy</option>
+                        <option value="ENGI">Engineering</option>
+                        <option value="ENVI">Environmental Science</option>
+                        <option value="HEAL">Health Professions</option>
+                        <option value="IMMU">Immunology and Microbiology</option>
+                        <option value="MATE">Materials Science</option>
+                        <option value="MATH">Mathematics</option>
+                        <option value="MEDI">Medicine</option>
+                        <option value="NEUR">Neuroscience</option>
+                        <option value="NURS">Nursing</option>
+                        <option value="PHAR">Pharmacology, Toxicology and Pharmaceutics</option>
+                        <option value="PHYS">Physics and Astronomy</option>
+                        <option value="PSYC">Psychology</option>
+                        <option value="SOCI">Social Sciences</option>
+                        <option value="VETE">Veterinary</option>
+                        <option value="MULT">Multidisciplinary</option>
+                      </select>
+                      <div class="mt-2">
+                        <input class="btn btn-primary add-restrict" type="button" value="Apply Domain Restriction" onclick="add_domain_restriction_to_query()" />
+                      </div>
+                    </fieldset>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        var sciHubReachable = false;
-        fetch('https://sci-hub.se', { mode: 'no-cors' }).then(r => { updateSciHubAccess(true); })
-            .catch(e => { updateSciHubAccess(false); });
+            <textarea id="querybox" name="query" onkeyup="textAreaChange()">{{ query }}</textarea>
 
-        function get(object, key, default_value) {
-            var result = object[key];
-            return (typeof result !== "undefined") ? result : default_value;
-        }
+            <div class="mt-3 d-flex flex-wrap align-items-center">
+              <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
 
-        var table = undefined;
-        var bag_of_doi = {};
-        var item_info = new Array();
+              <!-- Main split button: count -> fetch; dropdown toggles metadata default -->
+              <div class="btn-group ms-2" role="group" aria-label="Primary actions">
+                <button class="btn btn-primary" id="main_button" type="button" onclick="handle_submit(event)">Count Results</button>
+                <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                  <span class="visually-hidden">Toggle metadata</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li class="px-3 py-1">
+                    <div class="form-check m-0">
+                      <input class="form-check-input" type="checkbox" id="metaToggle">
+                      <label class="form-check-label" for="metaToggle">Include paper metadata</label>
+                    </div>
+                  </li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><span class="dropdown-item-text small text-muted">Tip: Shift-click = include once, Ctrl-click = exclude once</span></li>
+                </ul>
+              </div>
+              <span id="metaBadge" class="badge bg-secondary ms-2" style="display:none">Metadata ON</span>
 
-        function download(filename, dois) {
-            var text = "";
-            var i = 0;
-            for (const property in dois) {
-                const content = dois[property];
-                text += `@article{miage_scholar_article_${i++},
+              <!-- Clean post-fetch toolbar: one dropdown -->
+              <div id="postFetchGroup" class="btn-group ms-2" role="group" aria-label="Export & tools" hidden>
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                  Export &amp; Tools
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><button class="dropdown-item" type="button" onclick="copyPermalink()">Copy Permalink</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="downloadResults()">Download DOIs as BibTeX</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="downloadExcel('xlsx')">Export to Spreadsheet</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="createRssLink()">Create RSS Link</button></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><button class="dropdown-item" type="button" onclick="analyzeCitationGraph()">Analyse Citation Graph</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="cloudResults()">Generate Word Cloud</button></li>
+                </ul>
+              </div>
+            </div>
+            {% endif %}
+          </form>
+
+          <!-- Progress -->
+          <div class="container-fluid px-0" id="progress-container">
+            <div class="row">
+              <div class="col-12">
+                <label class="form-label">Progress</label>
+                <div class="progress">
+                  <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated"
+                       id="pb_success" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                    <span id="pb_success_count"></span>
+                  </div>
+                  <div role="progressbar" style="width: 0%" class="progress-bar bg-warning progress-bar-animated"
+                       id="pb_failure" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                    <span id="pb_failure_count"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <img src="" id="cloudimg" hidden />
+        </div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="table-wrap">
+        <div class="table-responsive">
+          <table id="doitable" class="table table-bordered table-hover sortable">
+            <thead>
+              <tr>
+                <th class="nowrap">Star</th>
+                <th>Identifier</th>
+                <th>Date</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Publication Title</th>
+                <th>Download</th>
+                <th>Snowball</th>
+                <th>Cite</th>
+                <th class="xref">Affiliation</th>
+                <th class="xref">country</th>
+                <th class="subject xref">Subjects</th>
+                <th class="cite_count xref">Citation Count</th>
+                <th class="ref_count xref">Reference Count</th>
+              </tr>
+            </thead>
+            <tbody id="doi_table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Metadata preference + split-button behavior -->
+  <script>
+    let includeMetaDefault = JSON.parse(window.localStorage.getItem('xref_default') || 'false');
+
+    function applyMetaDefaultToUI() {
+      const toggle = document.getElementById('metaToggle');
+      const badge  = document.getElementById('metaBadge');
+      const xrefCb = document.getElementById('xref'); // existing option
+
+      if (toggle) toggle.checked = !!includeMetaDefault;
+      if (badge)  badge.style.display = includeMetaDefault ? 'inline-block' : 'none';
+
+      if (xrefCb) {
+        xrefCb.checked = !!includeMetaDefault;
+        xref_changed(); // updates stylesheets + persists 'xref'
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const xrefCb = document.getElementById('xref');
+      if (xrefCb) includeMetaDefault = !!xrefCb.checked || includeMetaDefault;
+      applyMetaDefaultToUI();
+
+      const toggle = document.getElementById('metaToggle');
+      if (toggle) {
+        toggle.addEventListener('change', () => {
+          includeMetaDefault = !!toggle.checked;
+          window.localStorage.setItem('xref_default', JSON.stringify(includeMetaDefault));
+          applyMetaDefaultToUI();
+        });
+      }
+    });
+
+    function sendDoisRequest(evt) {
+      const btn = document.getElementById("main_button");
+      document.getElementById("xref").disabled = true;
+      btn.disabled = true;
+
+      const includeOnce = !!(evt && evt.shiftKey);
+      const excludeOnce = !!(evt && evt.ctrlKey);
+      const includeMeta = includeOnce ? true : (excludeOnce ? false : includeMetaDefault);
+
+      btn.textContent = "Fetching…";
+      btn.classList.remove('btn-primary','btn-warning');
+      btn.classList.add('btn-success');
+
+      socket.emit('get_dois', {
+        query: document.getElementById("querybox").value,
+        xref: includeMeta
+      });
+    }
+
+    function sendCountRequest(evt) {
+      const btn = document.getElementById("main_button");
+      document.getElementById("querybox").disabled = true;
+      btn.disabled = true;
+      btn.textContent = "Counting…";
+      btn.classList.remove('btn-success','btn-warning');
+      btn.classList.add('btn-primary');
+      socket.emit('count', { query: document.getElementById("querybox").value });
+    }
+
+    // Default action: count
+    let handle_submit = sendCountRequest;
+  </script>
+
+  <!-- Main logic -->
+  <script>
+    var tableRowTemplate = undefined;
+    fetch("/static/js/result-table.mustache")
+      .then((response) => response.text())
+      .then((template) => { tableRowTemplate = template; });
+
+    function updateSciHubAccess(isSciHubReachable) {
+      if (!isSciHubReachable) {
+        document.getElementById("scihubok").style.display = "none";
+        document.getElementById("scihubko").style.display = "revert";
+      } else {
+        document.getElementById("scihubok").style.display = "revert";
+        document.getElementById("scihubko").style.display = "none";
+      }
+    }
+
+    var sciHubReachable = false;
+    fetch('https://sci-hub.se', { mode: 'no-cors' }).then(r => { updateSciHubAccess(true); })
+      .catch(e => { updateSciHubAccess(false); });
+
+    function get(object, key, default_value) {
+      var result = object[key];
+      return (typeof result !== "undefined") ? result : default_value;
+    }
+
+    var table = undefined;
+    var bag_of_doi = {};
+    var item_info = [];
+
+    // New: last query id from backend
+    var latestQueryId = null;
+
+    function download(filename, dois) {
+      var text = "";
+      var i = 0;
+      for (const property in dois) {
+        const content = dois[property];
+        text += `@article{miage_scholar_article_${i++},
 abstract = {${content["X-abstract"]}},
 author = {${content["X-authors"]}},
 doi = {${content["doi"]}},
@@ -599,447 +530,779 @@ title = {${content["title"]}},
 year = {${content["year"]}},
 journal = { { ${content["pubtitle"]} } },
 }
-`
-            }
-            var element = document.createElement('a');
-            element.setAttribute('href', 'data:application/x-bibtex;charset=utf-8,' + encodeURIComponent(text));
-            element.setAttribute('download', filename);
-            element.style.display = 'none';
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
-        }
-
-        function onLoaded(evt) {
-            document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
-            xref_changed()
-            document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
-            document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
-
-            if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
-                $("#options").collapse('show');
-            }
-
-            if (document.getElementById("querybox").value == "") {
-                document.getElementById("querybox").value = window.localStorage.getItem("query");
-            } else {
-                handle_submit();
-            }
-        }
-
-        function textAreaChange() { updateQueryStorage(document.getElementById("querybox").value); }
-        function updateQueryStorage(str) { window.localStorage.setItem("query", str); }
-        window.onload = onLoaded;
-
-        const socket = io();
-        socket.on('connect', function () { socket.emit('my event', { data: 'I\'m connected!' }); });
-
-        socket.on('count', (count) => {
-            if (count > 1000) {
-                document.getElementById("main_button").value = "fetch the first 1000 (" + count + " breaches the mimit)";
-            } else {
-                document.getElementById("main_button").value = "fetch " + count + " results ";
-            }
-            handle_submit = sendDoisRequest;
-            document.getElementById("permalink").removeAttribute("hidden");
-        });
-
-        socket.on('dois', (data) => { console.log(data); });
-
-        socket.on('feed_generated', (data) => { window.open("/feed/" + data["feed_id"] + ".rss", '_blank'); });
-
-        socket.on('permalink_generated', (data) => {
-            document.getElementById("permalink").value = "Copied!";
-            navigator.clipboard.writeText(data);
-        });
-
-        socket.on('doi_export_done', (data) => {
-            document.getElementById("pb_success").classList.remove("progress-bar-striped");
-            document.getElementById("pb_failure").classList.remove("progress-bar-striped");
-            document.getElementById("dlresults").removeAttribute("hidden");
-            document.getElementById("dlresultsxsl").removeAttribute("hidden");
-            document.getElementById("rss").removeAttribute("hidden");
-            document.getElementById("cloud").removeAttribute("hidden");
-            try {
-                table = $('table').DataTable({
-                    paging: false,
-                    scrollY: '50vh',
-                    scrollX: true,           // keep horizontal scrolling
-                    scrollCollapse: true,
-                    ordering: true,
-                    order: [[1, "desc"]],
-                     columnDefs: [
-    { targets: 2, width: "300px" },   // Title column
-    { targets: 0, width: "200px" }   // Identifier column
-    
-  ]
-                    
-                });
-            } catch (e) { console.log(e); }
-        });
-
-        socket.on('doi_update', (data) => {
-            document.getElementById("pb_success").classList.add("progress-bar-striped");
-            document.getElementById("pb_success").setAttribute("aria-valuemax", data["total"]);
-            document.getElementById("pb_success").setAttribute("aria-valuenow", data["done"]);
-            document.getElementById("pb_success").style.width = 100 * data["done"] / data["total"] + "%";
-            document.getElementById("pb_success_count").innerHTML = data["done"];
-            document.getElementById("pb_failure").classList.add("progress-bar-striped");
-            document.getElementById("pb_failure").setAttribute("aria-valuemax", data["total"]);
-            document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
-            document.getElementById("pb_failure").style.width = 100 * data["failed"] / data["total"] + "%";
-            document.getElementById("pb_failure_count").innerHTML = data["failed"];
-        });
-
-        socket.on('doi_results', (data) => {
-            var rendered_html = "";
-            for (let doi_item of data) {
-                var doi = doi_item["doi"];
-                rendered_html += add_item_to_table(doi_item);
-                if (doi != "") {
-                    item_info.push(doi_item);
-                    bag_of_doi[doi] = doi_item
-                }
-            }
-            document.getElementById("doi_table").innerHTML += rendered_html;
-        });
-
-        function add_item_to_table(doi_item) {
-            let authorsNamesAndLinks = [];
-
-            for (const author of doi_item["X-authors-list"]) {
-                authorsNamesAndLinks.push(author); //could simplify
-            }
-
-            const full_doi = doi_item["doi"].split("_")[0];
-
-            var rendered = Mustache.render(tableRowTemplate, {
-                success: doi_item["doi"] != "" ? true : false,
-                openaccess: get(doi_item, "X-OA", false) != false,
-                doi: doi_item["doi"],
-                issn: doi_item["issn"],
-                full_doi: full_doi,
-                year: doi_item["year"],
-                title: doi_item["title"],
-                abstract: get(doi_item, "X-abstract", ""),
-                cite_count: get(doi_item, "X-IsReferencedByCount", ""),
-                ref_count: get(doi_item, "X-refcount", ""),
-                subject: get(doi_item, "X-subject", []),
-                pub_title: doi_item["pubtitle"],
-                pub_rank: doi_item["pub_rank"],
-                rank_source: doi_item["rank_source"],
-                hindex: doi_item["hindex"],
-                authorsNamesAndLinks: authorsNamesAndLinks,
-                affil: doi_item["X-Country-First-affiliation"],
-                country: doi_item["X-Country-First-Author"],
-                oa_url: doi_item["X-OA-URL"],
-                
-            });
-            return rendered;
-        }
-
-        function sendCountRequest() {
-            document.getElementById("querybox").disabled = true;
-            socket.emit('count', { query: document.getElementById("querybox").value });
-        }
-
-        function sendDoisRequest() {
-            document.getElementById("xref").disabled = true;
-            document.getElementById("main_button").disabled = true;
-            socket.emit('get_dois', {
-                query: document.getElementById("querybox").value,
-                xref: document.getElementById("xref").checked
-            });
-        }
-
-        handle_submit = sendCountRequest;
-
-        function resetAll() {
-            bag_of_doi = {};
-            window.location = "/";
-            handle_submit = sendCountRequest;
-            document.getElementById("main_button").value = "Count Results";
-            document.getElementById("dlresults").setAttribute("hidden", "true");
-            document.getElementById("dlresultsxsl").setAttribute("hidden", "true");
-            document.getElementById("rss").setAttribute("hidden", "true");
-            resetPermalinkButton();
-            document.getElementById("pb_success").setAttribute("max", 0);
-            document.getElementById("pb_success").setAttribute("value", 0);
-            document.getElementById("pb_failure").setAttribute("max", 0);
-            document.getElementById("pb_failure").setAttribute("value", 0);
-            document.getElementById("pb_failure_count").innerHTML = "";
-            document.getElementById("pb_success_count").innerHTML = "";
-            document.getElementById("main_button").disabled = false;
-            document.getElementById("querybox").disabled = false;
-        }
-
-        function downloadResults() { download("results.bib", bag_of_doi) }
-
-        function downloadExcel(type, fn, dl) {
-            var elt = document.getElementById('doitable');
-            var wb = XLSX.utils.table_to_book(elt, { sheet: "sheet1" });
-            return dl ?
-                XLSX.write(wb, { bookType: type, bookSST: true, type: 'base64' }) :
-                XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
-        }
-
-        function copyPermalink() { socket.emit('create_permalink', { query: document.getElementById("querybox").value }); }
-
-        function get_doi_cite(elt) {
-            let style = "apa";
-            if (document.getElementById("cite_bib").checked) { style = "bibtex"; }
-            const my_doi = elt.attributes.doi.value;
-            var query = ".cite_btn[doi='" + my_doi + "']";
-            document.querySelector(query).value = "Retrieving!";
-            document.querySelector(query).classList.remove("btn-info");
-            document.querySelector(query).classList.add("btn-warning");
-            fetch("/cite?doi=" + my_doi + "&style=" + style)
-                .then(function (response) {
-                    if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
-                    return response.json()
-                })
-                .then(function (response) {
-                    var query = ".cite_btn[doi='" + response["doi"] + "']";
-                    document.querySelector(query).value = "Copied!";
-                    document.querySelector(query).classList.remove("btn-warning");
-                    document.querySelector(query).classList.add("btn-success");
-                    setTimeout(function () {
-                        document.querySelector(query).value = "Copy Citation";
-                        document.querySelector(query).classList.remove("btn-success");
-                        document.querySelector(query).classList.add("btn-info");
-                    }, 3.0 * 1000)
-                    navigator.clipboard.writeText(response["citation"]);
-                });
-        }
-
-        async function fetchCloud(data = []) {
-            const response = await fetch("https://scholar-wc.miage.nextnet.top/word-cloud?gramSize=4", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                redirect: 'follow',
-                referrerPolicy: 'no-referrer',
-                body: JSON.stringify(data)
-            });
-            return response.blob();
-        }
-
-        function cloudResults() {
-            fetchCloud(Object.values(bag_of_doi).map(item => item["title"])).then(blob => {
-                var img = URL.createObjectURL(blob);
-                document.getElementById('cloud').setAttribute('src', img);
-                document.getElementById('cloudimg').setAttribute('src', img);
-                document.getElementById("cloudimg").removeAttribute("hidden");
-            });
-        }
-
-        function createRssLink() { socket.emit('create_feed', { query: document.getElementById("querybox").value }); }
-
-        function resetPermalinkButton() {
-            document.getElementById("permalink").value = "Get Query Permalink";
-            document.getElementById("permalink").setAttribute("hidden", "true");
-        }
-
-        function xref_changed() {
-            document.querySelectorAll('link.xref').forEach(function (node) {
-                node.disabled = document.getElementById("xref").checked;
-            });
-            window.localStorage.setItem("xref", document.getElementById("xref").checked);
-        }
-
-        function add_domain_restriction_to_query() {
-            var options = Array.prototype.slice.call(document.querySelector("#domain_select").selectedOptions);
-            var querybox = document.querySelector("#querybox");
-            querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
-                return `SUBJAREA("${elt.getAttribute("value")}")`
-            }).join(" OR ") + " )"
-        }
-
-        function add_source_restriction_to_query() {
-            var options = Array.prototype.slice.call(document.querySelector("#source_select").selectedOptions);
-            var querybox = document.querySelector("#querybox");
-            querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
-                return `${elt.getAttribute("code")}("${elt.getAttribute("value")}")`
-            }).join(" OR ") + " )"
-        }
-
-        function cite_bib_changed() {
-            window.localStorage.setItem("cite_bib", document.getElementById("cite_bib").checked);
-        }
-
-        function oa_changed() {
-            document.querySelectorAll('tr.paywall').forEach(function (node) {
-                if (document.getElementById("oa").checked) {
-                    node.style.display = 'none';
-                } else {
-                    node.style.display = 'table-row';
-                }
-            });
-            window.localStorage.setItem("oa", document.getElementById("oa").checked);
-        }
-    </script>
-
-<script>
-/* === Author tab orchestration (simple, popup-blocker ignored) ================
- * - First click on <a.author-orcidid|author-openalexid>: open ONE new tab.
- * - Second (and subsequent) clicks while that tab is open: send {authorID} on BC.
- * - If the tab is closed (detected via .closed or "tab-closed" BC message),
- *   the next qualifying click is treated as a first click again.
- * ========================================================================== */
-
-(function () {
-  const SEL = 'a.author-orcidid, a.author-openalexid';
-  const CH_NAME = 'miage-scholar-author-channel';
-
-  const bc = new BroadcastChannel(CH_NAME);
-  let authorTab = null;            // reference to the opened tab
-  let firstClickConsumed = false;  // whether first-click action has been used
-
-  function resetState() {
-    firstClickConsumed = false;
-    authorTab = null;
-  }
-
-  // Reset when tab2 notifies closure
-  bc.onmessage = (evt) => {
-    const d = evt && evt.data;
-    if (d === 'tab-closed' || (d && d.type === 'tab-closed')) resetState();
-  };
-
-  // Cheap periodic check for manual closure
-  setInterval(() => { if (authorTab && authorTab.closed) resetState(); }, 1000);
-
-  // Single handler via event delegation
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest && e.target.closest(SEL);
-    if (!a) return;
-
-    // Always suppress native navigation so only one tab opens
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-
-    // If we had a tab but it is closed, forget it
-    if (authorTab && authorTab.closed) resetState();
-
-    const href = a.getAttribute('href') || '';
-    const authorID =
-      a.getAttribute('authorID') ??
-      a.getAttribute('data-author-id') ??
-      (a.dataset ? a.dataset.authorId : null) ?? null;
-
-    if (!firstClickConsumed) {
-      // First qualifying click → open new tab once
-      authorTab = window.open(href, '_blank', 'noopener');
-      firstClickConsumed = true;
-      return;
+`;
+      }
+      var element = document.createElement('a');
+      element.setAttribute('href', 'data:application/x-bibtex;charset=utf-8,' + encodeURIComponent(text));
+      element.setAttribute('download', filename);
+      element.style.display = 'none';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
     }
 
-    // Subsequent qualifying clicks while tab presumed open → message
-    if (!authorTab || !authorTab.closed) {
-      bc.postMessage({ type: 'author-click', authorID });
-      return;
-    }
-
-    // Inconsistent state → treat like first click again
-    resetState();
-    authorTab = window.open(href, '_blank', 'noopener');
-    firstClickConsumed = true;
-  });
-})();
-</script>
-
-
-<script>
-  // Show the "Analyse citation graph" button when export is done (results present)
-  (function () {
-    const _orig = socket.listeners('doi_export_done')?.[0];
-    socket.off('doi_export_done'); // remove current to preserve order
-    socket.on('doi_export_done', function (data) {
+    function onLoaded(evt) {
+      document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
+      xref_changed();
+      document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
+      document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
+      // completion preference (default: true)
       try {
-        // call original handler logic (table setup, etc.)
-        if (typeof _orig === 'function') _orig.call(this, data);
-      } catch (e) { console.log(e); }
-      // then reveal the analyze button
-      const btn = document.getElementById('analyze_graph_btn');
-      if (btn) btn.removeAttribute('hidden');
-    });
-  })();
+        const compPref = window.localStorage.getItem("completion");
+        document.getElementById("completion").checked = (compPref === null) ? true : (compPref === 'true');
+      } catch (_) {}
 
-  // Helper: collect identifiers from the first column of the results table
-  function collectIdentifiersAsString() {
-    // Prefer the rendered text of col 0 for all rows in tbody
-    const ids = Array.from(document.querySelectorAll('#doitable tbody tr'))
-      .map(tr => (tr.querySelector('th') ? tr.querySelector('th').textContent.trim() : ''))
-      .filter(s => s.length > 0);
-    // Backend expects a string; join with commas
-    return ids;
-  }
+      if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
+        $("#options").collapse('show');
+      }
 
-  // Modal instance (Bootstrap 5)
-  let networkModalInstance = null;
-  function getNetworkModal() {
-    if (!networkModalInstance) {
-      const modalEl = document.getElementById('networkModal');
-      networkModalInstance = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+      if (document.getElementById("querybox").value == "") {
+        document.getElementById("querybox").value = window.localStorage.getItem("query");
+      } else {
+        handle_submit();
+      }
     }
-    return networkModalInstance;
-  }
+    function textAreaChange() { updateQueryStorage(document.getElementById("querybox").value); }
+    function updateQueryStorage(str) { window.localStorage.setItem("query", str); }
+    window.onload = onLoaded;
 
-  // Public handler for the button
-  function analyzeCitationGraph() {
-    const idsString = collectIdentifiersAsString();
-    // Emit exactly as specified (ids as a string)
-    socket.emit('create_network_graph_data', { ids: idsString });
+    const socket = io();
+    socket.on('connect', function () { socket.emit('my event', { data: 'I\'m connected!' }); });
 
-    // Reset and show modal immediately
-    const prog = document.getElementById('networkProgress');
-    const proc = document.getElementById('networkProcessed');
-    const tot = document.getElementById('networkTotal');
-    const refs = document.getElementById('networkRefs');
+    // Count handler: update main button label with actual number and switch to fetch
+    socket.on('count', (count) => {
+      const btn = document.getElementById("main_button");
+      btn.disabled = false;
+      document.getElementById("querybox").disabled = false;
 
-    prog.max = 0;
-    prog.value = 0;
-    proc.textContent = '0';
-    tot.textContent = '0';
-    refs.textContent = '0';
+      // Label reflects count and 1000 cap
+      if (count > 1000) {
+        btn.textContent = `Fetch first 1000 (found ${count})`;
+        btn.classList.remove('btn-primary','btn-success');
+        btn.classList.add('btn-warning');
+      } else {
+        btn.textContent = `Fetch ${count} results`;
+        btn.classList.remove('btn-warning','btn-success');
+        btn.classList.add('btn-primary');
+      }
+      // Next click fetches (still passes event for modifiers)
+      handle_submit = sendDoisRequest;
+    });
 
-    getNetworkModal().show();
-  }
+    // Receive query id for permalink
+    socket.on('query_id', (id) => {
+      latestQueryId = id;
+      // No separate button; exposed via Export & Tools dropdown
+    });
 
-  // Live progress: "nework_report" (spelling per specification)
-  socket.on('nework_report', function (payload) {
-    try {
-      const processed = Number(payload?.processed_works || 0);
-      const remaining = Number(payload?.remaining_works || 0);
-      const refsCount = Number(payload?.references_processed || 0);
-      const total = processed + remaining;
+    socket.on('dois', (data) => { console.log(data); });
+
+    socket.on('feed_generated', (data) => { window.open("/feed/" + data["feed_id"] + ".rss", '_blank'); });
+
+    // Export finished: show compact tools dropdown instead of many buttons
+    socket.on('doi_export_done', (data) => {
+      document.getElementById("pb_success").classList.remove("progress-bar-striped");
+      document.getElementById("pb_failure").classList.remove("progress-bar-striped");
+
+      // Reveal unified toolbar
+      const grp = document.getElementById('postFetchGroup');
+      if (grp) grp.hidden = false;
+
+      try {
+        table = $('table').DataTable({
+          paging: false,
+          scrollY: '50vh',
+          scrollX: true,
+          scrollCollapse: true,
+          ordering: true,
+          order: [[2, "desc"]],
+          columnDefs: [
+            { targets: 3, width: "300px" },
+            { targets: 1, width: "200px" },
+            { targets: 0, width: "48px" }
+          ]
+        });
+      } catch (e) { console.log(e); }
+    });
+
+    socket.on('doi_update', (data) => {
+      document.getElementById("pb_success").classList.add("progress-bar-striped");
+      document.getElementById("pb_success").setAttribute("aria-valuemax", data["total"]);
+      document.getElementById("pb_success").setAttribute("aria-valuenow", data["done"]);
+      document.getElementById("pb_success").style.width = (100 * data["done"] / data["total"]) + "%";
+      document.getElementById("pb_success_count").innerHTML = data["done"];
+
+      document.getElementById("pb_failure").classList.add("progress-bar-striped");
+      document.getElementById("pb_failure").setAttribute("aria-valuemax", data["total"]);
+      document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
+      document.getElementById("pb_failure").style.width = (100 * data["failed"] / data["total"]) + "%";
+      document.getElementById("pb_failure_count").innerHTML = data["failed"];
+    });
+
+    socket.on('doi_results', (data) => {
+      var rendered_html = "";
+      for (let doi_item of data) {
+        var doi = doi_item["doi"];
+        rendered_html += add_item_to_table(doi_item);
+        if (doi != "") {
+          item_info.push(doi_item);
+          bag_of_doi[doi] = doi_item
+        }
+      }
+      document.getElementById("doi_table").innerHTML += rendered_html;
+      // Initialize star icons after rows inserted
+      try { MSStars.refreshStarIcons(); } catch (e) {}
+    });
+
+    function add_item_to_table(doi_item) {
+      let authorsNamesAndLinks = [];
+      for (const author of doi_item["X-authors-list"]) {
+        authorsNamesAndLinks.push(author);
+      }
+      const full_doi = doi_item["doi"].split("_")[0];
+
+      var rendered = Mustache.render(tableRowTemplate, {
+        success: doi_item["doi"] != "" ? true : false,
+        openaccess: get(doi_item, "X-OA", false) != false,
+        doi: doi_item["doi"],
+        issn: doi_item["issn"],
+        full_doi: full_doi,
+        year: doi_item["year"],
+        title: doi_item["title"],
+        abstract: get(doi_item, "X-abstract", ""),
+        cite_count: get(doi_item, "X-IsReferencedByCount", ""),
+        ref_count: get(doi_item, "X-refcount", ""),
+        subject: get(doi_item, "X-subject", []),
+        pub_title: doi_item["pubtitle"],
+        pub_rank: doi_item["pub_rank"],
+        rank_source: doi_item["rank_source"],
+        hindex: doi_item["hindex"],
+        authorsNamesAndLinks: authorsNamesAndLinks,
+        affil: doi_item["X-Country-First-affiliation"],
+        country: doi_item["X-Country-First-Author"],
+        oa_url: doi_item["X-OA-URL"],
+      });
+      return rendered;
+    }
+
+    // Simple star handling using localStorage
+    const MSStars = (function(){
+      const KEY = 'starred_items';
+      function load(){
+        try { return JSON.parse(window.localStorage.getItem(KEY) || '{}'); } catch(_) { return {}; }
+      }
+      function save(map){
+        try { window.localStorage.setItem(KEY, JSON.stringify(map)); } catch(_) {}
+      }
+      function isStarred(doi){ const m = load(); return !!m[doi]; }
+      function toggle(doi){
+        const m = load();
+        if (m[doi]) { delete m[doi]; }
+        else if (bag_of_doi && bag_of_doi[doi]) { m[doi] = bag_of_doi[doi]; }
+        save(m);
+        return !!m[doi];
+      }
+      function setIcon(el, starred){
+        if (!el) return;
+        const i = el.querySelector('i');
+        if (!i) return;
+        i.classList.remove('far','fas');
+        i.classList.add(starred ? 'fas' : 'far');
+      }
+      function refresh(){
+        document.querySelectorAll('#doi_table .star-btn').forEach(btn => {
+          const doi = btn.getAttribute('data-doi');
+          setIcon(btn, isStarred(doi));
+        });
+      }
+      function handleClick(e){
+        const btn = e.target.closest('.star-btn');
+        if (!btn) return;
+        e.preventDefault();
+        const doi = btn.getAttribute('data-doi');
+        const starred = toggle(doi);
+        setIcon(btn, starred);
+      }
+      function init(){
+        const tbody = document.getElementById('doi_table');
+        if (tbody && !tbody._msStarInit){
+          tbody.addEventListener('click', handleClick);
+          tbody._msStarInit = true;
+        }
+        refresh();
+      }
+      return { refreshStarIcons: init };
+    })();
+
+    function resetAll() {
+      bag_of_doi = {};
+      latestQueryId = null;
+      // Reset UI
+      const btn = document.getElementById("main_button");
+      btn.textContent = "Count Results";
+      btn.disabled = false;
+      btn.classList.remove('btn-success','btn-warning');
+      btn.classList.add('btn-primary');
+
+      document.getElementById("querybox").disabled = false;
+      document.getElementById("pb_success").setAttribute("max", 0);
+      document.getElementById("pb_success").setAttribute("value", 0);
+      document.getElementById("pb_failure").setAttribute("max", 0);
+      document.getElementById("pb_failure").setAttribute("value", 0);
+      document.getElementById("pb_failure_count").innerHTML = "";
+      document.getElementById("pb_success_count").innerHTML = "";
+      const grp = document.getElementById('postFetchGroup');
+      if (grp) grp.hidden = true;
+
+      // Go home
+      window.location = "/";
+      // Back to 2-step flow
+      handle_submit = sendCountRequest;
+    }
+
+    function downloadResults() { download("results.bib", bag_of_doi) }
+
+    function downloadExcel(type, fn, dl) {
+      var elt = document.getElementById('doitable');
+      var wb = XLSX.utils.table_to_book(elt, { sheet: "sheet1" });
+      return dl ? XLSX.write(wb, { bookType: type, bookSST: true, type: 'base64' })
+                : XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
+    }
+
+    function copyPermalink() {
+      if (latestQueryId === null || latestQueryId === undefined) { return; }
+      const baseUrl = window.location.origin;
+      const link = baseUrl + '/permalink/' + latestQueryId;
+      navigator.clipboard.writeText(link).catch(() => {});
+    }
+
+    function get_doi_cite(elt) {
+      let style = "apa";
+      if (document.getElementById("cite_bib").checked) { style = "bibtex"; }
+      const my_doi = elt.attributes.doi.value;
+      var query = ".cite_btn[doi='" + my_doi + "']";
+      document.querySelector(query).value = "Retrieving!";
+      document.querySelector(query).classList.remove("btn-info");
+      document.querySelector(query).classList.add("btn-warning");
+      fetch("/cite?doi=" + my_doi + "&style=" + style)
+        .then(function (response) {
+          if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); }
+          return response.json()
+        })
+        .then(function (response) {
+          var query = ".cite_btn[doi='" + response["doi"] + "']";
+          document.querySelector(query).value = "Copied!";
+          document.querySelector(query).classList.remove("btn-warning");
+          document.querySelector(query).classList.add("btn-success");
+          setTimeout(function () {
+            document.querySelector(query).value = "Copy Citation";
+            document.querySelector(query).classList.remove("btn-success");
+            document.querySelector(query).classList.add("btn-info");
+          }, 3000)
+          navigator.clipboard.writeText(response["citation"]);
+        });
+    }
+
+    async function fetchCloud(data = []) {
+      const response = await fetch("https://scholar-wc.miage.nextnet.top/word-cloud?gramSize=4", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        body: JSON.stringify(data)
+      });
+      return response.blob();
+    }
+
+    function cloudResults() {
+      fetchCloud(Object.values(bag_of_doi).map(item => item["title"]))
+        .then(blob => {
+          var img = URL.createObjectURL(blob);
+          document.getElementById('cloudimg').setAttribute('src', img);
+          document.getElementById("cloudimg").removeAttribute("hidden");
+        });
+    }
+
+    function createRssLink() { socket.emit('create_feed', { query: document.getElementById("querybox").value }); }
+
+    function resetPermalinkButton() { /* no-op; handled by dropdown now */ }
+
+    function xref_changed() {
+      document.querySelectorAll('link.xref').forEach(function (node) {
+        node.disabled = document.getElementById("xref").checked;
+      });
+      window.localStorage.setItem("xref", document.getElementById("xref").checked);
+    }
+
+    function add_domain_restriction_to_query() {
+      var options = Array.prototype.slice.call(document.querySelector("#domain_select").selectedOptions);
+      var querybox = document.querySelector("#querybox");
+      querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
+        return `SUBJAREA("${elt.getAttribute("value")}")`
+      }).join(" OR ") + " )"
+    }
+
+    function add_source_restriction_to_query() {
+      var options = Array.prototype.slice.call(document.querySelector("#source_select").selectedOptions);
+      var querybox = document.querySelector("#querybox");
+      querybox.value = "(" + querybox.value + ") AND (" + options.map((elt) => {
+        return `${elt.getAttribute("code")}("${elt.getAttribute("value")}")`
+      }).join(" OR ") + " )"
+    }
+
+    function cite_bib_changed() {
+      window.localStorage.setItem("cite_bib", document.getElementById("cite_bib").checked);
+    }
+
+    function oa_changed() {
+      document.querySelectorAll('tr.paywall').forEach(function (node) {
+        if (document.getElementById("oa").checked) {
+          node.style.display = 'none';
+        } else {
+          node.style.display = 'table-row';
+        }
+      });
+      window.localStorage.setItem("oa", document.getElementById("oa").checked);
+    }
+
+    function completion_changed() {
+      try {
+        window.localStorage.setItem("completion", document.getElementById("completion").checked ? 'true' : 'false');
+      } catch (_) {}
+      // simplest reliable toggle: reload to (de)initialize the completion logic cleanly
+      try { window.location.reload(); } catch (_) {}
+    }
+  </script>
+
+  <!-- Author tab orchestration (kept) -->
+  <script>
+    (function () {
+      const SEL = 'a.author-orcidid, a.author-openalexid';
+      const CH_NAME = 'miage-scholar-author-channel';
+      const bc = new BroadcastChannel(CH_NAME);
+      let authorTab = null;
+      let firstClickConsumed = false;
+      function resetState() { firstClickConsumed = false; authorTab = null; }
+      bc.onmessage = (evt) => { const d = evt && evt.data; if (d === 'tab-closed' || (d && d.type === 'tab-closed')) resetState(); };
+      setInterval(() => { if (authorTab && authorTab.closed) resetState(); }, 1000);
+
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest(SEL);
+        if (!a) return;
+        e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        if (authorTab && authorTab.closed) resetState();
+        const href = a.getAttribute('href') || '';
+        const authorID = a.getAttribute('authorID') ?? a.getAttribute('data-author-id') ?? (a.dataset ? a.dataset.authorId : null) ?? null;
+        if (!firstClickConsumed) { authorTab = window.open(href, '_blank', 'noopener'); firstClickConsumed = true; return; }
+        if (!authorTab || !authorTab.closed) { bc.postMessage({ type: 'author-click', authorID }); return; }
+        resetState(); authorTab = window.open(href, '_blank', 'noopener'); firstClickConsumed = true;
+      });
+    })();
+  </script>
+
+  <!-- Network progress hooks -->
+  <script>
+    function collectIdentifiersAsString() {
+      const ids = Array.from(document.querySelectorAll('#doitable tbody tr'))
+        .map(tr => (tr.querySelector('th') ? tr.querySelector('th').textContent.trim() : ''))
+        .filter(s => s.length > 0);
+      return ids;
+    }
+
+    let networkModalInstance = null;
+    function getNetworkModal() {
+      if (!networkModalInstance) {
+        const modalEl = document.getElementById('networkModal');
+        networkModalInstance = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+      }
+      return networkModalInstance;
+    }
+
+    function analyzeCitationGraph() {
+      const idsString = collectIdentifiersAsString();
+      socket.emit('create_network_graph_data', {
+        ids: idsString,
+        query: document.getElementById('querybox').value
+      });
 
       const prog = document.getElementById('networkProgress');
       const proc = document.getElementById('networkProcessed');
       const tot = document.getElementById('networkTotal');
       const refs = document.getElementById('networkRefs');
 
-      prog.max = total;
-      prog.value = processed;
-      proc.textContent = String(processed);
-      tot.textContent = String(total);
-      refs.textContent = String(refsCount);
-    } catch (e) {
-      console.log('nework_report handling error', e);
+      prog.max = 0; prog.value = 0;
+      proc.textContent = '0'; tot.textContent = '0'; refs.textContent = '0';
+      getNetworkModal().show();
     }
+
+    socket.on('nework_report', function (payload) {
+      try {
+        const processed = Number(payload?.processed_works || 0);
+        const remaining = Number(payload?.remaining_works || 0);
+        const refsCount = Number(payload?.references_processed || 0);
+        const total = processed + remaining;
+
+        const prog = document.getElementById('networkProgress');
+        const proc = document.getElementById('networkProcessed');
+        const tot = document.getElementById('networkTotal');
+        const refs = document.getElementById('networkRefs');
+
+        prog.max = total;
+        prog.value = processed;
+        proc.textContent = String(processed);
+        tot.textContent = String(total);
+        refs.textContent = String(refsCount);
+      } catch (e) { console.log('nework_report handling error', e); }
+    });
+
+    socket.on('nework_report_done', function (payload) {
+      const id = payload && payload.network_id;
+      if (id !== undefined && id !== null) {
+        try { window.open('/network/' + id, '_blank'); } catch (e) { console.log(e); }
+      }
+      try { getNetworkModal().hide(); } catch (e) { }
+    });
+  </script>
+
+
+<style>
+  /* minimal styles for the inline completion menu */
+  .scopus-ac-wrap { position: relative; }
+  .scopus-ac-menu {
+    position: absolute; z-index: 2000; max-height: 260px; overflow-y: auto;
+    min-width: 280px; background: #fff; border: 1px solid rgba(0,0,0,.1);
+    border-radius: .5rem; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  }
+  html.dark-mode .scopus-ac-menu { background: var(--ms-bg-2); color: #e6edf3; border-color: rgba(255,255,255,.08); }
+  .scopus-ac-item { padding: .5rem .75rem; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
+  .scopus-ac-item.kbd span { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .scopus-ac-item:hover, .scopus-ac-item.active { background: rgba(13,110,253,.08); }
+  html.dark-mode .scopus-ac-item:hover, html.dark-mode .scopus-ac-item.active { background: rgba(255,255,255,.06); }
+  .scopus-ac-hint { color: var(--ms-muted); font-size: .85em; }
+  .scopus-ghost {
+    position:absolute; top:0; left:0; right:0; bottom:0; color: transparent; white-space: pre-wrap;
+    word-wrap: break-word; overflow: hidden; pointer-events:none; padding: .75rem 1rem; border-radius: .75rem;
+    font: inherit; line-height: inherit; tab-size: inherit;
+  }
+  .scopus-ghost .ghost-hint { color: rgba(13,110,253,.35); }
+</style>
+
+<script>
+(function () {
+  // Toggleable query completion (persisted via localStorage)
+  const completionEnabled = (window.localStorage.getItem('completion') ?? 'true') === 'true';
+  if (!completionEnabled) { try { window.__scopus_ac = null; } catch (_) {} return; }
+  // --- Vocabulary (Scopus advanced search) ---
+  // Operators
+  const BOOL_OPS = [
+    {label:'AND', insert:'AND', hint:'Boolean AND'},
+    {label:'OR', insert:'OR', hint:'Boolean OR'},
+    {label:'AND NOT', insert:'AND NOT', hint:'Boolean NOT (Scopus uses AND NOT)'},
+  ];
+  const PROX_OPS = [
+    {label:'W/n', insert:'W/3', hint:'Within n words, any order'},
+    {label:'PRE/n', insert:'PRE/3', hint:'Within n words, in this order'},
+  ];
+  // Field codes (non-exhaustive, common set)
+  const FIELDS = [
+    {label:'TITLE-ABS-KEY()', insert:'TITLE-ABS-KEY(${})', caretOffset:-2, hint:'Title OR Abstract OR Author Keywords'},
+    {label:'TITLE()',         insert:'TITLE(${})', caretOffset:-2, hint:'Article title'},
+    {label:'ABS()',           insert:'ABS(${})', caretOffset:-2, hint:'Abstract'},
+    {label:'KEY()',           insert:'KEY(${})', caretOffset:-2, hint:'Author keywords'},
+    {label:'AUTH()',          insert:'AUTH(${})', caretOffset:-2, hint:'Author name (any)'},
+  ];
+  // Comparables (year, etc.)
+  const COMPARABLES = [
+    {label:'PUBYEAR >', insert:'PUBYEAR > '},
+    {label:'PUBYEAR =', insert:'PUBYEAR = '},
+    {label:'PUBYEAR <', insert:'PUBYEAR < '}
+  ];
+  // Snippets for phrases and grouping
+  const SNIPPETS = [
+    {label:'"Loose phrase"', insert:'"${}"', caretOffset:-2, hint:'Phrase with variations allowed'},
+    {label:'{Exact phrase}', insert:'{${}}', caretOffset:-2, hint:'Exact phrase, no stemming/variants'},
+    {label:'( … ) group',   insert:'(${})', caretOffset:-2, hint:'Parenthesis group'},
+    {label:'[example] PRE/n', insert:'{term1} PRE/3 {term2}', hint:'Ordered proximity'},
+    {label:'[example] W/n',   insert:'{term1} W/3 {term2}',   hint:'Unordered proximity'}
+  ];
+
+  // Combine into a master list with categories
+  const CATALOG = [
+    {cat:'Fields', items:FIELDS},
+    {cat:'Operators', items:BOOL_OPS},
+    {cat:'Proximity', items:PROX_OPS},
+    {cat:'Year/Compare', items:COMPARABLES},
+    {cat:'Snippets', items:SNIPPETS}
+  ];
+
+  // Attach wrapper and ghost overlay for inline ghost hints
+  const ta = document.getElementById('querybox');
+  if (!ta) return;
+
+  // Wrap the textarea so we can position the menu absolutely
+  const wrap = document.createElement('div');
+  wrap.className = 'scopus-ac-wrap';
+  ta.parentNode.insertBefore(wrap, ta);
+  wrap.appendChild(ta);
+
+  // Ghost layer to show the next token faintly
+  const ghost = document.createElement('div');
+  ghost.className = 'scopus-ghost';
+  ghost.style.display = 'none';
+  wrap.style.position = 'relative';
+  wrap.appendChild(ghost);
+
+  // Menu element
+  const menu = document.createElement('div');
+  menu.className = 'scopus-ac-menu';
+  menu.style.display = 'none';
+  wrap.appendChild(menu);
+
+  let state = {
+    open:false, items:[], activeIndex:0,
+    triggerStart:0, // index of token start in text
+    filter:''        // user-typed filter
+  };
+
+  // Utility: get caret position and current token (since last whitespace or after '(')
+  function getContext() {
+    const pos = ta.selectionStart;
+    const text = ta.value;
+    const left = text.slice(0, pos);
+    // find the token start: after whitespace, after '(', after '-', after '{', after '"'
+    const m = left.match(/(?:^|[\s(\-"{])([^\s()"{}]*)$/);
+    const token = m ? m[1] : '';
+    const triggerStart = m ? (pos - token.length) : pos;
+    return {pos, token, triggerStart, text};
+  }
+
+  function buildCatalog(filter) {
+    const f = (filter || '').toUpperCase();
+    const out = [];
+    for (const section of CATALOG) {
+      for (const it of section.items) {
+        const hay = (it.label || it.insert || '').toUpperCase();
+        if (!f || hay.indexOf(f) >= 0) {
+          out.push({section:section.cat, ...it});
+        }
+      }
+    }
+    // sensible priority: field codes first, then year, then booleans, proximity, snippets
+    const prio = {Fields:0, 'Year/Compare':1, Operators:2, Proximity:3, Snippets:4};
+    out.sort((a,b) => (prio[a.section]-prio[b.section]) || a.label.localeCompare(b.label));
+    return out.slice(0, 50);
+  }
+
+  function renderMenu(items) {
+    if (!items.length) { menu.style.display = 'none'; state.open=false; return; }
+    const html = items.map((it, idx) => {
+      const active = idx === state.activeIndex ? 'active' : '';
+      const hint = it.hint ? `<span class="scopus-ac-hint">${escapeHtml(it.hint)}</span>` : '';
+      return `<div class="scopus-ac-item ${active}" data-idx="${idx}">
+                <span><span class="badge bg-light text-dark me-2">${escapeHtml(it.section)}</span>${escapeHtml(it.label)}</span>
+                ${hint}
+              </div>`;
+    }).join('');
+    menu.innerHTML = html;
+    menu.style.display = 'block';
+    state.open = true;
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function closeMenu(){ menu.style.display='none'; state.open=false; ghost.style.display='none'; }
+
+  // Position menu near the caret
+  function placeMenu() {
+    // simple heuristic: anchor to bottom-left of textarea; the box is wide enough
+    // For more precise placement, a caret pixel locator would be needed; not necessary here.
+    menu.style.top = (ta.offsetTop + ta.offsetHeight) + 'px';
+    menu.style.left = (ta.offsetLeft) + 'px';
+    menu.style.right = 'auto';
+  }
+
+  function setGhost(nextText) {
+    if (!nextText) { ghost.style.display='none'; return; }
+    const {pos, text} = {pos:ta.selectionStart, text:ta.value};
+    const before = text.slice(0, pos);
+    const after = text.slice(pos);
+    ghost.style.display='block';
+    ghost.style.padding = getComputedStyle(ta).padding;
+    ghost.style.font = getComputedStyle(ta).font;
+    ghost.style.lineHeight = getComputedStyle(ta).lineHeight;
+    ghost.style.borderRadius = getComputedStyle(ta).borderRadius;
+    ghost.innerHTML = escapeHtml(before) + '<span class="ghost-hint">' + escapeHtml(nextText) + '</span>' + escapeHtml(after);
+  }
+
+  // Insert selected item at current token
+  function applyItem(item) {
+    const ctx = getContext();
+    const insert = item.insert || item.label;
+    const before = ta.value.slice(0, ctx.triggerStart) + insert;
+    const after = ta.value.slice(ctx.pos);
+    ta.value = before + after;
+
+    // Caret placement with placeholders `${}`
+    let caret = ctx.triggerStart + insert.length;
+    if (typeof item.caretOffset === 'number') caret = ctx.triggerStart + insert.length + item.caretOffset;
+
+    // Expand `${}` placeholder by selecting it for immediate typing
+    const phStart = before.lastIndexOf('${');
+    if (phStart >= 0) {
+      const phEnd = before.indexOf('}', phStart);
+      if (phEnd > phStart) {
+        const s = phStart;
+        const e = phEnd + 1;
+        // remove ${} and place caret inside
+        ta.value = ta.value.slice(0, s) + ta.value.slice(s, e).replace('${}', '') + ta.value.slice(e);
+        caret = s;
+      }
+    }
+
+    ta.focus();
+    ta.setSelectionRange(caret, caret);
+    closeMenu();
+    textAreaChange && textAreaChange();
+  }
+
+  // Key handling
+  ta.addEventListener('keydown', (e) => {
+    if (!state.open) {
+      // quick expansions: on Enter with a trailing open function, auto add ')'
+      if (e.key === 'Enter') {
+        // let form logic proceed; no intervention
+      }
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); state.activeIndex = Math.min(state.activeIndex+1, state.items.length-1); renderMenu(state.items); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); state.activeIndex = Math.max(state.activeIndex-1, 0); renderMenu(state.items); return; }
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      e.preventDefault();
+      applyItem(state.items[state.activeIndex] || state.items[0]);
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
   });
 
-  // Completion: "nework_report_done" → open /network/<id> in new tab and hide modal
-  socket.on('nework_report_done', function (payload) {
-    const id = payload && payload.network_id;
-    if (id !== undefined && id !== null) {
-      try { window.open('/network/' + id, '_blank'); } catch (e) { console.log(e); }
-    }
-    try { getNetworkModal().hide(); } catch (e) { /* noop */ }
+  menu.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.scopus-ac-item');
+    if (!item) return;
+    const idx = Number(item.getAttribute('data-idx'));
+    applyItem(state.items[idx]);
   });
+
+  ta.addEventListener('input', handleInput);
+  ta.addEventListener('click', handleInput);
+
+  function handleInput() {
+    const {token, triggerStart} = getContext();
+    state.triggerStart = triggerStart;
+    state.filter = token;
+
+    // heuristics: open menu if starting a field, operator, comparator, or typing after space/(
+    // Show ghost hint for the top match
+    const items = buildCatalog(token);
+    state.items = items;
+    state.activeIndex = 0;
+
+    if (!token && ta.value.trim().length === 0) {
+      // prime with common starters
+      state.items = buildCatalog('TITLE-ABS-KEY');
+    }
+
+    if (items.length) {
+      placeMenu();
+      renderMenu(items);
+      // ghost shows the remainder of the top suggestion minus what is already typed
+      const top = items[0].label || items[0].insert || '';
+      const remainder = (top.startsWith(token) ? top.slice(token.length) : '');
+      setGhost(remainder ? remainder : '');
+    } else {
+      closeMenu();
+    }
+  }
+
+  // Balanced delimiters: auto-close ) ] } and quotes
+  ta.addEventListener('keypress', (e) => {
+    const pairs = {'(' : ')', '{' : '}', '"' : '"'};
+    const closer = pairs[e.key];
+    if (!closer) return;
+    const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+    const hasSelection = selEnd > selStart;
+    const val = ta.value;
+    e.preventDefault();
+    const insert = hasSelection ? e.key + val.slice(selStart, selEnd) + closer : e.key + closer;
+    ta.value = val.slice(0, selStart) + insert + val.slice(selEnd);
+    const caret = selStart + 1;
+    ta.setSelectionRange(caret, caret);
+    textAreaChange && textAreaChange();
+    handleInput();
+  });
+
+  // Minimal validator: basic parentheses/braces balance + operator normalization
+  // Exposed globally to reuse before sending to backend if desired.
+  window.scopusQuery = {
+    normalize: function (q) {
+      // Normalize spacing around AND NOT, W/n, PRE/n
+      return q
+        .replace(/\s+/g,' ')
+        .replace(/\bAND\s+NOT\b/gi,'AND NOT')
+        .replace(/\bW\s*\/\s*(\d+)\b/gi,'W/$1')
+        .replace(/\bPRE\s*\/\s*(\d+)\b/gi,'PRE/$1')
+        .trim();
+    },
+    checkBalance: function(q) {
+      const stack = [];
+      const pairs = {')':'(', '}':'{'};
+      for (const ch of q) {
+        if (ch==='(' || ch==='{') stack.push(ch);
+        if (ch===')' || ch==='}') {
+          if (stack.pop() !== pairs[ch]) return false;
+        }
+      }
+      return stack.length===0;
+    }
+  };
+  // Expose internals so external hooks can be wired conditionally
+  try { window.__scopus_ac = { ta, menu, state, closeMenu }; } catch (_) {}
+})();
+
+
+// Wire global hooks only when completion is initialized
+if (window.__scopus_ac) {
+  const { ta, menu, state, closeMenu } = window.__scopus_ac;
+  // Close on global Escape (even if the textarea is not focused)
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { try { closeMenu(); } catch (_) {} }
+  }, true);
+
+  // Close when the querybox loses focus, except when the blur is caused by interacting with the menu
+  state.suppressBlurClose = false;
+
+  // Mark that the next blur comes from interacting with the menu; use capture to run before blur
+  menu.addEventListener('pointerdown', function () {
+    state.suppressBlurClose = true;
+  }, true);
+
+  // If blur was not caused by menu interaction, close the panel
+  ta.addEventListener('blur', function () {
+    if (state.suppressBlurClose) {
+      setTimeout(function(){ state.suppressBlurClose = false; }, 0);
+      return;
+    }
+    closeMenu();
+  });
+
+  // Optional: if the user clicks anywhere else in the document and the textarea
+  // is not focused, close the panel as well (defensive hardening).
+  document.addEventListener('pointerdown', function (e) {
+    if (!ta.contains(e.target) && !menu.contains(e.target)) {
+      try { closeMenu(); } catch (_) {}
+    }
+  }, true);
+}
+
 </script>
 
-
 </body>
-
 </html>

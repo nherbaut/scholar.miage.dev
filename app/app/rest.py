@@ -1,7 +1,7 @@
 import requests
 
 from app.main import app, db
-from app.model import ScpusFeed, ScpusRequest, PublicationSource
+from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
 from app.business import count_results_for_query, get_scopus_works_for_query, update_feed, generate_rss, get_sources, \
     get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
@@ -106,14 +106,14 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_scopus_works_for_query(count, feed.query, xref=True)
+        dois = get_scopus_works_for_query(count, feed.query, xref=True,existing_data=pickle.loads(feed.feed_content))
     else:
         dois = []
     if feed.feed_content is not None:
         feed_content = pickle.loads(feed.feed_content)
     else:
         feed_content = {}
-
+    
     update_feed(dois, feed_content)
     feed.count = count
     feed.feed_content = pickle.dumps(feed_content)
@@ -124,7 +124,7 @@ def get_feed(id):
                         key=lambda x: x["pubdate"], reverse=True)
 
     rss = generate_rss(feed_items, feed.id, feed.query)
- 
+
     return Response(rss, mimetype='application/atom+xml')
 
 
@@ -159,6 +159,12 @@ def home():
     #        session['state'] = auth.state
     #    return render_template('index.html', login_url=auth.get_login_url())
     return render_template('index.html', sources=get_sources())
+
+
+@app.route('/stars', methods=["GET"])
+def stars_page():
+    # Client-side page; data loaded from localStorage in the browser
+    return render_template('stars.html', sources=get_sources())
 
 
 @app.route("/doi/<doi1>/<doi2>", methods=["GET"])
@@ -319,28 +325,47 @@ def get_venues_form():
     return render_template('venues.html', orcid=orcid, openalex=openalex, sources=get_sources())
 
 
-@app.route('/permalink', methods=["GET"])
-def permalink():
-    query = request.args.get('query')
-
-    return render_template('index.html', query=f"{query}", sources=get_sources())
-
-
 @app.route('/opensearch', methods=["GET"])
 def opensearch():
     query = request.args.get('query')
 
     return render_template('index.html', query=f"TITLE(\"{query}\")", sources=get_sources())
 
-@app.route("/network/compute/<id>",methods=["GET"])
-def get_network_data(id):
-     return app.response_class(
-            response=net_get_graph_data(id),
-            status=200,
-            mimetype='application/json'
-        )
-    
 
-@app.route('/network/<work_list_id>',methods=["GET"])
+@app.route("/network/compute/<id>", methods=["GET"])
+def get_network_data(id):
+    return app.response_class(
+        response=net_get_graph_data(id),
+        status=200,
+        mimetype='application/json'
+    )
+
+
+@app.route('/network/<work_list_id>', methods=["GET"])
 def get_network_page(work_list_id):
     return render_template('network.html', work_list_id=work_list_id,  sources=get_sources())
+
+
+@app.route('/networks', methods=["GET"])
+def get_networks_page():
+    
+    try:
+        networks_data = db.session.query(NetworkData).all()
+
+        return render_template('networks.html', networks=networks_data)
+    except:
+        return render_template('index.html',   sources=get_sources())
+
+        
+    
+
+
+@app.route('/permalink/<query_id>', methods=["GET"])
+def permalink(query_id: int):
+
+    try:
+        request = db.session.query(ScpusRequest).filter(ScpusRequest.id==int(query_id)).one()
+
+        return render_template('index.html', query=request.query,  sources=get_sources())
+    except:
+        return render_template('index.html',   sources=get_sources())

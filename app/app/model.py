@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, LargeBinary, Float, BigInteger
 from sqlalchemy.orm import scoped_session, sessionmaker
-
+from sqlalchemy.orm import deferred
+import pickle
 from app.config import Config
 from sqlalchemy.orm import declarative_base
 import datetime
@@ -45,12 +46,13 @@ class ScpusRequest(Base):
 class NetworkData(Base):
     __tablename__="networkdata"
     id = Column(Integer, primary_key=True)
-    network_data = Column(LargeBinary(length=(2 ** 32) - 1), default=None)
+    query = Column(String(4096))
+    network_data = deferred(Column(LargeBinary(length=(2 ** 32) - 1), default=None))
     
 class ScpusFeed(Base):
     __tablename__ = "feed"
     id = Column(Integer, primary_key=True)
-    feed_content = Column(LargeBinary(length=(2 ** 32) - 1), default=None)
+    feed_content = Column(LargeBinary(length=(2 ** 32) - 1), default=pickle.dumps({}))
     count = Column(Integer)
     query = Column(String(4096))
     lastBuildDate = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))

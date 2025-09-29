@@ -1,27 +1,289 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-    <title>Query History</title>
+  <meta charset="UTF-8" />
+  <title>Query History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Bootstrap 4 (kept for compatibility) -->
+  <link
+    rel="stylesheet"
+    href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+    integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+    crossorigin="anonymous"
+  />
+  <style>
+    :root{
+      --bg: #0f1115;
+      --card: #151922;
+      --text: #e6e8ef;
+      --muted: #9aa3b2;
+      --border: #2a3040;
+      --accent: #5b8cff;
+      --accent-2: #52d6b3;
+    }
+    @media (prefers-color-scheme: light) {
+      :root{
+        --bg:#f7f9fc; --card:#ffffff; --text:#1b2430; --muted:#5b6779; --border:#e6eaf0; --accent:#2d63ff; --accent-2:#22b38a;
+      }
+    }
+    html,body{height:100%}
+    body{
+      background: radial-gradient(1200px 700px at 0% -10%, rgba(91,140,255,0.15), transparent 60%),
+                  radial-gradient(1000px 600px at 100% 110%, rgba(82,214,179,0.12), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+    }
+    .navbar{
+      background: rgba(21,25,34,0.7);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand-dot{
+      width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      box-shadow:0 0 0 3px rgba(91,140,255,0.2);
+    }
+    .container-narrow{max-width:1100px}
+    .card{
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    }
+    .card-header{
+      background: transparent;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+    .controls .form-control{
+      background: #0f1117;
+      border-color: var(--border);
+      color: var(--text);
+    }
+    @media (prefers-color-scheme: light) {
+      .controls .form-control{ background: #fff; }
+    }
+    .table{
+      margin: 0;
+      color: var(--text);
+    }
+    .table thead th{
+      position: sticky; top: 0; z-index: 2;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent), var(--card);
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      font-size: .8rem; letter-spacing: .06em; color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    .table td, .table th{
+      border-color: var(--border);
+      vertical-align: middle;
+    }
+    .table a{ color: var(--accent); text-decoration: none; }
+    .table a:hover{ text-decoration: underline; }
+    .badge-soft{
+      background: rgba(91,140,255,.15);
+      color: var(--accent);
+      font-weight: 600;
+      border: 1px solid rgba(91,140,255,.25);
+      padding:.45rem .6rem;
+      border-radius: .8rem;
+    }
+    .img-wrap{
+      overflow: hidden; border-radius: 16px; border:1px solid var(--border);
+    }
+    .img-wrap img{
+      display:block; width:100%; height:auto; transition: transform .6s ease;
+    }
+    .img-wrap:hover img{ transform: scale(1.02); }
+    .sort-indicator{
+      margin-left:.35rem; opacity:.6; font-size:.9em;
+    }
+    .footer{
+      color: var(--muted); font-size:.9rem;
+    }
+    .kbd{
+      display:inline-block; padding:.15rem .45rem; border:1px solid var(--border); border-bottom-width:2px; border-radius:.4rem; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#0c0f14; color:var(--muted);
+    }
+    @media (prefers-color-scheme: light){
+      .kbd{ background:#fff }
+    }
+  </style>
 </head>
 <body>
-<h1>Query History</h1>
-<img src="https://scholar-wc.miage.nextnet.top/word-cloud?limit=5000" />
-<table class="table table-bordered table-hover">
-    <thead>
-    <td>date</td>
-    <td>query</td>
-    <td>results</td>
-    </thead>
-    {% for query in queries %}
-        <tr>
-        <td>{{ query.timestamp }}</td>
-            <td><a href="/permalink?query={{ query.query }}">{{ query.query }}</a></td>
-        <td>{{ query.count }}</td>
-        </tr>
-    {% endfor %}
-</table>
+   <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav"
+              aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="msNav">
+        <ul class="navbar-nav ms-3">
+          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
+          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
+          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
+          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
+          <li class="nav-item"><a class="nav-link" href="/stars">Stars</a></li>
+        </ul>
+      </div>
+
+
+    </div>
+  </nav>
+
+  <main class="container container-narrow my-4 my-md-5">
+    <div class="mb-4">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span>Overview</span>
+        </div>
+        <div class="card-body">
+          <div class="row align-items-start">
+            <div class="col-md-7 mb-3 mb-md-0">
+              <div class="img-wrap">
+                <img
+                  src="https://scholar-wc.miage.nextnet.top/word-cloud?limit=5000"
+                  alt="Word cloud over recent queries"
+                  loading="lazy"
+                  referrerpolicy="no-referrer"
+                />
+              </div>
+            </div>
+            <div class="col-md-5">
+              <div class="controls">
+                <label for="search" class="font-weight-bold">Filter</label>
+                <input id="search" type="search" class="form-control mb-3" placeholder="Search query text…" autocomplete="off" />
+                <div class="d-flex align-items-center text-muted">
+                  <span class="mr-2">Tips:</span>
+                  <span class="kbd mr-1">/</span><span class="mr-3">focus search</span>
+                  <span class="kbd mr-1">Esc</span><span>clear</span>
+                </div>
+                <hr />
+                <div class="d-flex align-items-center">
+                  <span class="badge-soft" id="rowCount">0 rows</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>  
+    </div>
+
+    <div class="card">
+      <div class="card-header">History</div>
+      <div class="table-responsive">
+        <table id="historyTable" class="table table-hover table-borderless mb-0">
+          <thead>
+            <tr>
+              <th data-sort-key="date">Date <span class="sort-indicator">↕</span></th>
+              <th data-sort-key="query">Query <span class="sort-indicator">↕</span></th>
+              <th data-sort-key="results" class="text-right pr-4">Results <span class="sort-indicator">↕</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for query in queries %}
+              <tr>
+                <td data-col="date">
+                  <time datetime="{{ query.timestamp }}">{{ query.timestamp }}</time>
+                </td>
+                <td data-col="query">
+                  <a href="/permalink/{{ query.id }}">{{ query.query }}</a>
+                </td>
+                <td data-col="results" class="text-right pr-4">
+                  <span class="badge-soft">{{ query.count }}</span>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="footer mt-4 mb-2">
+      Keyboard: press <span class="kbd">/</span> to focus search, <span class="kbd">Esc</span> to clear filter. Click headers to sort.
+    </p>
+  </main>
+
+  <script>
+    (function(){
+      const qs = s => document.querySelector(s);
+      const qsa = s => Array.prototype.slice.call(document.querySelectorAll(s));
+      const search = qs('#search');
+      const table = qs('#historyTable');
+      const rows = qsa('#historyTable tbody tr');
+      const rowCount = qs('#rowCount');
+      const HEADERS = qsa('#historyTable thead th');
+
+      function updateCount(){
+        const visible = rows.filter(r => r.style.display !== 'none').length;
+        rowCount.textContent = visible + (visible === 1 ? ' row' : ' rows');
+      }
+
+      function filterRows(term){
+        const t = term.trim().toLowerCase();
+        rows.forEach(r => {
+          const q = r.querySelector('[data-col="query"]').innerText.toLowerCase();
+          const d = r.querySelector('[data-col="date"]').innerText.toLowerCase();
+          r.style.display = (q.includes(t) || d.includes(t)) ? '' : 'none';
+        });
+        updateCount();
+      }
+
+      function getCellValue(row, key){
+        const el = row.querySelector(`[data-col="${key}"]`);
+        if(!el) return '';
+        if(key === 'results'){
+          const n = el.innerText.replace(/[^\d.-]/g,'');
+          return parseFloat(n) || 0;
+        }
+        return el.innerText.trim().toLowerCase();
+      }
+
+      function sortBy(key, asc){
+        const tbody = table.tBodies[0];
+        const sorted = rows.slice().sort((a,b)=>{
+          const va = getCellValue(a,key);
+          const vb = getCellValue(b,key);
+          if(typeof va === 'number' && typeof vb === 'number'){
+            return asc ? va - vb : vb - va;
+          }
+          return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+        });
+        sorted.forEach(r => tbody.appendChild(r));
+      }
+
+      // Header sort handlers
+      HEADERS.forEach(th=>{
+        let asc = true;
+        th.addEventListener('click', ()=>{
+          const key = th.getAttribute('data-sort-key');
+          sortBy(key, asc);
+          asc = !asc;
+        });
+      });
+
+      // Search
+      search.addEventListener('input', e => filterRows(e.target.value));
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', e=>{
+        if(e.key === '/'){
+          e.preventDefault();
+          search.focus();
+        } else if(e.key === 'Escape'){
+          search.value = '';
+          filterRows('');
+        }
+      });
+
+      // Initial count
+      updateCount();
+    })();
+  </script>
 </body>
 </html>

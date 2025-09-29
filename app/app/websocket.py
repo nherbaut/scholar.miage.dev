@@ -16,7 +16,7 @@ def net_create_graph_data(json_data):
         emit("nework_report",  nework_report)
 
     result = net_build_graph(json_data["ids"], 2, emitt=network_emit)
-    graph_data = NetworkData(network_data=pickle.dumps(json.dumps(result)))
+    graph_data = NetworkData(query=json_data["query"],network_data=pickle.dumps(json.dumps(result)))
     db.session.add(graph_data)
     db.session.commit()
 
@@ -32,11 +32,6 @@ def create_feed(json_data):
 
     emit("feed_generated", {"feed_id": feed.id})
 
-
-@socketio.on('my event')
-def handle_message(data):
-    for i in range(0, 10000):
-        emit('news', i)
 
 
 @socketio.on('create_permalink')
@@ -54,6 +49,8 @@ def handle_count(json_data, log_query=False):
                      ip="0.0.0.0", count=count, fetched=False)
     db.session.add(n)
     db.session.commit()
+    
+    emit("query_id",n.id)
 
     emit("count", count)
 
