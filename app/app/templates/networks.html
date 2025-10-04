@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Networks</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    .query-box { 
+      white-space: pre-wrap; /* preserve newlines */
+      word-break: break-word; 
+      margin: 0; 
+    }
+    .query-preview {
+      display: -webkit-box;
+      -webkit-line-clamp: 4;          /* clamp preview to ~4 lines */
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav"
+              aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="msNav">
+        <ul class="navbar-nav ms-3">
+          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
+          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
+          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
+          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
+          <li class="nav-item"><a class="nav-link" href="/stars">Stars</a></li>
+        </ul>
+      </div>
+
+
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Saved queries</span>
+        <span class="text-muted small">{{ networks|length }} item{{ '' if (networks|length == 1) else 's' }}</span>
+      </div>
+      <div class="list-group list-group-flush">
+        {% if networks and networks|length > 0 %}
+          {% for n in networks %}
+            <a class="list-group-item list-group-item-action py-3" href="/network/{{ n.id }}">
+              <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-2">Query</h6>
+                <span class="text-muted small">#{{ n.id }}</span>
+              </div>
+              <p class="query-box query-preview text-body-secondary">{{ (n.query or '(empty)') | e }}</p>
+            </a>
+          {% endfor %}
+        {% else %}
+          <div class="list-group-item py-4 text-center text-muted">No entries.</div>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

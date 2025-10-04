@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <title>Starred Articles - MIAGE Scholar</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+  <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="/static/css/flag-icon.css">
+  <link rel="stylesheet" href="/static/contrib/css/dark-mode.css">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav" aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="msNav">
+        <ul class="navbar-nav ms-3">
+          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
+          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
+          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
+          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
+          <li class="nav-item"><a class="nav-link active" aria-current="page" href="/stars">Stars</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="py-4">
+    <div class="container">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h1 class="h4 m-0">Starred Articles</h1>
+        <button id="clearAll" class="btn btn-outline-danger btn-sm">Clear all</button>
+      </div>
+
+      <div id="emptyState" class="alert alert-info" role="alert" style="display:none;">
+        No starred articles yet. Go back to the search page and click the star icon to save some.
+      </div>
+
+      <div class="table-responsive">
+        <table id="doitable" class="table table-bordered table-hover sortable">
+          <thead>
+          <tr>
+            <th class="nowrap">Star</th>
+            <th>Identifier</th>
+            <th>Date</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Publication Title</th>
+            <th>Download</th>
+            <th>Snowball</th>
+            <th>Cite</th>
+            <th class="xref">Affiliation</th>
+            <th class="xref">country</th>
+            <th class="subject xref">Subjects</th>
+            <th class="cite_count xref">Citation Count</th>
+            <th class="ref_count xref">Reference Count</th>
+          </tr>
+          </thead>
+          <tbody id="doi_table"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" crossorigin="anonymous"></script>
+  <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
+  <script src="/static/contrib/js/mustache.js"></script>
+
+  <script>
+    var tableRowTemplate;
+    fetch('/static/js/result-table.mustache').then(r => r.text()).then(t => { tableRowTemplate = t; renderStars(); });
+
+    function loadStars(){ try { return JSON.parse(localStorage.getItem('starred_items') || '{}'); } catch(_) { return {}; } }
+    function saveStars(m){ try { localStorage.setItem('starred_items', JSON.stringify(m)); } catch(_) {} }
+
+    function add_item_to_table(doi_item) {
+      let authorsNamesAndLinks = [];
+      for (const author of (doi_item["X-authors-list"] || [])) { authorsNamesAndLinks.push(author); }
+      const full_doi = (doi_item["doi"] || '').split("_")[0];
+      var rendered = Mustache.render(tableRowTemplate, {
+        success: doi_item["doi"] != "" ? true : false,
+        openaccess: (doi_item["X-OA"] || false) != false,
+        doi: doi_item["doi"],
+        issn: doi_item["issn"],
+        full_doi: full_doi,
+        year: doi_item["year"],
+        title: doi_item["title"],
+        abstract: (doi_item["X-abstract"] || ""),
+        cite_count: (doi_item["X-IsReferencedByCount"] || ""),
+        ref_count: (doi_item["X-refcount"] || ""),
+        subject: (doi_item["X-subject"] || []),
+        pub_title: doi_item["pubtitle"],
+        pub_rank: doi_item["pub_rank"],
+        rank_source: doi_item["rank_source"],
+        hindex: doi_item["hindex"],
+        authorsNamesAndLinks: authorsNamesAndLinks,
+        affil: doi_item["X-Country-First-affiliation"],
+        country: doi_item["X-Country-First-Author"],
+        oa_url: doi_item["X-OA-URL"],
+      });
+      return rendered;
+    }
+
+    function renderStars() {
+      const stars = loadStars();
+      const values = Object.values(stars);
+      const empty = values.length === 0;
+      document.getElementById('emptyState').style.display = empty ? 'block' : 'none';
+      if (empty) { document.getElementById('doi_table').innerHTML = ''; return; }
+      let html = '';
+      for (const item of values) { html += add_item_to_table(item); }
+      document.getElementById('doi_table').innerHTML = html;
+
+      // init DataTable after render
+      try {
+        if (!window._starsDT) {
+          window._starsDT = $('table').DataTable({
+            paging: false,
+            scrollY: '50vh',
+            scrollX: true,
+            scrollCollapse: true,
+            ordering: true,
+            order: [[2, 'desc']],
+            columnDefs: [
+              { targets: 3, width: '300px' },
+              { targets: 1, width: '200px' },
+              { targets: 0, width: '48px' }
+            ]
+          });
+        }
+      } catch (e) {}
+
+      // Set all icons to filled state here
+      document.querySelectorAll('#doi_table .star-btn i').forEach(i => { i.classList.remove('far'); i.classList.add('fas'); });
+    }
+
+    // Remove on star click
+    document.addEventListener('click', function(e){
+      const btn = e.target.closest('.star-btn');
+      if (!btn) return;
+      e.preventDefault();
+      const doi = btn.getAttribute('data-doi');
+      const stars = loadStars();
+      if (stars[doi]) { delete stars[doi]; saveStars(stars); }
+      // Remove row from UI
+      const tr = btn.closest('tr');
+      if (tr) tr.remove();
+      // If table now empty, show empty state
+      if (document.querySelectorAll('#doi_table tr').length === 0) {
+        document.getElementById('emptyState').style.display = 'block';
+      }
+    });
+
+    document.getElementById('clearAll').addEventListener('click', function(){
+      localStorage.removeItem('starred_items');
+      renderStars();
+    });
+
+    // Minimal cite handler used by the template
+    function get_doi_cite(elt) {
+      const my_doi = elt.getAttribute('doi') || elt.getAttribute('data-doi') || elt.getAttribute('data-doi');
+      const query = ".cite_btn[doi='" + my_doi + "']";
+      const btn = document.querySelector(query);
+      if (btn) { btn.value = 'Retrieving…'; btn.classList.remove('btn-info'); btn.classList.add('btn-warning'); }
+      fetch("/cite?doi=" + my_doi + "&style=apa")
+        .then(function (response) { if (!response.ok) { throw new Error('HTTP ' + response.status); } return response.json(); })
+        .then(function (response) {
+          const q = ".cite_btn[doi='" + response["doi"] + "']";
+          const b = document.querySelector(q);
+          if (b) {
+            b.value = 'Copied!'; b.classList.remove('btn-warning'); b.classList.add('btn-success');
+            setTimeout(function(){ b.value = 'Copy Citation'; b.classList.remove('btn-success'); b.classList.add('btn-info'); }, 3000);
+          }
+          try { navigator.clipboard.writeText(response["citation"]); } catch (_) {}
+        })
+        .catch(function(){ if (btn) { btn.value = 'Copy Citation'; btn.classList.remove('btn-warning'); btn.classList.add('btn-info'); } });
+    }
+  </script>
+</body>
+</html>
