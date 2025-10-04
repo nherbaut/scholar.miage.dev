@@ -319,10 +319,40 @@ def same_author_and_conf():
 
 @app.route("/venues", methods=["GET"])
 def get_venues_form():
-    orcid = request.args.get('orcid')
-    openalex = request.args.get('openalex')
+    # Accept multiple identifiers via repeated params or comma/space-separated lists
+    def _collect_list(param_name: str):
+        vals = request.args.getlist(param_name)
+        out = []
+        for v in vals:
+            if not v:
+                continue
+            # split on commas or whitespace
+            parts = [p.strip() for p in re.split(r"[\s,]+", v) if p and p.strip()]
+            out.extend(parts)
+        return out
 
-    return render_template('venues.html', orcid=orcid, openalex=openalex, sources=get_sources())
+    # Fallback single values if present (kept for backward compat in template)
+    orcid_single = request.args.get('orcid')
+    openalex_single = request.args.get('openalex')
+
+    # Full lists
+    try:
+        import re  # local import to avoid top-level impact
+        orcids = _collect_list('orcid')
+        openalexes = _collect_list('openalex')
+    except Exception:
+        # In case 're' or splitting fails for some reason, degrade gracefully
+        orcids = [v for v in request.args.getlist('orcid') if v]
+        openalexes = [v for v in request.args.getlist('openalex') if v]
+
+    return render_template(
+        'venues.html',
+        orcid=orcid_single,
+        openalex=openalex_single,
+        orcids=orcids,
+        openalexes=openalexes,
+        sources=get_sources()
+    )
 
 
 @app.route('/opensearch', methods=["GET"])

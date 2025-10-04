@@ -562,7 +562,24 @@ journal = { { ${content["pubtitle"]} } },
         handle_submit();
       }
     }
-    function textAreaChange() { updateQueryStorage(document.getElementById("querybox").value); }
+    function textAreaChange() {
+      // Persist query
+      updateQueryStorage(document.getElementById("querybox").value);
+      // If user edits the query, reset UI to the "Count" state
+      try {
+        const btn = document.getElementById('main_button');
+        if (btn) {
+          btn.textContent = 'Count Results';
+          btn.disabled = false;
+          btn.classList.remove('btn-success','btn-warning');
+          btn.classList.add('btn-primary');
+        }
+        const grp = document.getElementById('postFetchGroup');
+        if (grp) grp.hidden = true;
+        // Back to 2-step flow until fresh count is computed
+        handle_submit = sendCountRequest;
+      } catch (_) {}
+    }
     function updateQueryStorage(str) { window.localStorage.setItem("query", str); }
     window.onload = onLoaded;
 
@@ -640,6 +657,8 @@ journal = { { ${content["pubtitle"]} } },
     });
 
     socket.on('doi_results', (data) => {
+      // Once results start rendering, lock the query to preserve reproducibility
+      try { document.getElementById('querybox').disabled = true; } catch (_) {}
       var rendered_html = "";
       for (let doi_item of data) {
         var doi = doi_item["doi"];

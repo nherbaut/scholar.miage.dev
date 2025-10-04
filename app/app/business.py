@@ -442,6 +442,10 @@ def get_first_auth_country(entry):
 def load_response_from_openAlex(bucket, r, entry):
 
     oa_url = (r.get("open_access") or {}).get("oa_url", None)
+    authors_list=[{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"] if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]]
+    
+    if len(authors_list)==0:
+        authors_list=[{"display_name": entry.get('dc:creator', "unknown"), "orcid": "", "openalex": ""}]
 
     bucket.append({"doi": r["doi"], "title": r["title"],
                    "year": r["publication_year"],
@@ -451,7 +455,7 @@ def load_response_from_openAlex(bucket, r, entry):
                    "rank_source": "",
                    "hindex": "",
                    "X-OA": r["open_access"]["is_oa"],
-                   "X-FirstAuthor": "",
+                   "X-FirstAuthor": authors_list[0]["display_name"] if len(authors_list)>0 else "",
                    "X-Country-First-Author": get_first_auth_country(entry),
                    "X-Country-First-affiliation": get_first_auth_affil(entry),
                    "X-FirstAuthor-ORCID": "",
@@ -461,7 +465,7 @@ def load_response_from_openAlex(bucket, r, entry):
                    "X-refcount": r["referenced_works_count"],
                    "X-abstract": "",
                    "X-authors": ", ".join([a["author"]["display_name"] for a in r["authorships"]]),
-                   "X-authors-list": [{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"] if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]],
+                   "X-authors-list": authors_list,
                    "X-OA-URL": oa_url or ""
 
                    })

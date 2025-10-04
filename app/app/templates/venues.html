@@ -178,13 +178,25 @@
 
     addInputColumn();
 
-    // On page load, queue {{ orcid }} and {{ openalex }} (full URLs) and start processing
+    // On page load, queue any provided identifiers (supporting multiple values)
     document.addEventListener('DOMContentLoaded', () => {
-      const initialOrcidUrl    = {{ orcid|tojson }};
-      const initialOpenAlexUrl = {{ openalex|tojson }};
+      const initialOrcids      = {{ (orcids|default([]))|tojson }};
+      const initialOpenAlexes  = {{ (openalexes|default([]))|tojson }};
+      const initialOrcidUrl    = {{ (orcid|default(''))|tojson }};
+      const initialOpenAlexUrl = {{ (openalex|default(''))|tojson }};
 
-      if (typeof initialOrcidUrl === 'string' && initialOrcidUrl.trim())     pendingIdentifiers.push(initialOrcidUrl.trim());
-      if (typeof initialOpenAlexUrl === 'string' && initialOpenAlexUrl.trim()) pendingIdentifiers.push(initialOpenAlexUrl.trim());
+      const pushOneOrMany = (val) => {
+        if (Array.isArray(val)) {
+          val.forEach(v => { if (typeof v === 'string' && v.trim()) pendingIdentifiers.push(v.trim()); });
+        } else if (typeof val === 'string' && val.trim()) {
+          pendingIdentifiers.push(val.trim());
+        }
+      };
+
+      pushOneOrMany(initialOrcids);
+      pushOneOrMany(initialOpenAlexes);
+      pushOneOrMany(initialOrcidUrl);
+      pushOneOrMany(initialOpenAlexUrl);
 
       maybeStartNext();
     });

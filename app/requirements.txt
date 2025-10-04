@@ -1,3 +1,4 @@
+psycopg2-binary==2.9.10
 Flask>=2.2
 Flask-SocketIO>=5.3
 Flask-SQLAlchemy>=3.0
