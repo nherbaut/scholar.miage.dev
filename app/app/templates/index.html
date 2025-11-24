@@ -328,24 +328,10 @@
             <div class="mt-3 d-flex flex-wrap align-items-center">
               <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
 
-              <!-- Main split button: count -> fetch; dropdown toggles metadata default -->
+              <!-- Main button: count -> fetch -->
               <div class="btn-group ms-2" role="group" aria-label="Primary actions">
                 <button class="btn btn-primary" id="main_button" type="button" onclick="handle_submit(event)">Count Results</button>
-                <button type="button" class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
-                  <span class="visually-hidden">Toggle metadata</span>
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end">
-                  <li class="px-3 py-1">
-                    <div class="form-check m-0">
-                      <input class="form-check-input" type="checkbox" id="metaToggle">
-                      <label class="form-check-label" for="metaToggle">Include paper metadata</label>
-                    </div>
-                  </li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><span class="dropdown-item-text small text-muted">Tip: Shift-click = include once, Ctrl-click = exclude once</span></li>
-                </ul>
               </div>
-              <span id="metaBadge" class="badge bg-secondary ms-2" style="display:none">Metadata ON</span>
 
               <!-- Clean post-fetch toolbar: one dropdown -->
               <div id="postFetchGroup" class="btn-group ms-2" role="group" aria-label="Export & tools" hidden>
@@ -353,13 +339,15 @@
                   Export &amp; Tools
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                  <li><button class="dropdown-item" type="button" onclick="copyPermalink()">Copy Permalink</button></li>
-                  <li><button class="dropdown-item" type="button" onclick="downloadResults()">Download DOIs as BibTeX</button></li>
-                  <li><button class="dropdown-item" type="button" onclick="downloadExcel('xlsx')">Export to Spreadsheet</button></li>
-                  <li><button class="dropdown-item" type="button" onclick="createRssLink()">Create RSS Link</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="openQueryAnalysis()">Debug my query</button></li>
                   <li><hr class="dropdown-divider"></li>
-                  <li><button class="dropdown-item" type="button" onclick="analyzeCitationGraph()">Analyse Citation Graph</button></li>
-                  <li><button class="dropdown-item" type="button" onclick="cloudResults()">Generate Word Cloud</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="copyPermalink()">Copy Permalink</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="createRssLink()">Create RSS Link</button></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadResults()" disabled data-bs-toggle="tooltip" title="run the query first">Download DOIs as BibTeX</button></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadExcel('xlsx')" disabled data-bs-toggle="tooltip" title="run the query first">Export to Spreadsheet</button></li>
+                  <li><hr class="dropdown-divider"></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="analyzeCitationGraph()" disabled data-bs-toggle="tooltip" title="run the query first">Analyse Citation Graph</button></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="cloudResults()" disabled data-bs-toggle="tooltip" title="run the query first">Generate Word Cloud</button></li>
                 </ul>
               </div>
             </div>
@@ -418,47 +406,12 @@
     </div>
   </main>
 
-  <!-- Metadata preference + split-button behavior -->
+  <!-- Fetch/count behavior (xref based solely on checkbox state) -->
   <script>
-    let includeMetaDefault = JSON.parse(window.localStorage.getItem('xref_default') || 'false');
-
-    function applyMetaDefaultToUI() {
-      const toggle = document.getElementById('metaToggle');
-      const badge  = document.getElementById('metaBadge');
-      const xrefCb = document.getElementById('xref'); // existing option
-
-      if (toggle) toggle.checked = !!includeMetaDefault;
-      if (badge)  badge.style.display = includeMetaDefault ? 'inline-block' : 'none';
-
-      if (xrefCb) {
-        xrefCb.checked = !!includeMetaDefault;
-        xref_changed(); // updates stylesheets + persists 'xref'
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const xrefCb = document.getElementById('xref');
-      if (xrefCb) includeMetaDefault = !!xrefCb.checked || includeMetaDefault;
-      applyMetaDefaultToUI();
-
-      const toggle = document.getElementById('metaToggle');
-      if (toggle) {
-        toggle.addEventListener('change', () => {
-          includeMetaDefault = !!toggle.checked;
-          window.localStorage.setItem('xref_default', JSON.stringify(includeMetaDefault));
-          applyMetaDefaultToUI();
-        });
-      }
-    });
-
     function sendDoisRequest(evt) {
       const btn = document.getElementById("main_button");
       document.getElementById("xref").disabled = true;
       btn.disabled = true;
-
-      const includeOnce = !!(evt && evt.shiftKey);
-      const excludeOnce = !!(evt && evt.ctrlKey);
-      const includeMeta = includeOnce ? true : (excludeOnce ? false : includeMetaDefault);
 
       btn.textContent = "Fetching…";
       btn.classList.remove('btn-primary','btn-warning');
@@ -466,7 +419,7 @@
 
       socket.emit('get_dois', {
         query: document.getElementById("querybox").value,
-        xref: includeMeta
+        xref: document.getElementById("xref").checked
       });
     }
 
@@ -516,6 +469,7 @@
 
     // New: last query id from backend
     var latestQueryId = null;
+    var runDependentButtons = null;
 
     function download(filename, dois) {
       var text = "";
@@ -541,6 +495,41 @@ journal = { { ${content["pubtitle"]} } },
       document.body.removeChild(element);
     }
 
+    function initializeRunDependentButtons(enabled) {
+      runDependentButtons = runDependentButtons || document.querySelectorAll('#postFetchGroup .requires-run');
+      const title = 'run the query first';
+      runDependentButtons.forEach(btn => {
+        if (!btn) return;
+        if (enabled) {
+          btn.disabled = false;
+          btn.removeAttribute('title');
+          btn.removeAttribute('data-bs-toggle');
+        } else {
+          btn.disabled = true;
+          btn.setAttribute('title', title);
+          btn.setAttribute('data-bs-toggle', 'tooltip');
+        }
+      });
+
+      if (window.bootstrap && bootstrap.Tooltip) {
+        runDependentButtons.forEach(btn => {
+          if (!btn) return;
+          if (btn.disabled && btn.getAttribute('data-bs-toggle') === 'tooltip') {
+            if (btn._tooltipInstance) { btn._tooltipInstance.dispose(); }
+            btn._tooltipInstance = new bootstrap.Tooltip(btn);
+          } else if (btn._tooltipInstance) {
+            btn._tooltipInstance.dispose();
+            btn._tooltipInstance = null;
+          }
+        });
+      }
+    }
+
+    function openQueryAnalysis() {
+      if (latestQueryId === null || latestQueryId === undefined) { return; }
+      window.open('/query/analysis/' + latestQueryId, '_blank');
+    }
+
     function onLoaded(evt) {
       document.getElementById("xref").checked = window.localStorage.getItem("xref") === 'true';
       xref_changed();
@@ -561,6 +550,8 @@ journal = { { ${content["pubtitle"]} } },
       } else {
         handle_submit();
       }
+      // prepare tooltips for gated actions
+      initializeRunDependentButtons(false);
     }
     function textAreaChange() {
       // Persist query
@@ -604,6 +595,11 @@ journal = { { ${content["pubtitle"]} } },
       }
       // Next click fetches (still passes event for modifiers)
       handle_submit = sendDoisRequest;
+
+      // Show export/tools bar and gate actions until results fetched
+      const grp = document.getElementById('postFetchGroup');
+      if (grp) grp.hidden = false;
+      initializeRunDependentButtons(false);
     });
 
     // Receive query id for permalink
@@ -624,6 +620,7 @@ journal = { { ${content["pubtitle"]} } },
       // Reveal unified toolbar
       const grp = document.getElementById('postFetchGroup');
       if (grp) grp.hidden = false;
+      initializeRunDependentButtons(true);
 
       try {
         table = $('table').DataTable({
@@ -772,6 +769,7 @@ journal = { { ${content["pubtitle"]} } },
       document.getElementById("pb_success_count").innerHTML = "";
       const grp = document.getElementById('postFetchGroup');
       if (grp) grp.hidden = true;
+      initializeRunDependentButtons(false);
 
       // Go home
       window.location = "/";

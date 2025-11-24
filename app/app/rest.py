@@ -4,6 +4,7 @@ from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
 from app.business import count_results_for_query, get_scopus_works_for_query, update_feed, generate_rss, get_sources, \
     get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data
+from app.query_analyzer import get_json_analyzed_query
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
 # from mendeley.session import MendeleySession
@@ -95,6 +96,7 @@ def purge_items(id):
     feed.count = -1
     db.session.commit()
     return "DELETED", 204
+
 
 
 @app.route("/feed/<id>.rss")
@@ -387,6 +389,33 @@ def get_networks_page():
         return render_template('index.html',   sources=get_sources())
 
         
+@app.route('/query/analysis', methods=["GET"])
+def query_analysis_page():
+    default_query = request.args.get("query", "")
+    return render_template('query_analysis.html', query=default_query, show_run_button=True, sources=get_sources())
+
+
+@app.route('/query/analysis/<query_id>', methods=["GET"])
+def query_analysis_saved(query_id: int):
+    try:
+        saved_request = db.session.query(ScpusRequest).filter(ScpusRequest.id == int(query_id)).one()
+        return render_template('query_analysis.html', query=saved_request.query, show_run_button=False, sources=get_sources())
+    except:
+        return render_template('query_analysis.html', query="", show_run_button=False, sources=get_sources())
+
+
+@app.route('/query/analysis', methods=["POST"])
+def analyze_query():
+    payload = request.get_json() or {}
+    query = payload.get("query")
+    if not query:
+        return abort(400, description="Missing query")
+    data = get_json_analyzed_query(query, count_results_for_query)
+    return app.response_class(
+        response=data,
+        status=200,
+        mimetype='application/json'
+    )
     
 
 
@@ -399,3 +428,4 @@ def permalink(query_id: int):
         return render_template('index.html', query=request.query,  sources=get_sources())
     except:
         return render_template('index.html',   sources=get_sources())
+

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Query Analysis</title>
+  <style>
+    :root{
+      --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --fg:#e2e8f0;
+      --accent:#38bdf8; --edge:#475569;
+      --node-default:#64748b; --node-outline:#0b1220;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;}
+    header{padding:16px 20px;border-bottom:1px solid #1f2937;background:linear-gradient(135deg,#0f172a 0%,#0b1220 55%,#0a1222 100%);}
+    h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:10px;}
+    h1 span.badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#172334;color:var(--muted);border:1px solid #22344a;}
+    .controls{display:grid;grid-template-columns:1fr auto;gap:12px;margin-top:12px;align-items:start;}
+    .controls.no-button{grid-template-columns:1fr;}
+    textarea{width:100%;min-height:90px;padding:12px 14px;border-radius:10px;border:1px solid #1f2937;background:var(--panel);color:var(--fg);font-size:14px;line-height:1.5;resize:vertical;}
+    textarea:focus{outline:1px solid #1d4ed8;border-color:#1d4ed8;}
+    button{padding:12px 16px;border-radius:10px;border:1px solid #1d4ed8;background:#2563eb;color:white;font-weight:600;cursor:pointer;transition:transform .1s ease,box-shadow .1s ease;}
+    button:hover{box-shadow:0 10px 25px rgba(37,99,235,.25);transform:translateY(-1px);}
+    button:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
+    .status{margin-top:10px;font-size:13px;color:var(--muted);}
+    #graph-wrapper{height:calc(100vh - 190px);padding:0 12px 16px;}
+    #graph{width:100%;height:100%;background:linear-gradient(180deg,rgba(255,255,255,.02) 0%,rgba(255,255,255,0) 45%);border-top:1px solid #1f2937;}
+    .edge{stroke:var(--edge);stroke-width:1.3;fill:none;opacity:.65;}
+    .edge-label{fill:var(--muted);font-size:11px;pointer-events:none;}
+    .node circle{stroke:var(--node-outline);stroke-width:2px;}
+    .node text{font-size:12px;font-weight:600;pointer-events:none;}
+    .legend{position:absolute;right:18px;top:18px;background:rgba(12,18,32,.92);border:1px solid #1f2937;border-radius:10px;padding:10px 12px;font-size:12px;color:var(--muted);backdrop-filter:blur(8px);}
+    .legend h3{margin:0 0 6px 0;font-size:12px;color:var(--fg);font-weight:700;}
+    .legend .row{display:flex;align-items:center;gap:8px;margin-top:4px;}
+    
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Query Analysis <span class="badge">AST graph</span></h1>
+    <div class="controls {% if not show_run_button|default(true) %}no-button{% endif %}">
+      <textarea id="queryInput" placeholder="Type a Scopus query (e.g., TITLE-ABS-KEY(blockchain) AND ... )">{{ query or '' }}</textarea>
+      {% if show_run_button|default(true) %}
+      <button id="runBtn">Analyze</button>
+      {% endif %}
+    </div>
+    <div class="status" id="status">Ready.</div>
+  </header>
+  <div id="graph-wrapper">
+    <svg id="graph" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet"></svg>
+  
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script>
+    const svg = d3.select('#graph');
+    const defs = svg.append('defs');
+    // Red diagonal stripe pattern with transparent background
+    defs.append('pattern')
+      .attr('id', 'zero-stripe')
+      .attr('patternUnits', 'userSpaceOnUse')
+      .attr('width', 8)
+      .attr('height', 8)
+      .append('path')
+      .attr('d', 'M-2,2 l4,-4 M0,8 l8,-8 M6,10 l4,-4')
+      .attr('stroke', '#dc2626')
+      .attr('stroke-width', 2);
+
+    const gRoot = svg.append('g');
+    const gLinks = gRoot.append('g');
+    const gLinkLabels = gRoot.append('g');
+    const gNodes = gRoot.append('g');
+
+    const showRunButton = {{ (show_run_button|default(True))|string|lower }};
+    const runBtn = document.getElementById('runBtn');
+    const queryInput = document.getElementById('queryInput');
+    const statusEl = document.getElementById('status');
+
+    const zoom = d3.zoom().scaleExtent([0.4, 2.5]).on('zoom', (ev) => {
+      gRoot.attr('transform', ev.transform);
+    });
+    svg.call(zoom);
+
+    if (runBtn) {
+      runBtn.addEventListener('click', analyze);
+    }
+    queryInput.addEventListener('keydown', (ev) => {
+      if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
+        ev.preventDefault();
+        analyze();
+      }
+    });
+
+    async function analyze(){
+      const query = queryInput.value.trim();
+      if(!query){
+        statusEl.textContent = 'Please enter a query.';
+        return;
+      }
+      if(runBtn){ runBtn.disabled = true; }
+      statusEl.textContent = 'Analyzing…';
+      try{
+        const resp = await fetch('/query/analysis', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({query})
+        });
+        if(!resp.ok){
+          const text = await resp.text();
+          throw new Error(text || resp.statusText);
+        }
+        const data = await resp.json();
+        renderGraph(data);
+        statusEl.textContent = 'Graph updated.';
+      }catch(err){
+        console.error(err);
+        statusEl.textContent = 'Error: ' + err.message;
+      }finally{
+        if(runBtn){ runBtn.disabled = false; }
+      }
+    }
+
+    function buildHierarchy(data){
+      const nodesById = new Map();
+      data.nodes.forEach(n => nodesById.set(String(n.id), {...n, children: []}));
+
+      const indegree = new Map([...nodesById.keys()].map(id => [id, 0]));
+      const edgeLabelMap = new Map();
+      data.edges.forEach(e => {
+        const src = String(e.source), tgt = String(e.target);
+        if(nodesById.has(src) && nodesById.has(tgt)){
+          nodesById.get(src).children.push(nodesById.get(tgt));
+          edgeLabelMap.set(src + '->' + tgt, e.label || '');
+          indegree.set(tgt, (indegree.get(tgt) || 0) + 1);
+        }
+      });
+
+      let rootId = null;
+      for(const [id, deg] of indegree.entries()){
+        if(deg === 0){ rootId = id; break; }
+      }
+      if(!rootId){
+        rootId = data.nodes.length ? String(data.nodes[0].id) : null;
+      }
+      if(!rootId) return {root:null, edgeLabelMap};
+      const root = d3.hierarchy(nodesById.get(rootId), d => d.children);
+      return {root, edgeLabelMap};
+    }
+
+    function renderGraph(data){
+      const {root, edgeLabelMap} = buildHierarchy(data);
+      if(!root){
+        statusEl.textContent = 'No graph to display.';
+        gLinks.selectAll('*').remove();
+        gNodes.selectAll('*').remove();
+        gLinkLabels.selectAll('*').remove();
+        gNodeLabels.selectAll('*').remove();
+        return;
+      }
+
+      const width = 1200, height = 680;
+      const tree = d3.tree().nodeSize([150, 140]).separation(()=>1.2);
+      tree(root);
+
+      const nodes = root.descendants();
+      const xExtent = d3.extent(nodes, d => d.x);
+      const yExtent = d3.extent(nodes, d => d.y);
+      const xOffset = ((width - 200) - (xExtent[1] - xExtent[0])) / 2 - xExtent[0] + 100;
+      const yOffset = 80 - yExtent[0];
+
+      // parent/children maps to drive color intensity
+      const parentEdgeByChild = new Map(); // childId -> {parentId,label}
+      const childrenByParent = new Map();  // parentId -> [{id, score, label}]
+      const nodeById = new Map(data.nodes.map(n => [String(n.id), n]));
+      (data.edges || []).forEach(e => {
+        const p = String(e.source), c = String(e.target);
+        parentEdgeByChild.set(c, { parent: p, label: e.label || '' });
+        if(!childrenByParent.has(p)) childrenByParent.set(p, []);
+        childrenByParent.get(p).push({
+          id: c,
+          score: nodeById.get(c)?.score,
+          label: e.label || ''
+        });
+      });
+
+      const ratioByChild = new Map(); // childId -> {ratio,label}
+      for (const [p, kids] of childrenByParent.entries()) {
+        const scores = kids.map(k => (k.score === null || Number.isNaN(k.score)) ? 0 : Math.max(0, Number(k.score)));
+        const sum = scores.reduce((a,b)=>a+b, 0);
+        kids.forEach((k, idx) => {
+          const ratioRaw = sum > 0 ? (scores[idx] / sum) : 0.5;
+          const ratio = 0.2 + 0.8 * ratioRaw; // baseline 20% intensity
+          ratioByChild.set(k.id, { ratio, label: k.label });
+        });
+      }
+
+      const contrastColor = (fill) => {
+        const c = d3.color(fill) || d3.color('#94a3b8');
+        const yiq = (c.r * 299 + c.g * 587 + c.b * 114) / 1000;
+        return yiq >= 140 ? '#0f172a' : '#f8fafc';
+      };
+
+      const nodeColor = (nodeId) => {
+        const info = ratioByChild.get(String(nodeId));
+        if(!info) return '#e2e8f0'; // root or orphan
+        if(info.label === '+') return d3.interpolateReds(info.ratio);
+        if(info.label === '-') return d3.interpolateBlues(info.ratio);
+        return '#cbd5e1';
+      };
+
+      const isZeroScore = (nodeId) => {
+        const n = nodeById.get(String(nodeId));
+        return n && n.score === 0;
+      };
+
+      const edgeData = root.links().map(l => ({
+        source: l.source,
+        target: l.target,
+        label: edgeLabelMap.get(String(l.source.data.id) + '->' + String(l.target.data.id)) || ''
+      }));
+
+      const link = gLinks.selectAll('path').data(edgeData, d => d.target.data.id);
+      link.join(
+        enter => enter.append('path').attr('class','edge')
+          .attr('d', d3.linkVertical()
+            .x(d => d.x + xOffset)
+            .y(d => d.y + yOffset)),
+        update => update.attr('d', d3.linkVertical()
+          .x(d => d.x + xOffset)
+          .y(d => d.y + yOffset)),
+        exit => exit.remove()
+      );
+
+      const linkLabel = gLinkLabels.selectAll('text').data(edgeData, d => d.target.data.id);
+      linkLabel.join(
+        enter => enter.append('text')
+          .attr('class','edge-label')
+          .attr('text-anchor','middle')
+          .text(d => d.label || '')
+          .attr('x', d => (d.source.x + d.target.x)/2 + xOffset)
+          .attr('y', d => (d.source.y + d.target.y)/2 + yOffset - 6),
+        update => update
+          .text(d => d.label || '')
+          .attr('x', d => (d.source.x + d.target.x)/2 + xOffset)
+          .attr('y', d => (d.source.y + d.target.y)/2 + yOffset - 6),
+        exit => exit.remove()
+      );
+
+      const nodeRadius = 60;
+
+      const wrapLabel = (text, maxLen = 22, maxLines = 3) => {
+        if(!text) return [''];
+        const words = text.split(/\s+/);
+        const lines = [];
+        let line = '';
+        for(const w of words){
+          const tentative = line ? `${line} ${w}` : w;
+          if(tentative.length <= maxLen){
+            line = tentative;
+          }else{
+            lines.push(line);
+            line = w;
+          }
+          if(lines.length === maxLines){
+            break;
+          }
+        }
+        if(line && lines.length < maxLines) lines.push(line);
+        if(lines.length === maxLines && (words.length > maxLines)){
+          const last = lines[lines.length-1];
+          lines[lines.length-1] = last.length >= maxLen ? last.slice(0, maxLen-1) + '…' : last + '…';
+        }
+        return lines;
+      };
+
+      const nodeGroup = gNodes.selectAll('g.node').data(nodes, d => d.data.id);
+      const nodeEnter = nodeGroup.enter().append('g').attr('class','node');
+
+      nodeEnter.append('circle').attr('class','node-base');
+      nodeEnter.append('circle').attr('class','node-stripe');
+      nodeEnter.append('text');
+      nodeEnter.append('title');
+
+      const nodeMerge = nodeEnter.merge(nodeGroup);
+
+      nodeMerge.select('circle.node-base')
+        .attr('r', nodeRadius)
+        .attr('cx', d => d.x + xOffset)
+        .attr('cy', d => d.y + yOffset)
+        .attr('fill', d => nodeColor(d.data.id));
+
+      nodeMerge.select('circle.node-stripe')
+        .attr('r', nodeRadius)
+        .attr('cx', d => d.x + xOffset)
+        .attr('cy', d => d.y + yOffset)
+        .attr('fill', 'url(#zero-stripe)')
+        .attr('opacity', d => isZeroScore(d.data.id) ? 1 : 0);
+
+      nodeMerge.select('title')
+        .text(d => {
+          const val = d.data.subquery_without;
+          const score = d.data.score;
+          const info = ratioByChild.get(String(d.data.id));
+          const dir = info ? info.label : null;
+          let scoreMsg = '';
+          if (dir === '+') {
+            scoreMsg = `This term adds ${score} papers to the results.`;
+          } else if (dir === '-') {
+            scoreMsg = `This term removes ${score} papers from the results.`;
+          } else if (score !== null && !Number.isNaN(score)) {
+            scoreMsg = `Score: ${score}`;
+          }
+          const hasChildren = d.children && d.children.length > 0;
+          const base = hasChildren
+            ? (d.data.label || '')
+            : (val === null ? 'Root cannot be removed' : val);
+          return scoreMsg ? `${scoreMsg}\n${base}` : base;
+        });
+
+      nodeMerge.select('text')
+        .attr('text-anchor','middle')
+        .attr('x', d => d.x + xOffset)
+        .attr('y', d => d.y + yOffset)
+        .each(function(d){
+          const sel = d3.select(this);
+          const circleFill = d3.select(this.parentNode).select('circle.node-base').attr('fill') || '#e2e8f0';
+          const textColor = contrastColor(circleFill);
+          sel.attr('fill', textColor);
+          const name =  (d.data.term_label || d.data.label || '');
+          const lines = wrapLabel(name);
+          const info = ratioByChild.get(String(d.data.id));
+          let scoreStr = 'Score: n/a';
+          if (d.data.score !== null && !Number.isNaN(d.data.score)) {
+            if (info?.label === '+') {
+              scoreStr = `+ ${d.data.score} papers`;
+            } else if (info?.label === '-') {
+              scoreStr = `- ${d.data.score} papers`;
+            } else {
+              scoreStr = `Score: ${d.data.score}`;
+            }
+          }
+          const combined = [...lines, scoreStr];
+          sel.selectAll('tspan').remove();
+          combined.forEach((line, i) => {
+            sel.append('tspan')
+              .attr('x', d.x + xOffset)
+              .attr('dy', i === 0 ? 4 : 16)
+              .text(line);
+          });
+        });
+
+      nodeMerge
+        .on('contextmenu', (ev, d) => {
+          ev.preventDefault();
+          const val = d.data.subquery_without;
+          if(!val){
+            statusEl.textContent = 'Root cannot be removed.';
+            return;
+          }
+          navigator.clipboard.writeText(val).then(() => {
+            statusEl.textContent = 'Copied subquery_without to clipboard.';
+          }).catch(() => {
+            statusEl.textContent = 'Unable to copy to clipboard.';
+          });
+        })
+        .on('mouseover', function(ev, d){
+          const titleEl = this.querySelector('title');
+          if(titleEl){
+            // force title refresh
+            titleEl.textContent = titleEl.textContent;
+          }
+        });
+
+      nodeGroup.exit().remove();
+    }
+
+    // Auto-run if template provides a query
+    if(queryInput.value.trim()){
+      analyze();
+    }
+  </script>
+</body>
+</html>

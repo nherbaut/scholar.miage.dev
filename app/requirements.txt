@@ -15,3 +15,4 @@ gevent>=23.9
 gevent-websocket>=0.10.1
 gunicorn>=21.2
 redis>=5.0
+networkx

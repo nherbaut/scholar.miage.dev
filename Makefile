@@ -1,7 +1,7 @@
 arm64:
 	docker buildx build --platform linux/arm64 . -t  nherbaut/scpushack:nextnet --push
 amd64:
-	docker buildx build --platform linux/amd64 . -t  nherbaut/scpushack:nextnet --push
+	docker buildx build --platform linux/amd64 . -t  nherbaut/scpushack:nextnet  
 
 build: arm64 amd64
 

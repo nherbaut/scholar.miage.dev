@@ -1,7 +1,7 @@
 from flask_socketio import emit
 from typing import Dict, Iterable, List, Set, Tuple
 from app.main import socketio, db
-from app.business import count_results_for_query, get_scopus_works_for_query, create_short_link, net_build_graph
+from app.business import count_results_for_query, get_scopus_works_for_query, net_build_graph
 from app.model import ScpusFeed, ScpusRequest, NetworkData
 from app.researchers import get_venue_for_orcid, get_venue_for_openalex
 import json
@@ -34,11 +34,6 @@ def create_feed(json_data):
 
 
 
-@socketio.on('create_permalink')
-def handle_count(json_data, log_query=False):
-    query = json_data["query"]
-    short_url = create_short_link(query)
-    emit('permalink_generated', short_url)
 
 
 @socketio.on('count')
@@ -54,7 +49,7 @@ def handle_count(json_data, log_query=False):
 
     emit("count", count)
 
-#
+
 
 
 @socketio.on("get_venue_openalex")

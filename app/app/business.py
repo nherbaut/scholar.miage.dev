@@ -11,6 +11,8 @@ import urllib.parse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Iterable, List, Set, Tuple
+import tempfile
+import contextlib
 from urllib.error import HTTPError
 from concurrent.futures import as_completed
 
@@ -284,10 +286,11 @@ def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs:
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
 
         entries = partial_results["search-results"]["entry"]
-        
-        entries=[entry for entry in entries if (entry.get('prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
-        
-        if len(entries)==0:
+
+        entries = [entry for entry in entries if (entry.get(
+            'prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
+
+        if len(entries) == 0:
             break
 
         @copy_current_request_context
@@ -439,13 +442,157 @@ def get_first_auth_country(entry):
     return "xxx"
 
 
+def inverted_abstrct_to_abstract(ia):
+    if not ia:
+        return ""
+    iaa = {}
+    for k, vv in ia.items():
+        for v in vv:
+            iaa[v] = k
+    return " ".join([iaa[k] for k in sorted(iaa.keys())])
+
+
+def get_abstract_semanticscholar(doi: str):
+    """
+    Retrieve paper abstract from Semantic Scholar Graph API.
+    Returns None if not found or no abstract.
+    """
+    url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}"
+    params = {"fields": "title,abstract"}
+    r = requests.get(url, timeout=10)
+    if r.status_code != 200:
+        return None
+    data = r.json()
+    return data.get("abstract", "") or ""
+
+
+def _download_pdf_to_temp(url: str) -> str | None:
+    """Download a PDF to a temporary file and return its filepath, or None on failure."""
+    try:
+        r = requests.get(url, timeout=30, allow_redirects=True)
+        if r.status_code != 200:
+            return None
+        content_type = r.headers.get("Content-Type", "").lower()
+        is_pdf = r.content.startswith(
+            b"%PDF") or "application/pdf" in content_type
+        if not is_pdf:
+            return None
+        fd, path = tempfile.mkstemp(prefix="oa_pdf_", suffix=".pdf")
+        with os.fdopen(fd, "wb") as f:
+            f.write(r.content)
+        return path
+    except Exception:
+        return None
+
+
+def _extract_abstract_from_pdf_file(pdf_path: str) -> str:
+    """Use a local GROBID service to extract abstract from a PDF file path."""
+    try:
+        with open(pdf_path, "rb") as f:
+            files = {"input": (os.path.basename(
+                pdf_path), f, "application/pdf")}
+            grobid = requests.post(
+                "http://localhost:8070/api/processHeaderDocument", files=files, timeout=45,
+                headers={"Accept": "application/xml"}
+            )
+        if grobid.status_code != 200:
+            return ""
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(grobid.text)
+        abs_nodes = root.findall(".//{*}abstract")
+        return " ".join(" ".join(n.itertext()).strip() for n in abs_nodes).strip()
+    except Exception:
+        return ""
+
+
+def _unpaywall_pdf_url(doi: str, email: str) -> str | None:
+    """Return Unpaywall best PDF URL for a DOI, or None."""
+    try:
+        url = f"https://api.unpaywall.org/v2/{doi}"
+        params = {"email": email}
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        oa = data.get("best_oa_location") or {}
+        return oa.get("url_for_pdf") or None
+    except Exception:
+        return None
+
+
+def get_abstract_unpaywall(doi: str, email: str) -> str | None:
+    """
+    Retrieve abstract via Unpaywall (PDF) using GROBID. Returns empty string on failure.
+    The PDF download is delegated to a helper and the file is cleaned up.
+    """
+    pdf_url = _unpaywall_pdf_url(doi, email)
+    if not pdf_url:
+        return None
+    pdf_path = _download_pdf_to_temp(pdf_url)
+    if not pdf_path:
+        return ""
+    try:
+        return _extract_abstract_from_pdf_file(pdf_path)
+    finally:
+        with contextlib.suppress(Exception):
+            os.remove(pdf_path)
+
+
+def get_abstract_from_pdf_sources(doi: str, openalex_oa_url: str | None, email: str) -> str:
+    """
+    Try to extract abstract from a PDF by first downloading via OpenAlex OA URL,
+    then falling back to Unpaywall's PDF URL. Ensures temporary files are removed.
+    Returns empty string if extraction fails.
+    """
+    # 1) Try OpenAlex OA URL first
+    if openalex_oa_url:
+        pdf_path = _download_pdf_to_temp(openalex_oa_url)
+        if pdf_path:
+            try:
+                abstract = _extract_abstract_from_pdf_file(pdf_path)
+                if abstract:
+                    return abstract
+            finally:
+                with contextlib.suppress(Exception):
+                    os.remove(pdf_path)
+
+    # 2) Fallback: Unpaywall best PDF
+    pdf_url = _unpaywall_pdf_url(doi, email)
+    if pdf_url:
+        pdf_path = _download_pdf_to_temp(pdf_url)
+        if pdf_path:
+            try:
+                abstract = _extract_abstract_from_pdf_file(pdf_path)
+                if abstract:
+                    return abstract
+            finally:
+                with contextlib.suppress(Exception):
+                    os.remove(pdf_path)
+
+    return ""
+
+
 def load_response_from_openAlex(bucket, r, entry):
 
     oa_url = (r.get("open_access") or {}).get("oa_url", None)
-    authors_list=[{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"] if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]]
-    
-    if len(authors_list)==0:
-        authors_list=[{"display_name": entry.get('dc:creator', "unknown"), "orcid": "", "openalex": ""}]
+    authors_list = [{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"]
+                     if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]]
+
+    abstract = inverted_abstrct_to_abstract(
+        r["abstract_inverted_index"]) if "abstract_inverted_index" in r else None
+    if not abstract:
+        abstract = get_abstract_semanticscholar(r["doi"])
+        
+    # it's too slow        
+    # if not abstract:
+    #     abstract = get_abstract_from_pdf_sources(
+    #         r["doi"], oa_url, "nicolas.herbaut@u-bordeaux.fr")
+    if not abstract:
+        abstract = ""
+
+    if len(authors_list) == 0:
+        authors_list = [{"display_name": entry.get(
+            'dc:creator', "unknown"), "orcid": "", "openalex": ""}]
 
     bucket.append({"doi": r["doi"], "title": r["title"],
                    "year": r["publication_year"],
@@ -455,7 +602,7 @@ def load_response_from_openAlex(bucket, r, entry):
                    "rank_source": "",
                    "hindex": "",
                    "X-OA": r["open_access"]["is_oa"],
-                   "X-FirstAuthor": authors_list[0]["display_name"] if len(authors_list)>0 else "",
+                   "X-FirstAuthor": authors_list[0]["display_name"] if len(authors_list) > 0 else "",
                    "X-Country-First-Author": get_first_auth_country(entry),
                    "X-Country-First-affiliation": get_first_auth_affil(entry),
                    "X-FirstAuthor-ORCID": "",
@@ -463,7 +610,7 @@ def load_response_from_openAlex(bucket, r, entry):
                    "X-IsReferencedByCount": r["cited_by_count"],
                    "X-subject": (r["primary_topic"] if "primary_topic" in r and r["primary_topic"] and len(r["primary_topic"]) else {}).get("display_name", ""),
                    "X-refcount": r["referenced_works_count"],
-                   "X-abstract": "",
+                   "X-abstract": abstract,
                    "X-authors": ", ".join([a["author"]["display_name"] for a in r["authorships"]]),
                    "X-authors-list": authors_list,
                    "X-OA-URL": oa_url or ""
@@ -527,7 +674,7 @@ def escape_query(query):
 
 
 def count_results_for_query(query):
-    print(f"query with {API_KEY} API_KEY")
+    #print(f"query with {API_KEY} API_KEY")
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
 
@@ -538,32 +685,6 @@ def count_results_for_query(query):
     else:
 
         return 0
-
-
-def create_short_link(query):
-    long_url = f"{ROOT_URL}/permalink?query={escape_query(query)}"
-    if SHLINK_API_KEY is None:
-        return long_url
-    body = {
-        "longUrl": long_url,
-        "tags": [
-            "miage scholar"
-        ],
-        "findIfExists": True,
-        "domain": "s.miage.nextnet.top",
-        "shortCodeLength": 5,
-        "validateUrl": True,
-        "title": f"Miage scholar permalink for {query[:30]}",
-        "crawlable": False
-    }
-    headers = {'X-Api-Key': SHLINK_API_KEY, "Content-type": "application/json"}
-    resp = requests.post(
-        "https://s.miage.nextnet.top/rest/v2/short-urls", json=body, headers=headers)
-    if resp.status_code == 200:
-        result_url = resp.json().get("shortUrl")
-    else:
-        result_url = long_url
-    return result_url
 
 
 # NETWORK (BETA)
@@ -632,6 +753,21 @@ def net_referenced_ids(w: dict) -> List[str]:
         if isinstance(r, str) and "/" in r:
             out.append(r.rsplit("/", 1)[-1])
     return out
+
+
+def net_extract_keywords(w: dict) -> List[str]:
+    """Return keyword strings from a work object."""
+    kws = []
+    for kw in (w.get("keywords") or []):
+        if isinstance(kw, dict):
+            val = kw.get("keyword")
+        else:
+            val = kw
+        if val:
+            val = str(val).strip()
+            if val:
+                kws.append(val)
+    return kws
 
 
 def net_get_graph_data(id):
@@ -716,15 +852,16 @@ def net_build_graph(
     # Each input work gets ONE node id. If it has a DOI, we use "doi:<doi_url>", else the W-id.
     # All links referencing this work MUST use this exact id as 'source'.
     work_node_id: Dict[str, str] = {}
+    keyword_counter = Counter()
     for wid, w in works.items():
         doi_url = (w.get("ids") or {}).get("doi")
         node_id = f"doi:{doi_url}" if doi_url else wid
         work_node_id[wid] = node_id
+        keyword_counter.update(set(net_extract_keywords(w)))
 
     # -------------------------
     # Phase 2b: collect FORWARD references (counts and raw links)
     # -------------------------
-    from collections import Counter
     counts_forward = Counter()
     links_forward: List[Dict[str, str]] = []
 
@@ -841,6 +978,7 @@ def net_build_graph(
                 "openalex": openalex_url,
                 "count": counts_forward[rid],
             })
+            keyword_counter.update(set(net_extract_keywords(w)))
         added_refs_fwd += 1
         emitt({
             "processed_works": len(works) + missed,
@@ -878,6 +1016,7 @@ def net_build_graph(
                 "openalex": openalex_url,
                 "count": counts_back[rid],
             })
+            keyword_counter.update(set(net_extract_keywords(w)))
         added_refs_back += 1
         emitt({
             "processed_works": len(works) + missed,
@@ -906,9 +1045,11 @@ def net_build_graph(
     # -------------------------
     # Return graph
     # -------------------------
+    top_keywords = dict(keyword_counter.most_common(200))
     return {
         "nodes": nodes,
         "links": links,
+        "keywords": top_keywords,
         "meta": {
             "generated_at": datetime.date.today().isoformat(),
             "min_count": min_count,
@@ -917,5 +1058,6 @@ def net_build_graph(
             "refs_kept_forward": len(ref_fwd_kept),
             "refs_kept_backward": len(ref_back_kept),
             "cites_limit_per_work": cites_limit_per_work,
+            "keywords": top_keywords,
         },
     }
