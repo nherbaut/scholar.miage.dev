@@ -1,7 +1,7 @@
 from flask_socketio import emit
 from typing import Dict, Iterable, List, Set, Tuple
 from app.main import socketio, db
-from app.business import count_results_for_query, get_scopus_works_for_query, net_build_graph
+from app.business import count_results_for_query, get_papers, net_build_graph
 from app.model import ScpusFeed, ScpusRequest, NetworkData
 from app.researchers import get_venue_for_orcid, get_venue_for_openalex
 import json
@@ -80,6 +80,6 @@ def handle_get_dois(json_data):
     the_query = json_data["query"]
     xref = json_data["xref"]
     count = count_results_for_query(the_query)
-    dois = get_scopus_works_for_query(count, the_query, xref=xref, emitt=emit)
+    dois = get_papers(count, the_query, xref=xref, arxiv=True, emitt=emit)
 
     emit("dois", {"dois": dois})

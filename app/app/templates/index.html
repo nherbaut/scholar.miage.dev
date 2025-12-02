@@ -49,6 +49,7 @@
     table#doitable thead th { position: sticky; top: 0; background: #fff; z-index: 5; box-shadow: 0 1px 0 var(--ms-border); }
     #doitable th.wrap-200, #doitable td.wrap-200 { max-width: 200px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
     #doitable th.nowrap, #doitable td.nowrap { white-space: nowrap; }
+    tr.arxiv-row { background-color: #ffe5c2 !important; color: #5c2d00; }
     div.dataTables_wrapper { width: 100%; }
     .collapse .card.card-body { border-radius: .75rem; }
     .muted { color: var(--ms-muted); }
@@ -107,28 +108,7 @@
 
 <body>
   <!-- Top Nav -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
-
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav"
-              aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-
-      <div class="collapse navbar-collapse" id="msNav">
-        <ul class="navbar-nav ms-3">
-          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
-          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
-          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
-          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
-          <li class="nav-item"><a class="nav-link" href="/stars">Stars</a></li>
-        </ul>
-      </div>
-
-
-    </div>
-  </nav>
+  {% include "_navbar.html" %}
 
   <!-- Hero / Header -->
   <header class="hero py-5">
@@ -364,6 +344,11 @@
                        id="pb_success" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
                     <span id="pb_success_count"></span>
                   </div>
+                  <div role="progressbar" style="width: 0%; background-color: #ff9800;"
+                       class="progress-bar progress-bar-animated"
+                       id="pb_arxiv" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                    <span id="pb_arxiv_count"></span>
+                  </div>
                   <div role="progressbar" style="width: 0%" class="progress-bar bg-warning progress-bar-animated"
                        id="pb_failure" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
                     <span id="pb_failure_count"></span>
@@ -466,6 +451,36 @@
     var table = undefined;
     var bag_of_doi = {};
     var item_info = [];
+
+    function escapeDoiForSelector(value) {
+      if (window.CSS && CSS.escape) {
+        return CSS.escape(value);
+      }
+      return value.replace(/["\\]/g, '\\$&');
+    }
+
+    function removeExistingRow(doi) {
+      if (!doi) { return; }
+      const selector = '#doi_table tr[data-doi="' + escapeDoiForSelector(doi) + '"]';
+      const existingRow = document.querySelector(selector);
+      if (!existingRow) { return; }
+      if (table && typeof table.row === 'function') {
+        try { table.row(existingRow).remove().draw(false); return; } catch (_) {}
+      }
+      existingRow.remove();
+    }
+
+    function upsertItemInfo(doiItem) {
+      const doi = doiItem["doi"];
+      if (doi) {
+        const idx = item_info.findIndex(item => item["doi"] === doi);
+        if (idx !== -1) {
+          item_info[idx] = doiItem;
+          return;
+        }
+      }
+      item_info.push(doiItem);
+    }
 
     // New: last query id from backend
     var latestQueryId = null;
@@ -615,6 +630,8 @@ journal = { { ${content["pubtitle"]} } },
     // Export finished: show compact tools dropdown instead of many buttons
     socket.on('doi_export_done', (data) => {
       document.getElementById("pb_success").classList.remove("progress-bar-striped");
+      const pbArxiv = document.getElementById("pb_arxiv");
+      if (pbArxiv) { pbArxiv.classList.remove("progress-bar-striped"); }
       document.getElementById("pb_failure").classList.remove("progress-bar-striped");
 
       // Reveal unified toolbar
@@ -640,29 +657,65 @@ journal = { { ${content["pubtitle"]} } },
     });
 
     socket.on('doi_update', (data) => {
-      document.getElementById("pb_success").classList.add("progress-bar-striped");
-      document.getElementById("pb_success").setAttribute("aria-valuemax", data["total"]);
-      document.getElementById("pb_success").setAttribute("aria-valuenow", data["done"]);
-      document.getElementById("pb_success").style.width = (100 * data["done"] / data["total"]) + "%";
-      document.getElementById("pb_success_count").innerHTML = data["done"];
+      const total = data["total"] || 0;
+      const done = data["done"] || 0;
+      const failed = data["failed"] || 0;
+      const arxiv = data["arxiv"] || 0;
+      const successNonArxiv = Math.max(0, done - arxiv);
+      const denominator = total > 0 ? total : 1;
 
-      document.getElementById("pb_failure").classList.add("progress-bar-striped");
-      document.getElementById("pb_failure").setAttribute("aria-valuemax", data["total"]);
-      document.getElementById("pb_failure").setAttribute("aria-valuenow", data["failed"]);
-      document.getElementById("pb_failure").style.width = (100 * data["failed"] / data["total"]) + "%";
-      document.getElementById("pb_failure_count").innerHTML = data["failed"];
+      const pbSuccess = document.getElementById("pb_success");
+      const pbArxiv = document.getElementById("pb_arxiv");
+      const pbFailure = document.getElementById("pb_failure");
+
+      pbSuccess.classList.add("progress-bar-striped");
+      pbSuccess.setAttribute("aria-valuemax", total);
+      pbSuccess.setAttribute("aria-valuenow", successNonArxiv);
+      pbSuccess.style.width = (100 * successNonArxiv / denominator) + "%";
+      document.getElementById("pb_success_count").innerHTML = successNonArxiv;
+
+      if (pbArxiv) {
+        pbArxiv.classList.add("progress-bar-striped");
+        pbArxiv.setAttribute("aria-valuemax", total);
+        pbArxiv.setAttribute("aria-valuenow", arxiv);
+        pbArxiv.style.width = (100 * arxiv / denominator) + "%";
+        document.getElementById("pb_arxiv_count").innerHTML = arxiv;
+      }
+
+      pbFailure.classList.add("progress-bar-striped");
+      pbFailure.setAttribute("aria-valuemax", total);
+      pbFailure.setAttribute("aria-valuenow", failed);
+      pbFailure.style.width = (100 * failed / denominator) + "%";
+      document.getElementById("pb_failure_count").innerHTML = failed;
     });
 
     socket.on('doi_results', (data) => {
       // Once results start rendering, lock the query to preserve reproducibility
       try { document.getElementById('querybox').disabled = true; } catch (_) {}
+      const dedupedItems = [];
+      const seen = {};
+      for (const doi_item of data) {
+        const doi = doi_item["doi"];
+        if (doi && Object.prototype.hasOwnProperty.call(seen, doi)) {
+          dedupedItems[seen[doi]] = doi_item;
+        } else {
+          dedupedItems.push(doi_item);
+          if (doi) { seen[doi] = dedupedItems.length - 1; }
+        }
+      }
+
       var rendered_html = "";
-      for (let doi_item of data) {
-        var doi = doi_item["doi"];
+      for (const doi_item of dedupedItems) {
+        const doi = doi_item["doi"];
+        if (doi) {
+          removeExistingRow(doi);
+        }
         rendered_html += add_item_to_table(doi_item);
         if (doi != "") {
-          item_info.push(doi_item);
+          upsertItemInfo(doi_item);
           bag_of_doi[doi] = doi_item
+        } else {
+          item_info.push(doi_item);
         }
       }
       document.getElementById("doi_table").innerHTML += rendered_html;
@@ -675,11 +728,14 @@ journal = { { ${content["pubtitle"]} } },
       for (const author of doi_item["X-authors-list"]) {
         authorsNamesAndLinks.push(author);
       }
-      const full_doi = doi_item["doi"].split("_")[0];
+      const doiValue = doi_item["doi"] || "";
+      const isArxiv = /^https?:\/\/arxiv\.org/.test(doiValue);
+      const full_doi = doiValue.split("_")[0];
 
       var rendered = Mustache.render(tableRowTemplate, {
         success: doi_item["doi"] != "" ? true : false,
         openaccess: get(doi_item, "X-OA", false) != false,
+        is_arxiv: isArxiv,
         doi: doi_item["doi"],
         issn: doi_item["issn"],
         full_doi: full_doi,
@@ -761,10 +817,22 @@ journal = { { ${content["pubtitle"]} } },
       btn.classList.add('btn-primary');
 
       document.getElementById("querybox").disabled = false;
+      document.getElementById("pb_success").classList.remove("progress-bar-striped");
       document.getElementById("pb_success").setAttribute("max", 0);
       document.getElementById("pb_success").setAttribute("value", 0);
+      document.getElementById("pb_success").style.width = "0%";
+      const pbArxiv = document.getElementById("pb_arxiv");
+      if (pbArxiv) {
+        pbArxiv.classList.remove("progress-bar-striped");
+        pbArxiv.setAttribute("max", 0);
+        pbArxiv.setAttribute("value", 0);
+        pbArxiv.style.width = "0%";
+        document.getElementById("pb_arxiv_count").innerHTML = "";
+      }
+      document.getElementById("pb_failure").classList.remove("progress-bar-striped");
       document.getElementById("pb_failure").setAttribute("max", 0);
       document.getElementById("pb_failure").setAttribute("value", 0);
+      document.getElementById("pb_failure").style.width = "0%";
       document.getElementById("pb_failure_count").innerHTML = "";
       document.getElementById("pb_success_count").innerHTML = "";
       const grp = document.getElementById('postFetchGroup');

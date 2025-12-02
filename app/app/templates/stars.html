@@ -11,23 +11,7 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav" aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="msNav">
-        <ul class="navbar-nav ms-3">
-          <li class="nav-item"><a class="nav-link" href="/history">Query Logs</a></li>
-          <li class="nav-item"><a class="nav-link" href="/networks">Citation Networks</a></li>
-          <li class="nav-item"><a class="nav-link" href="/feeds">RSS Feeds</a></li>
-          <li class="nav-item"><a class="nav-link" href="/venues">Authors tool</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" href="/stars">Stars</a></li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+  {% include "_navbar.html" %}
 
   <main class="py-4">
     <div class="container">

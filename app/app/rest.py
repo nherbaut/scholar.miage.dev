@@ -2,7 +2,7 @@ import requests
 
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
-from app.business import count_results_for_query, get_scopus_works_for_query, update_feed, generate_rss, get_sources, \
+from app.business import count_results_for_query, get_papers, update_feed, generate_rss, get_sources, \
     get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data
 from app.query_analyzer import get_json_analyzed_query
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
@@ -71,7 +71,7 @@ def add_journal():
 @app.route("/feeds")
 def list_feeds():
     feeds = db.session.query(ScpusFeed).all()
-    return render_template('feeds.html', feeds=feeds)
+    return render_template('feeds.html', feeds=feeds, active_page="feeds")
 
 
 @app.route("/feed/<id>.rss", methods=["DELETE"])
@@ -108,7 +108,7 @@ def get_feed(id):
 
     count = count_results_for_query(feed.query)
     if count != feed.count:
-        dois = get_scopus_works_for_query(count, feed.query, xref=True,existing_data=pickle.loads(feed.feed_content))
+        dois = get_papers(count, feed.query, xref=True,existing_data=pickle.loads(feed.feed_content))
     else:
         dois = []
     if feed.feed_content is not None:
@@ -166,7 +166,7 @@ def home():
 @app.route('/stars', methods=["GET"])
 def stars_page():
     # Client-side page; data loaded from localStorage in the browser
-    return render_template('stars.html', sources=get_sources())
+    return render_template('stars.html', sources=get_sources(), active_page="stars")
 
 
 @app.route("/doi/<doi1>/<doi2>", methods=["GET"])
@@ -179,7 +179,7 @@ def get_doi_for_title():
     title = request.args.get('title')
     query = f"TITLE({title})"
     count = count_results_for_query(query)
-    dois = get_scopus_works_for_query(count, query, False)
+    dois = get_papers(count, query, False)
     if (len(dois) == 0):
         abort(404)
     return app.response_class(
@@ -230,7 +230,7 @@ def history():
         )
 
     else:
-        return render_template('history.html', queries=queries)
+        return render_template('history.html', queries=queries, active_page="history")
 
 
 @app.route("/refresh_ranking", methods=["GET"])
@@ -283,7 +283,7 @@ def snowball():
         title = request.args.get('title')
         query = f"REFTITLE(\"{title}\")"
         count = count_results_for_query(query)
-        dois = get_scopus_works_for_query(count, query, False)
+        dois = get_papers(count, query, False)
         return app.response_class(
             response=json.dumps([doi["doi"] for doi in dois]),
             status=200,
@@ -353,7 +353,8 @@ def get_venues_form():
         openalex=openalex_single,
         orcids=orcids,
         openalexes=openalexes,
-        sources=get_sources()
+        sources=get_sources(),
+        active_page="venues"
     )
 
 
@@ -384,7 +385,7 @@ def get_networks_page():
     try:
         networks_data = db.session.query(NetworkData).all()
 
-        return render_template('networks.html', networks=networks_data)
+        return render_template('networks.html', networks=networks_data, active_page="networks")
     except:
         return render_template('index.html',   sources=get_sources())
 
@@ -392,7 +393,7 @@ def get_networks_page():
 @app.route('/query/analysis', methods=["GET"])
 def query_analysis_page():
     default_query = request.args.get("query", "")
-    return render_template('query_analysis.html', query=default_query, show_run_button=True, sources=get_sources())
+    return render_template('query_analysis.html', query=default_query, show_run_button=True, sources=get_sources(),active_page="debug")
 
 
 @app.route('/query/analysis/<query_id>', methods=["GET"])
@@ -401,7 +402,7 @@ def query_analysis_saved(query_id: int):
         saved_request = db.session.query(ScpusRequest).filter(ScpusRequest.id == int(query_id)).one()
         return render_template('query_analysis.html', query=saved_request.query, show_run_button=False, sources=get_sources())
     except:
-        return render_template('query_analysis.html', query="", show_run_button=False, sources=get_sources())
+        return render_template('query_analysis.html', query="", show_run_button=False, sources=get_sources(),active_page="debug")
 
 
 @app.route('/query/analysis', methods=["POST"])
@@ -428,4 +429,3 @@ def permalink(query_id: int):
         return render_template('index.html', query=request.query,  sources=get_sources())
     except:
         return render_template('index.html',   sources=get_sources())
-

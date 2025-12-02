@@ -1,13 +1,16 @@
 <tr
-
-    
-
+    {{#is_arxiv}}
+    class="table-warning arxiv-row"
+    {{/is_arxiv}}
+    {{^is_arxiv}}
     {{#openaccess}}
     class="table-success openaccess"
     {{/openaccess}}
     {{^openaccess}}
     class="table-info paywall"
     {{/openaccess}}
+    {{/is_arxiv}}
+    data-doi="{{doi}}"
 >
 
     <!-- Star column -->

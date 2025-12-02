@@ -16,6 +16,7 @@ import contextlib
 from urllib.error import HTTPError
 from concurrent.futures import as_completed
 
+
 # Third-party libraries
 import dateparser
 import pycountry
@@ -45,6 +46,7 @@ from app.main import (
     db,
 )
 from app.model import PublicationSource, Ranking, NetworkData
+from app.arxiv import get_arxiv_results
 
 pyalex_config.email = os.getenv("PYALEX_EMAIL", "nico@scholar.miage.dev")
 pyalex_config.max_retries = 3
@@ -273,10 +275,10 @@ def get_ref_for_doi(doi):
     print(result)
 
 
-def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs: None, existing_data={}):
+def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None, existing_data={}):
     dois = []
 
-    context = type('', (object,), {"success": 0, "failed": 0})()
+    context = type('', (object,), {"success": 0, "failed": 0,"arxiv":0})()
     client_results_bucket_size = min(max(10, count / 20), 200)
     client_bucket = []
     for i in range(0, min(MAX_RESULTS_QUERY, count), 25):
@@ -294,9 +296,9 @@ def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs:
             break
 
         @copy_current_request_context
-        def call_back(success, failure):
+        def call_back(success, failure, arxiv=0):
             emitt('doi_update', {"total": count,
-                  "done": success, "failed": failure})
+                  "done": success, "failed": failure, "arxiv": arxiv})
 
         if xref:
             futures = [
@@ -316,7 +318,14 @@ def get_scopus_works_for_query(count, query, xref, emitt=lambda *args, **kwargs:
             emitt('doi_results', client_bucket)
             client_bucket = []
         dois = dois + bucket
-    emitt('doi_results', client_bucket)
+
+    if arxiv:
+        arxiv_papers = []
+        extract_data_arxiv(dois, arxiv_papers, get_arxiv_results(
+            query).entries, context, call_back)
+        emitt('doi_results', arxiv_papers)
+
+    print(len(dois))
     emitt('doi_export_done', dois)
     return dois
 
@@ -351,7 +360,6 @@ def extract_data_openalex(bucket, entry, context, call_back):
             oa_response = Works()[f"https://doi.org/{doi}"]
             load_response_from_openAlex(bucket, oa_response, entry)
         except Exception as e:
-            print(e)
             load_response_from_scpus(bucket, entry)
     else:
         try:
@@ -361,7 +369,7 @@ def extract_data_openalex(bucket, entry, context, call_back):
                 load_response_from_scpus(bucket, entry)
                 complete_scopus_extraction(bucket[-1], oa_responses[1])
         except Exception as e:
-            # something work with the openalex query, not much we can do now
+            # something wrong with the openalex query, not much we can do now
             pass
 
     try:
@@ -384,6 +392,51 @@ def extract_data_scopus(bucket, entry, context, call_back):
         pass
 
 
+def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back):
+
+    scopus_papers = {d["title"]: d for d in dois}
+
+    for paper in arxiv_results:
+
+        if paper.title.value in scopus_papers:
+            if scopus_papers[paper.title.value]["doi"] == "":
+                scopus_papers[paper.title.value]["doi"] = paper.id_
+            scopus_papers[paper.title.value]["X-OA-URL"] = paper.links[0].href
+            scopus_papers[paper.title.value]["X-abstract"] = paper.summary.value
+            scopus_papers[paper.title.value]["X-OA"] = True
+            print(
+                f"updated {scopus_papers[paper.title.value]['doi']} from arXiv")
+            bucket.append(scopus_papers[paper.title.value])
+        else:
+            authors_list = [{"display_name": a.name, "orcid": "",
+                             "openalex": ""} for a in paper.authors]
+
+            bucket.append({"doi": paper.id_, "title": paper.title.value,
+                           "year": paper.published.year,
+                           "x-precise-date": str(paper.published),
+                           "pubtitle": "arXiv.org",
+                           "pub_rank": "",
+                           "rank_source": "",
+                           "hindex": "",
+                           "X-OA": True,
+                           "X-FirstAuthor": paper.authors[0].name,
+                           "X-Country-First-Author": "",
+                           "X-Country-First-affiliation": "",
+                           "X-FirstAuthor-ORCID": "",
+                           "X-FirstAuthor-OpenAlex": "",
+                           "X-IsReferencedByCount": "",
+                           "X-subject": "",
+                           "X-refcount": "",
+                           "X-abstract": paper.summary.value,
+                           "X-authors": ", ".join([a.name for a in paper.authors]),
+                           "X-authors-list":  authors_list,
+                           "X-OA-URL": paper.links[0].href
+                           })
+
+            context.arxiv += 1
+            call_back(context.success, context.failed, context.arxiv)
+
+
 def load_response_from_scpus(bucket, entry):
     year = entry.get('prism:coverDisplayDate', "")
     if year != "":
@@ -404,8 +457,14 @@ def load_response_from_scpus(bucket, entry):
         issn = entry.get("prism:eIssn", "")
 
     authors_list = [{"display_name": entry.get('dc:creator', "unknown")}]
+    if "prism:doi" in entry:
+        doi = "https://doi.org/"+entry.get("prism:doi", "")
+    else:
+        doi = ""
     bucket.append(
-        {"doi": "https://doi.org/"+entry.get("prism:doi", ""), "issn": issn, "title": entry.get("dc:title", "-"),
+        {"doi": doi,
+         "issn": issn,
+         "title": entry.get("dc:title", "-"),
          "year": year,
          "x-precise-date": str(coverDate),
          "pubtitle": entry.get('prism:publicationName', ""),
@@ -582,8 +641,8 @@ def load_response_from_openAlex(bucket, r, entry):
         r["abstract_inverted_index"]) if "abstract_inverted_index" in r else None
     if not abstract:
         abstract = get_abstract_semanticscholar(r["doi"])
-        
-    # it's too slow        
+
+    # it's too slow
     # if not abstract:
     #     abstract = get_abstract_from_pdf_sources(
     #         r["doi"], oa_url, "nicolas.herbaut@u-bordeaux.fr")
@@ -673,15 +732,18 @@ def escape_query(query):
     return urllib.parse.quote(query)
 
 
-def count_results_for_query(query):
-    #print(f"query with {API_KEY} API_KEY")
+def count_results_for_query(query, include_arxive=False):
+    # print(f"query with {API_KEY} API_KEY")
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
 
     if "search-results" in response:
 
         count = int(response["search-results"]["opensearch:totalResults"])
-        return count
+        if include_arxive:
+            return count+len(get_arxiv_results(query).entries)
+        else:
+            return count
     else:
 
         return 0
