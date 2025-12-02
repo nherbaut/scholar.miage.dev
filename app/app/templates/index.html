@@ -386,7 +386,7 @@
                       <label class="form-check-label" for="completion">Enable query completion</label>
                     </div>
                     <div class="form-check">
-                      <input type="checkbox" class="form-check-input" id="arxiv" name="arxiv" checked>
+                      <input type="checkbox" class="form-check-input" id="arxiv" name="arxiv">
                       <label class="form-check-label" for="arxiv">Include arXiv results</label>
                     </div>
                   </div>
@@ -575,7 +575,7 @@
       socket.emit('get_dois', {
         query: document.getElementById("querybox").value,
         xref: document.getElementById("xref").checked,
-        arxiv: arxivCheckbox ? arxivCheckbox.checked : true
+        arxiv: arxivCheckbox ? arxivCheckbox.checked : false
       });
     }
 
@@ -587,7 +587,7 @@
       btn.textContent = "Counting…";
       btn.classList.remove('btn-success', 'btn-warning');
       btn.classList.add('btn-primary');
-      socket.emit('count', { query: document.getElementById("querybox").value, arxiv: arxivCheckbox ? arxivCheckbox.checked : true });
+      socket.emit('count', { query: document.getElementById("querybox").value, arxiv: arxivCheckbox ? arxivCheckbox.checked : false });
     }
 
     // Default action: count
@@ -848,7 +848,7 @@ journal = { { ${content["pubtitle"]} } },
       const done = data["done"] || 0;
       const failed = data["failed"] || 0;
       const arxiv = data["arxiv"] || 0;
-      const successNonArxiv = Math.max(0, done - arxiv);
+      const successNonArxiv = Math.max(0, done);
       const denominator = total > 0 ? total : 1;
 
       const pbSuccess = document.getElementById("pb_success");

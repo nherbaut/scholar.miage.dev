@@ -16,7 +16,8 @@ def net_create_graph_data(json_data):
         emit("nework_report",  nework_report)
 
     result = net_build_graph(json_data["ids"], 2, emitt=network_emit)
-    graph_data = NetworkData(query=json_data["query"],network_data=pickle.dumps(json.dumps(result)))
+    graph_data = NetworkData(
+        query=json_data["query"], network_data=pickle.dumps(json.dumps(result)))
     db.session.add(graph_data)
     db.session.commit()
 
@@ -33,25 +34,20 @@ def create_feed(json_data):
     emit("feed_generated", {"feed_id": feed.id})
 
 
-
-
-
 @socketio.on('count')
 def handle_count(json_data, log_query=False):
-    
-    
-    count = count_results_for_query(json_data["query"],include_arxiv=json_data["arxiv"])
+
+    count_scopus, count_arxiv = count_results_for_query(
+        json_data["query"], include_arxiv=json_data["arxiv"])
 
     n = ScpusRequest(query=json_data["query"],
-                     ip="0.0.0.0", count=count, fetched=False)
+                     ip="0.0.0.0", count=count_scopus+count_arxiv, fetched=False)
     db.session.add(n)
     db.session.commit()
-    
-    emit("query_id",n.id)
 
-    emit("count", count)
+    emit("query_id", n.id)
 
-
+    emit("count", count_scopus+count_arxiv)
 
 
 @socketio.on("get_venue_openalex")
@@ -82,7 +78,9 @@ def handle_get_dois(json_data):
     the_query = json_data["query"]
     xref = json_data["xref"]
     arxiv = json_data["arxiv"]
-    count = count_results_for_query(the_query)
-    dois = get_papers(count, the_query, xref=xref, arxiv=arxiv, emitt=emit)
+    count_scopus, count_arxiv = count_results_for_query(
+        the_query, include_arxiv=arxiv)
+    dois = get_papers(count_scopus, the_query, xref=xref,
+                      arxiv=arxiv, emitt=emit, count_arxiv=count_arxiv)
 
     emit("dois", {"dois": dois})

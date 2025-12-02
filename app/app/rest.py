@@ -98,7 +98,6 @@ def purge_items(id):
     return "DELETED", 204
 
 
-
 @app.route("/feed/<id>.rss")
 def get_feed(id):
     try:
@@ -106,18 +105,20 @@ def get_feed(id):
     except db.orm.exc.NoResultFound as e:
         return abort(404, description="No feed with this id")
 
-    count = count_results_for_query(feed.query)
-    if count != feed.count:
-        dois = get_papers(count, feed.query, xref=True,existing_data=pickle.loads(feed.feed_content))
+    count_scopus, count_arxiv = count_results_for_query(
+        feed.query, include_arxiv=True)
+    if count_scopus+count_arxiv != feed.count:
+        dois = get_papers(count_scopus, feed.query, arxiv=True, xref=True,
+                          existing_data=pickle.loads(feed.feed_content), count_arxiv=count_arxiv)
     else:
         dois = []
     if feed.feed_content is not None:
         feed_content = pickle.loads(feed.feed_content)
     else:
         feed_content = {}
-    
+
     update_feed(dois, feed_content)
-    feed.count = count
+    feed.count = count_scopus+count_arxiv
     feed.feed_content = pickle.dumps(feed_content)
     feed.hit += 1
     db.session.commit()
@@ -178,8 +179,8 @@ def get_info_for_doi(doi1, doi2):
 def get_doi_for_title():
     title = request.args.get('title')
     query = f"TITLE({title})"
-    count = count_results_for_query(query)
-    dois = get_papers(count, query, False)
+    count_scopus, _ = count_results_for_query(query)
+    dois = get_papers(count_scopus, query, False)
     if (len(dois) == 0):
         abort(404)
     return app.response_class(
@@ -329,7 +330,8 @@ def get_venues_form():
             if not v:
                 continue
             # split on commas or whitespace
-            parts = [p.strip() for p in re.split(r"[\s,]+", v) if p and p.strip()]
+            parts = [p.strip()
+                     for p in re.split(r"[\s,]+", v) if p and p.strip()]
             out.extend(parts)
         return out
 
@@ -381,7 +383,7 @@ def get_network_page(work_list_id):
 
 @app.route('/networks', methods=["GET"])
 def get_networks_page():
-    
+
     try:
         networks_data = db.session.query(NetworkData).all()
 
@@ -389,20 +391,21 @@ def get_networks_page():
     except:
         return render_template('index.html',   sources=get_sources())
 
-        
+
 @app.route('/query/analysis', methods=["GET"])
 def query_analysis_page():
     default_query = request.args.get("query", "")
-    return render_template('query_analysis.html', query=default_query, show_run_button=True, sources=get_sources(),active_page="debug")
+    return render_template('query_analysis.html', query=default_query, show_run_button=True, sources=get_sources(), active_page="debug")
 
 
 @app.route('/query/analysis/<query_id>', methods=["GET"])
 def query_analysis_saved(query_id: int):
     try:
-        saved_request = db.session.query(ScpusRequest).filter(ScpusRequest.id == int(query_id)).one()
+        saved_request = db.session.query(ScpusRequest).filter(
+            ScpusRequest.id == int(query_id)).one()
         return render_template('query_analysis.html', query=saved_request.query, show_run_button=False, sources=get_sources())
     except:
-        return render_template('query_analysis.html', query="", show_run_button=False, sources=get_sources(),active_page="debug")
+        return render_template('query_analysis.html', query="", show_run_button=False, sources=get_sources(), active_page="debug")
 
 
 @app.route('/query/analysis', methods=["POST"])
@@ -417,14 +420,14 @@ def analyze_query():
         status=200,
         mimetype='application/json'
     )
-    
 
 
 @app.route('/permalink/<query_id>', methods=["GET"])
 def permalink(query_id: int):
 
     try:
-        request = db.session.query(ScpusRequest).filter(ScpusRequest.id==int(query_id)).one()
+        request = db.session.query(ScpusRequest).filter(
+            ScpusRequest.id == int(query_id)).one()
 
         return render_template('index.html', query=request.query,  sources=get_sources())
     except:

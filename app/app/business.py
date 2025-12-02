@@ -275,18 +275,25 @@ def get_ref_for_doi(doi):
     print(result)
 
 
-def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None, existing_data={}):
+def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None, existing_data={}, count_arxiv=0):
     dois = []
 
     context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0})()
-    client_results_bucket_size = min(max(10, count / 20), 200)
+    client_results_bucket_size = min(max(10, count_scopus / 20), 200)
     client_bucket = []
-    for i in range(0, min(MAX_RESULTS_QUERY, count), 25):
+
+    @copy_current_request_context
+    def call_back(success, failure, arxiv=0):
+        emitt('doi_update', {"total": count_scopus+count_arxiv,
+                             "done": success, "failed": failure, "arxiv": arxiv})
+
+    for i in range(0, min(MAX_RESULTS_QUERY, count_scopus), 25):
         bucket = []
-        print(f"SCPUS_BACKEND {SCPUS_BACKEND}")
+        print(f"SCPUS_BACKEND {SCPUS_BACKEND % (i, 25, escape_query(query))}")
         partial_results = session_scpus.get(
             SCPUS_BACKEND % (i, 25, escape_query(query))).json()
 
+        print(f'{partial_results["search-results"]}')
         entries = partial_results["search-results"]["entry"]
 
         entries = [entry for entry in entries if (entry.get(
@@ -294,11 +301,6 @@ def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: No
 
         if len(entries) == 0:
             break
-
-        @copy_current_request_context
-        def call_back(success, failure, arxiv=0):
-            emitt('doi_update', {"total": count,
-                  "done": success, "failed": failure, "arxiv": arxiv})
 
         if xref:
             futures = [
@@ -322,7 +324,11 @@ def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: No
     arxiv_papers = []
     extract_data_arxiv(dois, arxiv_papers, get_arxiv_results(
         query).entries, context, call_back, add_arxiv_results=arxiv)
-    emitt('doi_results', arxiv_papers)
+    if arxiv:
+        emitt('doi_results', arxiv_papers)
+
+    if arxiv:
+        dois = dois + arxiv_papers
 
     print(len(dois))
     emitt('doi_export_done', dois)
@@ -395,7 +401,7 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back, add_arxi
 
     scopus_papers = {d["title"]: d for d in dois}
 
-    for paper in arxiv_results:
+    for idx, paper in enumerate(arxiv_results, start=1):
 
         if paper.title.value in scopus_papers:
             if scopus_papers[paper.title.value]["doi"] == "":
@@ -412,29 +418,34 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back, add_arxi
                                 "openalex": ""} for a in paper.authors]
 
                 bucket.append({"doi": paper.id_, "title": paper.title.value,
-                            "year": paper.published.year,
-                            "x-precise-date": str(paper.published),
-                            "pubtitle": "arXiv.org",
-                            "pub_rank": "",
-                            "rank_source": "",
-                            "hindex": "",
-                            "X-OA": True,
-                            "X-FirstAuthor": paper.authors[0].name,
-                            "X-Country-First-Author": "",
-                            "X-Country-First-affiliation": "",
-                            "X-FirstAuthor-ORCID": "",
-                            "X-FirstAuthor-OpenAlex": "",
-                            "X-IsReferencedByCount": "",
-                            "X-subject": "",
-                            "X-refcount": "",
-                            "X-abstract": paper.summary.value,
-                            "X-authors": ", ".join([a.name for a in paper.authors]),
-                            "X-authors-list":  authors_list,
-                            "X-OA-URL": paper.links[0].href
-                            })
+                               "year": paper.published.year,
+                               "x-precise-date": str(paper.published),
+                               "pubtitle": "arXiv.org",
+                               "pub_rank": "",
+                               "rank_source": "",
+                               "hindex": "",
+                               "X-OA": True,
+                               "X-FirstAuthor": paper.authors[0].name,
+                               "X-Country-First-Author": "",
+                               "X-Country-First-affiliation": "",
+                               "X-FirstAuthor-ORCID": "",
+                               "X-FirstAuthor-OpenAlex": "",
+                               "X-IsReferencedByCount": "",
+                               "X-subject": "",
+                               "X-refcount": "",
+                               "X-abstract": paper.summary.value,
+                               "X-authors": ", ".join([a.name for a in paper.authors]),
+                               "X-authors-list":  authors_list,
+                               "X-OA-URL": paper.links[0].href
+                               })
 
                 context.arxiv += 1
-                call_back(context.success, context.failed, context.arxiv)
+                if context.arxiv % 25 == 0:
+                    print("sending doi update")
+                    call_back(context.success, context.failed, context.arxiv)
+        # For arXiv papers, only send periodic updates to avoid spamming clients
+        if add_arxiv_results and idx == len(arxiv_results):
+            call_back(context.success, context.failed, context.arxiv)
 
 
 def load_response_from_scpus(bucket, entry):
@@ -741,12 +752,12 @@ def count_results_for_query(query, include_arxiv=False):
 
         count = int(response["search-results"]["opensearch:totalResults"])
         if include_arxiv:
-            return count+len(get_arxiv_results(query).entries)
+            return count, len(get_arxiv_results(query).entries)
         else:
-            return count
+            return count, 0
     else:
 
-        return 0
+        return 0, 0
 
 
 # NETWORK (BETA)
