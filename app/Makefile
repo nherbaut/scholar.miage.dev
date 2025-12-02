@@ -1,18 +1,22 @@
-arm64:
-	docker buildx build --platform linux/arm64 . -t  nherbaut/scpushack:nextnet 
-amd64:
-	docker buildx build --platform linux/amd64 . -t  nherbaut/scpushack:nextnet 
+IMAGE ?= nherbaut/scpushack:nextnet
 
-build: arm64 amd64
+.PHONY: build push run stop log
 
-push:
-	docker push nherbaut/scpushack:nextnet
+build:
+	docker build . -t $(IMAGE)
+
+push: build
+	docker push $(IMAGE)
+
 run:
-	docker run --rm -p 8106:8000  -e SHLINK_API_KEY=${SHLINK_API_KEY} -e API_KEY=${API_KEY} -e PYALEX_EMAIL=nicolas.herbaut@u-bordeaux.fr --name "scpushack" nherbaut/scpushack:nextnet
+	docker run --rm -p 8106:8000 \
+		-e SHLINK_API_KEY=${SHLINK_API_KEY} \
+		-e API_KEY=${API_KEY} \
+		-e PYALEX_EMAIL=nicolas.herbaut@u-bordeaux.fr \
+		--name "scpushack" $(IMAGE)
+
 stop:
 	docker rm -f scpushack | true
+
 log:
 	docker logs -f scpushack
-
-
-
