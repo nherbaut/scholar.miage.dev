@@ -38,7 +38,9 @@ def create_feed(json_data):
 
 @socketio.on('count')
 def handle_count(json_data, log_query=False):
-    count = count_results_for_query(json_data["query"])
+    
+    
+    count = count_results_for_query(json_data["query"],include_arxiv=json_data["arxiv"])
 
     n = ScpusRequest(query=json_data["query"],
                      ip="0.0.0.0", count=count, fetched=False)
@@ -79,7 +81,8 @@ def handle_get_venues(orcid):
 def handle_get_dois(json_data):
     the_query = json_data["query"]
     xref = json_data["xref"]
+    arxiv = json_data["arxiv"]
     count = count_results_for_query(the_query)
-    dois = get_papers(count, the_query, xref=xref, arxiv=True, emitt=emit)
+    dois = get_papers(count, the_query, xref=xref, arxiv=arxiv, emitt=emit)
 
     emit("dois", {"dois": dois})

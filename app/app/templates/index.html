@@ -7,7 +7,7 @@
 
   <!-- Bootstrap + Vendors -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
   <link rel="stylesheet" href="//cdn.datatables.net/1.11.3/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="static/css/flag-icon.css">
   <link rel="stylesheet" href="static/css/xref.css" class="xref">
@@ -15,7 +15,8 @@
   <link rel="stylesheet" href="static/contrib/css/dark-mode.css">
   <link rel="stylesheet" href="static/css/style.css">
 
-  <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml" title="MIAGE Scholar">
+  <link rel="search" type="application/opensearchdescription+xml" href="static/xml/opensearch.xml"
+    title="MIAGE Scholar">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
 
   <!-- Aesthetic overrides -->
@@ -27,49 +28,167 @@
       --ms-muted: #6c757d;
       --ms-border: rgba(0, 0, 0, .08);
     }
-    body { background-color: #f7f9fc; }
-    .navbar { box-shadow: 0 2px 10px rgba(0, 0, 0, .06); }
+
+    body {
+      background-color: #f7f9fc;
+    }
+
+    .navbar {
+      box-shadow: 0 2px 10px rgba(0, 0, 0, .06);
+    }
+
     .hero {
       background: linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%);
       border-bottom: 1px solid var(--ms-border);
     }
-    .hero .display-6 { letter-spacing: .2px; }
-    .info-badges .badge { font-weight: 500; }
-    .card { border: 1px solid var(--ms-border); border-radius: 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); }
-    .card .card-header { background-color: transparent; border-bottom: 1px dashed var(--ms-border); font-weight: 600; }
-    .section-title { font-weight: 600; margin-bottom: .25rem; }
-    textarea#querybox {
-      width: 100%; min-height: 120px; resize: vertical; border-radius: .75rem;
-      border: 1px solid var(--ms-border); padding: .75rem 1rem; background: #fff;
+
+    .hero .display-6 {
+      letter-spacing: .2px;
     }
-    .btn+.btn { margin-left: .5rem; }
-    #progress-container .progress { height: 1rem; border-radius: 999px; background-color: #e9ecef; }
-    .table-wrap { border: 1px solid var(--ms-border); border-radius: .75rem; background: #fff; padding: .5rem; }
-    table#doitable { width: 100% !important; table-layout: fixed; white-space: normal; }
-    table#doitable thead th { position: sticky; top: 0; background: #fff; z-index: 5; box-shadow: 0 1px 0 var(--ms-border); }
-    #doitable th.wrap-200, #doitable td.wrap-200 { max-width: 200px; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
-    #doitable th.nowrap, #doitable td.nowrap { white-space: nowrap; }
-    tr.arxiv-row { background-color: #ffe5c2 !important; color: #5c2d00; }
-    div.dataTables_wrapper { width: 100%; }
-    .collapse .card.card-body { border-radius: .75rem; }
-    .muted { color: var(--ms-muted); }
-    .icon-btn { display: inline-flex; align-items: center; gap: .5rem; }
-    html.dark-mode body { background: var(--ms-bg); }
-    html.dark-mode .hero { background: linear-gradient(180deg, var(--ms-bg) 0%, var(--ms-bg-2) 100%); border-bottom-color: rgba(255, 255, 255, .08); }
-    html.dark-mode .table-wrap, html.dark-mode textarea#querybox, html.dark-mode .card { background: var(--ms-bg-2); border-color: rgba(255, 255, 255, .08); color: #e6edf3; }
-    html.dark-mode table#doitable thead th { background: var(--ms-bg-2); box-shadow: 0 1px 0 rgba(255, 255, 255, .08); }
+
+    .info-badges .badge {
+      font-weight: 500;
+    }
+
+    .card {
+      border: 1px solid var(--ms-border);
+      border-radius: 1rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .04);
+    }
+
+    .card .card-header {
+      background-color: transparent;
+      border-bottom: 1px dashed var(--ms-border);
+      font-weight: 600;
+    }
+
+    .section-title {
+      font-weight: 600;
+      margin-bottom: .25rem;
+    }
+
+    textarea#querybox {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border-radius: .75rem;
+      border: 1px solid var(--ms-border);
+      padding: .75rem 1rem;
+      background: #fff;
+    }
+
+    .btn+.btn {
+      margin-left: .5rem;
+    }
+
+    #progress-container .progress {
+      height: 1rem;
+      border-radius: 999px;
+      background-color: #e9ecef;
+    }
+
+    .table-wrap {
+      border: 1px solid var(--ms-border);
+      border-radius: .75rem;
+      background: #fff;
+      padding: .5rem;
+    }
+
+    table#doitable {
+      width: 100% !important;
+      table-layout: fixed;
+      white-space: normal;
+    }
+
+    table#doitable thead th {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 5;
+      box-shadow: 0 1px 0 var(--ms-border);
+    }
+
+    #doitable th.wrap-200,
+    #doitable td.wrap-200 {
+      max-width: 200px;
+      white-space: normal;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    #doitable th.nowrap,
+    #doitable td.nowrap {
+      white-space: nowrap;
+    }
+
+    tr.arxiv-row {
+      background-color: #ffe5c2 !important;
+      color: #5c2d00;
+    }
+
+    .progress-bar.bg-arxiv {
+      background-color: #ffd54f;
+    }
+
+    .progress-bar.bg-nodoi {
+      background-color: #ff9800;
+    }
+
+    .progress-bar.bg-oa {
+      background-color: #17a2b8;
+    }
+
+    div.dataTables_wrapper {
+      width: 100%;
+    }
+
+    .collapse .card.card-body {
+      border-radius: .75rem;
+    }
+
+    .muted {
+      color: var(--ms-muted);
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    html.dark-mode body {
+      background: var(--ms-bg);
+    }
+
+    html.dark-mode .hero {
+      background: linear-gradient(180deg, var(--ms-bg) 0%, var(--ms-bg-2) 100%);
+      border-bottom-color: rgba(255, 255, 255, .08);
+    }
+
+    html.dark-mode .table-wrap,
+    html.dark-mode textarea#querybox,
+    html.dark-mode .card {
+      background: var(--ms-bg-2);
+      border-color: rgba(255, 255, 255, .08);
+      color: #e6edf3;
+    }
+
+    html.dark-mode table#doitable thead th {
+      background: var(--ms-bg-2);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, .08);
+    }
   </style>
 
   <!-- Scripts -->
   <script src="https://cdn.socket.io/socket.io-3.0.1.min.js"></script>
   <script src="https://code.jquery.com/jquery-3.6.0.slim.min.js"
-          integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
+    integrity="sha256-u7e5khyithlIdTpu22PHhENmPcRdFiHRjhAuHcs05RI=" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
-          integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
-          crossorigin="anonymous"></script>
+    integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
+    crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
-          integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
-          crossorigin="anonymous"></script>
+    integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+    crossorigin="anonymous"></script>
 
   <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
   <script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
@@ -118,31 +237,42 @@
           <h1 class="display-6 mb-2">Export Scholar data for SMS/SLRs</h1>
           <p class="muted mb-3">Search, fetch DOIs, export BibTeX/Excel, and generate RSS or word clouds.</p>
           <div class="info-badges d-flex align-items-center gap-2">
-            <span id="scihubok" data-bs-toggle="tooltip" class="badge bg-success scihubinfo" title="sci-hub server reachable">Sci-Hub servers</span>
+            <span id="scihubok" data-bs-toggle="tooltip" class="badge bg-success scihubinfo"
+              title="sci-hub server reachable">Sci-Hub servers</span>
             <span id="scihubko" data-bs-toggle="tooltip" class="badge bg-danger scihubinfo"
-                  title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1">Sci-Hub servers</span>
+              title="Can't contact Sci-Hub servers, you may not be able to bypass paywall due to ISP restriction. You should consider changing your DNS server to 8.8.8.8, 8.8.4.4 or 1.1.1.1">Sci-Hub
+              servers</span>
           </div>
         </div>
         <div class="col-lg-4 text-lg-end">
           <div class="btn-toolbar justify-content-lg-end" role="toolbar" aria-label="Toolbar">
             <div class="btn-group me-2" role="group" aria-label="Help">
-              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#import_procedure" aria-expanded="false">
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                data-bs-target="#import_procedure" aria-expanded="false">
                 <i class="fas fa-list-ul"></i><span>Import Procedure</span>
               </button>
-              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#importTuto" aria-expanded="false">
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                data-bs-target="#importTuto" aria-expanded="false">
                 <i class="fas fa-video"></i><span>Tutorial</span>
               </button>
-              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#releaseNotes" aria-expanded="false">
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                data-bs-target="#releaseNotes" aria-expanded="false">
                 <i class="fas fa-bullhorn"></i><span>Release Notes</span>
               </button>
-              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse" data-bs-target="#word_cloud" aria-expanded="false">
+              <button class="btn btn-outline-primary icon-btn" type="button" data-bs-toggle="collapse"
+                data-bs-target="#word_cloud" aria-expanded="false">
                 <i class="fas fa-cloud"></i><span>Popular terms</span>
               </button>
             </div>
             <div class="btn-group" role="group" aria-label="Links">
-              <button class="btn btn-light" type="button" onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">Query Language</button>
-              <button class="btn btn-light" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">Sources</button>
-              <button class="btn btn-light" type="button" onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">Report a Bug</button>
+              <button class="btn btn-light" type="button"
+                onclick="window.location='http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm';">Query
+                Language</button>
+              <button class="btn btn-light" type="button"
+                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top';">Sources</button>
+              <button class="btn btn-light" type="button"
+                onclick="window.location='https://github.com/nherbaut/scholar.miage.nextnet.top/issues';">Report a
+                Bug</button>
             </div>
           </div>
         </div>
@@ -154,8 +284,10 @@
           <div class="collapse" id="import_procedure">
             <div class="card card-body">
               <ol class="mb-0">
-                <li>Type a query following the <a href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a>,
-                    e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy))</i></li>
+                <li>Type a query following the <a
+                    href="http://schema.elsevier.com/dtds/document/bkapi/search/SCOPUSSearchTips.htm">doc</a>,
+                  e.g. <i>TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR
+                    TITLE-ABS-KEY(Privacy))</i></li>
                 <li>Click “Count Results”.</li>
                 <li>Click “Fetch” to resolve DOIs.</li>
                 <li>Download the BibTeX file.</li>
@@ -167,14 +299,16 @@
           </div>
           <div class="collapse" id="importTuto">
             <div class="card card-body">
-              <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/" target="_blank">Access video tutorial here</a>
+              <a href="https://mediatheque.univ-paris1.fr/video/2870-miage-scholar-tutorial-importing-search-results-in-parsifal/"
+                target="_blank">Access video tutorial here</a>
             </div>
           </div>
           <div class="collapse" id="releaseNotes">
             <div class="card card-body">
               <h2 class="h5 section-title">Release notes</h2>
               <ul class="mb-0">
-                <li>2.0.0 Open Alex integration, Citation Network creation, Author's publication tracking, minor UI changes</li>
+                <li>2.0.0 Open Alex integration, Citation Network creation, Author's publication tracking, minor UI
+                  changes</li>
                 <li>1.5.0 Subject area/journal restriction; CORE2021/2018 &amp; SCImago metadata.</li>
                 <li>1.4.0 Citation export to txt or BibTeX.</li>
                 <li>1.3.0 Word cloud; ISSN and Google Scholar links for items without DOI.</li>
@@ -204,7 +338,8 @@
         <div class="card-header">
           <div class="d-flex align-items-center justify-content-between">
             <span>Query</span>
-            <small class="text-muted">Example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy)) AND PUBYEAR &gt; 2020</small>
+            <small class="text-muted">Example: TITLE-ABS-KEY(blockchain) AND TITLE-ABS-KEY(INDUSTRY 4.0) AND
+              (TITLE-ABS-KEY(Security) OR TITLE-ABS-KEY(Privacy)) AND PUBYEAR &gt; 2020</small>
           </div>
         </div>
         <div class="card-body">
@@ -217,9 +352,10 @@
               <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
               <input class="btn btn-primary ms-2" type="submit" value="Fetch {{ count }} results (up to 1000)">
             </div>
-              {% else %}
+            {% else %}
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#options" aria-expanded="false" aria-controls="collapseExample">
+              <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                data-bs-target="#options" aria-expanded="false" aria-controls="collapseExample">
                 Options
               </button>
             </div>
@@ -229,20 +365,29 @@
                 <div class="row g-4">
                   <div class="col-lg-4">
                     <div class="form-check">
-                      <input type="checkbox" class="form-check-input" id="xref" name="xref" onchange="xref_changed()" unchecked>
-                      <label class="form-check-label" for="xref">Download paper metadata <span class="badge bg-warning">beta</span></label>
+                      <input type="checkbox" class="form-check-input" id="xref" name="xref" onchange="xref_changed()"
+                        unchecked>
+                      <label class="form-check-label" for="xref">Download paper metadata <span
+                          class="badge bg-warning">beta</span></label>
                     </div>
                     <div class="form-check">
-                      <input type="checkbox" class="form-check-input" id="oa" name="oa" onchange="oa_changed()" unchecked>
+                      <input type="checkbox" class="form-check-input" id="oa" name="oa" onchange="oa_changed()"
+                        unchecked>
                       <label class="form-check-label" for="oa">Show only Open Access work</label>
                     </div>
                     <div class="form-check">
-                      <input type="checkbox" class="form-check-input" id="cite_bib" name="cite_bib" onchange="cite_bib_changed()" unchecked>
+                      <input type="checkbox" class="form-check-input" id="cite_bib" name="cite_bib"
+                        onchange="cite_bib_changed()" unchecked>
                       <label class="form-check-label" for="cite_bib">Citation as BibTeX</label>
                     </div>
                     <div class="form-check">
-                      <input type="checkbox" class="form-check-input" id="completion" name="completion" onchange="completion_changed()" checked>
+                      <input type="checkbox" class="form-check-input" id="completion" name="completion"
+                        onchange="completion_changed()" checked>
                       <label class="form-check-label" for="completion">Enable query completion</label>
+                    </div>
+                    <div class="form-check">
+                      <input type="checkbox" class="form-check-input" id="arxiv" name="arxiv" checked>
+                      <label class="form-check-label" for="arxiv">Include arXiv results</label>
                     </div>
                   </div>
                   <div class="col-lg-4">
@@ -252,13 +397,15 @@
                         {% for category in sources.keys() %}
                         <optgroup label="{{ category }}">
                           {% for source in sources[category] %}
-                          <option value="{{ source.full_text_name }}" code="{{ source.code }}">{{ source.short_name }}</option>
+                          <option value="{{ source.full_text_name }}" code="{{ source.code }}">{{ source.short_name }}
+                          </option>
                           {% endfor %}
                         </optgroup>
                         {% endfor %}
                       </select>
                       <div class="mt-2">
-                        <input id="source_select_btn" class="btn btn-primary add-restrict" type="button" value="Apply Source Restriction" onclick="add_source_restriction_to_query()" />
+                        <input id="source_select_btn" class="btn btn-primary add-restrict" type="button"
+                          value="Apply Source Restriction" onclick="add_source_restriction_to_query()" />
                       </div>
                     </fieldset>
                   </div>
@@ -295,7 +442,8 @@
                         <option value="MULT">Multidisciplinary</option>
                       </select>
                       <div class="mt-2">
-                        <input class="btn btn-primary add-restrict" type="button" value="Apply Domain Restriction" onclick="add_domain_restriction_to_query()" />
+                        <input class="btn btn-primary add-restrict" type="button" value="Apply Domain Restriction"
+                          onclick="add_domain_restriction_to_query()" />
                       </div>
                     </fieldset>
                   </div>
@@ -310,24 +458,36 @@
 
               <!-- Main button: count -> fetch -->
               <div class="btn-group ms-2" role="group" aria-label="Primary actions">
-                <button class="btn btn-primary" id="main_button" type="button" onclick="handle_submit(event)">Count Results</button>
+                <button class="btn btn-primary" id="main_button" type="button" onclick="handle_submit(event)">Count
+                  Results</button>
               </div>
 
               <!-- Clean post-fetch toolbar: one dropdown -->
               <div id="postFetchGroup" class="btn-group ms-2" role="group" aria-label="Export & tools" hidden>
-                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown"
+                  aria-expanded="false">
                   Export &amp; Tools
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                  <li><button class="dropdown-item" type="button" onclick="openQueryAnalysis()">Debug my query</button></li>
-                  <li><hr class="dropdown-divider"></li>
+                  <li><button class="dropdown-item" type="button" onclick="openQueryAnalysis()">Debug my query</button>
+                  </li>
+                  <li>
+                    <hr class="dropdown-divider">
+                  </li>
                   <li><button class="dropdown-item" type="button" onclick="copyPermalink()">Copy Permalink</button></li>
-                  <li><button class="dropdown-item" type="button" onclick="createRssLink()">Create RSS Link</button></li>
-                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadResults()" disabled data-bs-toggle="tooltip" title="run the query first">Download DOIs as BibTeX</button></li>
-                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadExcel('xlsx')" disabled data-bs-toggle="tooltip" title="run the query first">Export to Spreadsheet</button></li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><button class="dropdown-item requires-run" type="button" onclick="analyzeCitationGraph()" disabled data-bs-toggle="tooltip" title="run the query first">Analyse Citation Graph</button></li>
-                  <li><button class="dropdown-item requires-run" type="button" onclick="cloudResults()" disabled data-bs-toggle="tooltip" title="run the query first">Generate Word Cloud</button></li>
+                  <li><button class="dropdown-item" type="button" onclick="createRssLink()">Create RSS Link</button>
+                  </li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadResults()" disabled
+                      data-bs-toggle="tooltip" title="run the query first">Download DOIs as BibTeX</button></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="downloadExcel('xlsx')" disabled
+                      data-bs-toggle="tooltip" title="run the query first">Export to Spreadsheet</button></li>
+                  <li>
+                    <hr class="dropdown-divider">
+                  </li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="analyzeCitationGraph()" disabled
+                      data-bs-toggle="tooltip" title="run the query first">Analyse Citation Graph</button></li>
+                  <li><button class="dropdown-item requires-run" type="button" onclick="cloudResults()" disabled
+                      data-bs-toggle="tooltip" title="run the query first">Generate Word Cloud</button></li>
                 </ul>
               </div>
             </div>
@@ -338,19 +498,27 @@
           <div class="container-fluid px-0" id="progress-container">
             <div class="row">
               <div class="col-12">
+                <label class="form-label">Open Access Ratio</label>
+                <div class="progress mb-2">
+                  <div role="progressbar" style="width: 0%" class="progress-bar progress-bar-animated bg-oa"
+                    id="pb_oa_ratio" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0"
+                    title="Open access papers (X-OA)">
+                    <span id="pb_oa_ratio_count"></span>
+                  </div>
+                </div>
+
                 <label class="form-label">Progress</label>
                 <div class="progress">
                   <div role="progressbar" style="width: 0%" class="progress-bar bg-success progress-bar-animated"
-                       id="pb_success" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                    id="pb_success" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0" title="Papers with DOI">
                     <span id="pb_success_count"></span>
                   </div>
-                  <div role="progressbar" style="width: 0%; background-color: #ff9800;"
-                       class="progress-bar progress-bar-animated"
-                       id="pb_arxiv" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                  <div role="progressbar" style="width: 0%" class="progress-bar progress-bar-animated bg-arxiv"
+                    id="pb_arxiv" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0" title="Papers from arXiv">
                     <span id="pb_arxiv_count"></span>
                   </div>
-                  <div role="progressbar" style="width: 0%" class="progress-bar bg-warning progress-bar-animated"
-                       id="pb_failure" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+                  <div role="progressbar" style="width: 0%" class="progress-bar progress-bar-animated bg-nodoi"
+                    id="pb_failure" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0" title="Papers without DOI">
                     <span id="pb_failure_count"></span>
                   </div>
                 </div>
@@ -396,26 +564,30 @@
     function sendDoisRequest(evt) {
       const btn = document.getElementById("main_button");
       document.getElementById("xref").disabled = true;
+      const arxivCheckbox = document.getElementById("arxiv");
+      if (arxivCheckbox) { arxivCheckbox.disabled = true; }
       btn.disabled = true;
 
       btn.textContent = "Fetching…";
-      btn.classList.remove('btn-primary','btn-warning');
+      btn.classList.remove('btn-primary', 'btn-warning');
       btn.classList.add('btn-success');
 
       socket.emit('get_dois', {
         query: document.getElementById("querybox").value,
-        xref: document.getElementById("xref").checked
+        xref: document.getElementById("xref").checked,
+        arxiv: arxivCheckbox ? arxivCheckbox.checked : true
       });
     }
 
     function sendCountRequest(evt) {
       const btn = document.getElementById("main_button");
+      const arxivCheckbox = document.getElementById("arxiv");
       document.getElementById("querybox").disabled = true;
       btn.disabled = true;
       btn.textContent = "Counting…";
-      btn.classList.remove('btn-success','btn-warning');
+      btn.classList.remove('btn-success', 'btn-warning');
       btn.classList.add('btn-primary');
-      socket.emit('count', { query: document.getElementById("querybox").value });
+      socket.emit('count', { query: document.getElementById("querybox").value, arxiv: arxivCheckbox ? arxivCheckbox.checked : true });
     }
 
     // Default action: count
@@ -451,6 +623,7 @@
     var table = undefined;
     var bag_of_doi = {};
     var item_info = [];
+    var openAccessCount = 0;
 
     function escapeDoiForSelector(value) {
       if (window.CSS && CSS.escape) {
@@ -465,7 +638,7 @@
       const existingRow = document.querySelector(selector);
       if (!existingRow) { return; }
       if (table && typeof table.row === 'function') {
-        try { table.row(existingRow).remove().draw(false); return; } catch (_) {}
+        try { table.row(existingRow).remove().draw(false); return; } catch (_) { }
       }
       existingRow.remove();
     }
@@ -480,6 +653,20 @@
         }
       }
       item_info.push(doiItem);
+    }
+
+    function updateOpenAccessProgress() {
+      const totalItems = item_info.length;
+      const denominator = totalItems > 0 ? totalItems : 1;
+      openAccessCount = item_info.reduce((acc, item) => acc + (get(item, "X-OA", false) ? 1 : 0), 0);
+      const ratio = Math.round((100 * openAccessCount) / denominator);
+      const pb = document.getElementById("pb_oa_ratio");
+      if (!pb) { return; }
+      pb.setAttribute("aria-valuemax", 100);
+      pb.setAttribute("aria-valuenow", ratio);
+      pb.style.width = ratio + "%";
+      const label = document.getElementById("pb_oa_ratio_count");
+      if (label) { label.innerHTML = `${ratio}%`; }
     }
 
     // New: last query id from backend
@@ -554,7 +741,7 @@ journal = { { ${content["pubtitle"]} } },
       try {
         const compPref = window.localStorage.getItem("completion");
         document.getElementById("completion").checked = (compPref === null) ? true : (compPref === 'true');
-      } catch (_) {}
+      } catch (_) { }
 
       if (document.getElementById("xref").checked || document.getElementById("oa").checked) {
         $("#options").collapse('show');
@@ -577,14 +764,14 @@ journal = { { ${content["pubtitle"]} } },
         if (btn) {
           btn.textContent = 'Count Results';
           btn.disabled = false;
-          btn.classList.remove('btn-success','btn-warning');
+          btn.classList.remove('btn-success', 'btn-warning');
           btn.classList.add('btn-primary');
         }
         const grp = document.getElementById('postFetchGroup');
         if (grp) grp.hidden = true;
         // Back to 2-step flow until fresh count is computed
         handle_submit = sendCountRequest;
-      } catch (_) {}
+      } catch (_) { }
     }
     function updateQueryStorage(str) { window.localStorage.setItem("query", str); }
     window.onload = onLoaded;
@@ -601,11 +788,11 @@ journal = { { ${content["pubtitle"]} } },
       // Label reflects count and 1000 cap
       if (count > 1000) {
         btn.textContent = `Fetch first 1000 (found ${count})`;
-        btn.classList.remove('btn-primary','btn-success');
+        btn.classList.remove('btn-primary', 'btn-success');
         btn.classList.add('btn-warning');
       } else {
         btn.textContent = `Fetch ${count} results`;
-        btn.classList.remove('btn-warning','btn-success');
+        btn.classList.remove('btn-warning', 'btn-success');
         btn.classList.add('btn-primary');
       }
       // Next click fetches (still passes event for modifiers)
@@ -691,7 +878,7 @@ journal = { { ${content["pubtitle"]} } },
 
     socket.on('doi_results', (data) => {
       // Once results start rendering, lock the query to preserve reproducibility
-      try { document.getElementById('querybox').disabled = true; } catch (_) {}
+      try { document.getElementById('querybox').disabled = true; } catch (_) { }
       const dedupedItems = [];
       const seen = {};
       for (const doi_item of data) {
@@ -719,8 +906,9 @@ journal = { { ${content["pubtitle"]} } },
         }
       }
       document.getElementById("doi_table").innerHTML += rendered_html;
+      updateOpenAccessProgress();
       // Initialize star icons after rows inserted
-      try { MSStars.refreshStarIcons(); } catch (e) {}
+      try { MSStars.refreshStarIcons(); } catch (e) { }
     });
 
     function add_item_to_table(doi_item) {
@@ -731,17 +919,23 @@ journal = { { ${content["pubtitle"]} } },
       const doiValue = doi_item["doi"] || "";
       const isArxiv = /^https?:\/\/arxiv\.org/.test(doiValue);
       const full_doi = doiValue.split("_")[0];
+      const isOpenAccess = !!get(doi_item, "X-OA", false);
+      const oaLink = doi_item["X-OA-URL"] || full_doi || doiValue;
+      const abstractText = get(doi_item, "X-abstract", "");
+      const hasAbstract = !!abstractText && abstractText.trim() !== "";
 
       var rendered = Mustache.render(tableRowTemplate, {
         success: doi_item["doi"] != "" ? true : false,
-        openaccess: get(doi_item, "X-OA", false) != false,
+        openaccess: isOpenAccess,
         is_arxiv: isArxiv,
+        is_oa: isOpenAccess,
         doi: doi_item["doi"],
         issn: doi_item["issn"],
         full_doi: full_doi,
         year: doi_item["year"],
         title: doi_item["title"],
-        abstract: get(doi_item, "X-abstract", ""),
+        abstract: abstractText,
+        has_abstract: hasAbstract,
         cite_count: get(doi_item, "X-IsReferencedByCount", ""),
         ref_count: get(doi_item, "X-refcount", ""),
         subject: get(doi_item, "X-subject", []),
@@ -752,42 +946,42 @@ journal = { { ${content["pubtitle"]} } },
         authorsNamesAndLinks: authorsNamesAndLinks,
         affil: doi_item["X-Country-First-affiliation"],
         country: doi_item["X-Country-First-Author"],
-        oa_url: doi_item["X-OA-URL"],
+        oa_link: oaLink,
       });
       return rendered;
     }
 
     // Simple star handling using localStorage
-    const MSStars = (function(){
+    const MSStars = (function () {
       const KEY = 'starred_items';
-      function load(){
-        try { return JSON.parse(window.localStorage.getItem(KEY) || '{}'); } catch(_) { return {}; }
+      function load() {
+        try { return JSON.parse(window.localStorage.getItem(KEY) || '{}'); } catch (_) { return {}; }
       }
-      function save(map){
-        try { window.localStorage.setItem(KEY, JSON.stringify(map)); } catch(_) {}
+      function save(map) {
+        try { window.localStorage.setItem(KEY, JSON.stringify(map)); } catch (_) { }
       }
-      function isStarred(doi){ const m = load(); return !!m[doi]; }
-      function toggle(doi){
+      function isStarred(doi) { const m = load(); return !!m[doi]; }
+      function toggle(doi) {
         const m = load();
         if (m[doi]) { delete m[doi]; }
         else if (bag_of_doi && bag_of_doi[doi]) { m[doi] = bag_of_doi[doi]; }
         save(m);
         return !!m[doi];
       }
-      function setIcon(el, starred){
+      function setIcon(el, starred) {
         if (!el) return;
         const i = el.querySelector('i');
         if (!i) return;
-        i.classList.remove('far','fas');
+        i.classList.remove('far', 'fas');
         i.classList.add(starred ? 'fas' : 'far');
       }
-      function refresh(){
+      function refresh() {
         document.querySelectorAll('#doi_table .star-btn').forEach(btn => {
           const doi = btn.getAttribute('data-doi');
           setIcon(btn, isStarred(doi));
         });
       }
-      function handleClick(e){
+      function handleClick(e) {
         const btn = e.target.closest('.star-btn');
         if (!btn) return;
         e.preventDefault();
@@ -795,9 +989,9 @@ journal = { { ${content["pubtitle"]} } },
         const starred = toggle(doi);
         setIcon(btn, starred);
       }
-      function init(){
+      function init() {
         const tbody = document.getElementById('doi_table');
-        if (tbody && !tbody._msStarInit){
+        if (tbody && !tbody._msStarInit) {
           tbody.addEventListener('click', handleClick);
           tbody._msStarInit = true;
         }
@@ -813,7 +1007,7 @@ journal = { { ${content["pubtitle"]} } },
       const btn = document.getElementById("main_button");
       btn.textContent = "Count Results";
       btn.disabled = false;
-      btn.classList.remove('btn-success','btn-warning');
+      btn.classList.remove('btn-success', 'btn-warning');
       btn.classList.add('btn-primary');
 
       document.getElementById("querybox").disabled = false;
@@ -821,6 +1015,11 @@ journal = { { ${content["pubtitle"]} } },
       document.getElementById("pb_success").setAttribute("max", 0);
       document.getElementById("pb_success").setAttribute("value", 0);
       document.getElementById("pb_success").style.width = "0%";
+      document.getElementById("pb_oa_ratio").setAttribute("max", 0);
+      document.getElementById("pb_oa_ratio").setAttribute("value", 0);
+      document.getElementById("pb_oa_ratio").style.width = "0%";
+      document.getElementById("pb_oa_ratio_count").innerHTML = "0%";
+      openAccessCount = 0;
       const pbArxiv = document.getElementById("pb_arxiv");
       if (pbArxiv) {
         pbArxiv.classList.remove("progress-bar-striped");
@@ -851,14 +1050,14 @@ journal = { { ${content["pubtitle"]} } },
       var elt = document.getElementById('doitable');
       var wb = XLSX.utils.table_to_book(elt, { sheet: "sheet1" });
       return dl ? XLSX.write(wb, { bookType: type, bookSST: true, type: 'base64' })
-                : XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
+        : XLSX.writeFile(wb, fn || ('MIAGEScholarResults.' + (type || 'xlsx')));
     }
 
     function copyPermalink() {
       if (latestQueryId === null || latestQueryId === undefined) { return; }
       const baseUrl = window.location.origin;
       const link = baseUrl + '/permalink/' + latestQueryId;
-      navigator.clipboard.writeText(link).catch(() => {});
+      navigator.clipboard.writeText(link).catch(() => { });
     }
 
     function get_doi_cite(elt) {
@@ -953,9 +1152,9 @@ journal = { { ${content["pubtitle"]} } },
     function completion_changed() {
       try {
         window.localStorage.setItem("completion", document.getElementById("completion").checked ? 'true' : 'false');
-      } catch (_) {}
+      } catch (_) { }
       // simplest reliable toggle: reload to (de)initialize the completion logic cleanly
-      try { window.location.reload(); } catch (_) {}
+      try { window.location.reload(); } catch (_) { }
     }
   </script>
 
@@ -1050,344 +1249,397 @@ journal = { { ${content["pubtitle"]} } },
   </script>
 
 
-<style>
-  /* minimal styles for the inline completion menu */
-  .scopus-ac-wrap { position: relative; }
-  .scopus-ac-menu {
-    position: absolute; z-index: 2000; max-height: 260px; overflow-y: auto;
-    min-width: 280px; background: #fff; border: 1px solid rgba(0,0,0,.1);
-    border-radius: .5rem; box-shadow: 0 8px 24px rgba(0,0,0,.12);
-  }
-  html.dark-mode .scopus-ac-menu { background: var(--ms-bg-2); color: #e6edf3; border-color: rgba(255,255,255,.08); }
-  .scopus-ac-item { padding: .5rem .75rem; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
-  .scopus-ac-item.kbd span { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  .scopus-ac-item:hover, .scopus-ac-item.active { background: rgba(13,110,253,.08); }
-  html.dark-mode .scopus-ac-item:hover, html.dark-mode .scopus-ac-item.active { background: rgba(255,255,255,.06); }
-  .scopus-ac-hint { color: var(--ms-muted); font-size: .85em; }
-  .scopus-ghost {
-    position:absolute; top:0; left:0; right:0; bottom:0; color: transparent; white-space: pre-wrap;
-    word-wrap: break-word; overflow: hidden; pointer-events:none; padding: .75rem 1rem; border-radius: .75rem;
-    font: inherit; line-height: inherit; tab-size: inherit;
-  }
-  .scopus-ghost .ghost-hint { color: rgba(13,110,253,.35); }
-</style>
-
-<script>
-(function () {
-  // Toggleable query completion (persisted via localStorage)
-  const completionEnabled = (window.localStorage.getItem('completion') ?? 'true') === 'true';
-  if (!completionEnabled) { try { window.__scopus_ac = null; } catch (_) {} return; }
-  // --- Vocabulary (Scopus advanced search) ---
-  // Operators
-  const BOOL_OPS = [
-    {label:'AND', insert:'AND', hint:'Boolean AND'},
-    {label:'OR', insert:'OR', hint:'Boolean OR'},
-    {label:'AND NOT', insert:'AND NOT', hint:'Boolean NOT (Scopus uses AND NOT)'},
-  ];
-  const PROX_OPS = [
-    {label:'W/n', insert:'W/3', hint:'Within n words, any order'},
-    {label:'PRE/n', insert:'PRE/3', hint:'Within n words, in this order'},
-  ];
-  // Field codes (non-exhaustive, common set)
-  const FIELDS = [
-    {label:'TITLE-ABS-KEY()', insert:'TITLE-ABS-KEY(${})', caretOffset:-2, hint:'Title OR Abstract OR Author Keywords'},
-    {label:'TITLE()',         insert:'TITLE(${})', caretOffset:-2, hint:'Article title'},
-    {label:'ABS()',           insert:'ABS(${})', caretOffset:-2, hint:'Abstract'},
-    {label:'KEY()',           insert:'KEY(${})', caretOffset:-2, hint:'Author keywords'},
-    {label:'AUTH()',          insert:'AUTH(${})', caretOffset:-2, hint:'Author name (any)'},
-  ];
-  // Comparables (year, etc.)
-  const COMPARABLES = [
-    {label:'PUBYEAR >', insert:'PUBYEAR > '},
-    {label:'PUBYEAR =', insert:'PUBYEAR = '},
-    {label:'PUBYEAR <', insert:'PUBYEAR < '}
-  ];
-  // Snippets for phrases and grouping
-  const SNIPPETS = [
-    {label:'"Loose phrase"', insert:'"${}"', caretOffset:-2, hint:'Phrase with variations allowed'},
-    {label:'{Exact phrase}', insert:'{${}}', caretOffset:-2, hint:'Exact phrase, no stemming/variants'},
-    {label:'( … ) group',   insert:'(${})', caretOffset:-2, hint:'Parenthesis group'},
-    {label:'[example] PRE/n', insert:'{term1} PRE/3 {term2}', hint:'Ordered proximity'},
-    {label:'[example] W/n',   insert:'{term1} W/3 {term2}',   hint:'Unordered proximity'}
-  ];
-
-  // Combine into a master list with categories
-  const CATALOG = [
-    {cat:'Fields', items:FIELDS},
-    {cat:'Operators', items:BOOL_OPS},
-    {cat:'Proximity', items:PROX_OPS},
-    {cat:'Year/Compare', items:COMPARABLES},
-    {cat:'Snippets', items:SNIPPETS}
-  ];
-
-  // Attach wrapper and ghost overlay for inline ghost hints
-  const ta = document.getElementById('querybox');
-  if (!ta) return;
-
-  // Wrap the textarea so we can position the menu absolutely
-  const wrap = document.createElement('div');
-  wrap.className = 'scopus-ac-wrap';
-  ta.parentNode.insertBefore(wrap, ta);
-  wrap.appendChild(ta);
-
-  // Ghost layer to show the next token faintly
-  const ghost = document.createElement('div');
-  ghost.className = 'scopus-ghost';
-  ghost.style.display = 'none';
-  wrap.style.position = 'relative';
-  wrap.appendChild(ghost);
-
-  // Menu element
-  const menu = document.createElement('div');
-  menu.className = 'scopus-ac-menu';
-  menu.style.display = 'none';
-  wrap.appendChild(menu);
-
-  let state = {
-    open:false, items:[], activeIndex:0,
-    triggerStart:0, // index of token start in text
-    filter:''        // user-typed filter
-  };
-
-  // Utility: get caret position and current token (since last whitespace or after '(')
-  function getContext() {
-    const pos = ta.selectionStart;
-    const text = ta.value;
-    const left = text.slice(0, pos);
-    // find the token start: after whitespace, after '(', after '-', after '{', after '"'
-    const m = left.match(/(?:^|[\s(\-"{])([^\s()"{}]*)$/);
-    const token = m ? m[1] : '';
-    const triggerStart = m ? (pos - token.length) : pos;
-    return {pos, token, triggerStart, text};
-  }
-
-  function buildCatalog(filter) {
-    const f = (filter || '').toUpperCase();
-    const out = [];
-    for (const section of CATALOG) {
-      for (const it of section.items) {
-        const hay = (it.label || it.insert || '').toUpperCase();
-        if (!f || hay.indexOf(f) >= 0) {
-          out.push({section:section.cat, ...it});
-        }
-      }
+  <style>
+    /* minimal styles for the inline completion menu */
+    .scopus-ac-wrap {
+      position: relative;
     }
-    // sensible priority: field codes first, then year, then booleans, proximity, snippets
-    const prio = {Fields:0, 'Year/Compare':1, Operators:2, Proximity:3, Snippets:4};
-    out.sort((a,b) => (prio[a.section]-prio[b.section]) || a.label.localeCompare(b.label));
-    return out.slice(0, 50);
-  }
 
-  function renderMenu(items) {
-    if (!items.length) { menu.style.display = 'none'; state.open=false; return; }
-    const html = items.map((it, idx) => {
-      const active = idx === state.activeIndex ? 'active' : '';
-      const hint = it.hint ? `<span class="scopus-ac-hint">${escapeHtml(it.hint)}</span>` : '';
-      return `<div class="scopus-ac-item ${active}" data-idx="${idx}">
+    .scopus-ac-menu {
+      position: absolute;
+      z-index: 2000;
+      max-height: 260px;
+      overflow-y: auto;
+      min-width: 280px;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, .1);
+      border-radius: .5rem;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+    }
+
+    html.dark-mode .scopus-ac-menu {
+      background: var(--ms-bg-2);
+      color: #e6edf3;
+      border-color: rgba(255, 255, 255, .08);
+    }
+
+    .scopus-ac-item {
+      padding: .5rem .75rem;
+      cursor: pointer;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: .5rem;
+    }
+
+    .scopus-ac-item.kbd span {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+    }
+
+    .scopus-ac-item:hover,
+    .scopus-ac-item.active {
+      background: rgba(13, 110, 253, .08);
+    }
+
+    html.dark-mode .scopus-ac-item:hover,
+    html.dark-mode .scopus-ac-item.active {
+      background: rgba(255, 255, 255, .06);
+    }
+
+    .scopus-ac-hint {
+      color: var(--ms-muted);
+      font-size: .85em;
+    }
+
+    .scopus-ghost {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      color: transparent;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow: hidden;
+      pointer-events: none;
+      padding: .75rem 1rem;
+      border-radius: .75rem;
+      font: inherit;
+      line-height: inherit;
+      tab-size: inherit;
+    }
+
+    .scopus-ghost .ghost-hint {
+      color: rgba(13, 110, 253, .35);
+    }
+  </style>
+
+  <script>
+    (function () {
+      // Toggleable query completion (persisted via localStorage)
+      const completionEnabled = (window.localStorage.getItem('completion') ?? 'true') === 'true';
+      if (!completionEnabled) { try { window.__scopus_ac = null; } catch (_) { } return; }
+      // --- Vocabulary (Scopus advanced search) ---
+      // Operators
+      const BOOL_OPS = [
+        { label: 'AND', insert: 'AND', hint: 'Boolean AND' },
+        { label: 'OR', insert: 'OR', hint: 'Boolean OR' },
+        { label: 'AND NOT', insert: 'AND NOT', hint: 'Boolean NOT (Scopus uses AND NOT)' },
+      ];
+      const PROX_OPS = [
+        { label: 'W/n', insert: 'W/3', hint: 'Within n words, any order' },
+        { label: 'PRE/n', insert: 'PRE/3', hint: 'Within n words, in this order' },
+      ];
+      // Field codes (non-exhaustive, common set)
+      const FIELDS = [
+        { label: 'TITLE-ABS-KEY()', insert: 'TITLE-ABS-KEY(${})', caretOffset: -2, hint: 'Title OR Abstract OR Author Keywords' },
+        { label: 'TITLE()', insert: 'TITLE(${})', caretOffset: -2, hint: 'Article title' },
+        { label: 'ABS()', insert: 'ABS(${})', caretOffset: -2, hint: 'Abstract' },
+        { label: 'KEY()', insert: 'KEY(${})', caretOffset: -2, hint: 'Author keywords' },
+        { label: 'AUTH()', insert: 'AUTH(${})', caretOffset: -2, hint: 'Author name (any)' },
+      ];
+      // Comparables (year, etc.)
+      const COMPARABLES = [
+        { label: 'PUBYEAR >', insert: 'PUBYEAR > ' },
+        { label: 'PUBYEAR =', insert: 'PUBYEAR = ' },
+        { label: 'PUBYEAR <', insert: 'PUBYEAR < ' }
+      ];
+      // Snippets for phrases and grouping
+      const SNIPPETS = [
+        { label: '"Loose phrase"', insert: '"${}"', caretOffset: -2, hint: 'Phrase with variations allowed' },
+        { label: '{Exact phrase}', insert: '{${}}', caretOffset: -2, hint: 'Exact phrase, no stemming/variants' },
+        { label: '( … ) group', insert: '(${})', caretOffset: -2, hint: 'Parenthesis group' },
+        { label: '[example] PRE/n', insert: '{term1} PRE/3 {term2}', hint: 'Ordered proximity' },
+        { label: '[example] W/n', insert: '{term1} W/3 {term2}', hint: 'Unordered proximity' }
+      ];
+
+      // Combine into a master list with categories
+      const CATALOG = [
+        { cat: 'Fields', items: FIELDS },
+        { cat: 'Operators', items: BOOL_OPS },
+        { cat: 'Proximity', items: PROX_OPS },
+        { cat: 'Year/Compare', items: COMPARABLES },
+        { cat: 'Snippets', items: SNIPPETS }
+      ];
+
+      // Attach wrapper and ghost overlay for inline ghost hints
+      const ta = document.getElementById('querybox');
+      if (!ta) return;
+
+      // Wrap the textarea so we can position the menu absolutely
+      const wrap = document.createElement('div');
+      wrap.className = 'scopus-ac-wrap';
+      ta.parentNode.insertBefore(wrap, ta);
+      wrap.appendChild(ta);
+
+      // Ghost layer to show the next token faintly
+      const ghost = document.createElement('div');
+      ghost.className = 'scopus-ghost';
+      ghost.style.display = 'none';
+      wrap.style.position = 'relative';
+      wrap.appendChild(ghost);
+
+      // Menu element
+      const menu = document.createElement('div');
+      menu.className = 'scopus-ac-menu';
+      menu.style.display = 'none';
+      wrap.appendChild(menu);
+
+      let state = {
+        open: false, items: [], activeIndex: 0,
+        triggerStart: 0, // index of token start in text
+        filter: ''        // user-typed filter
+      };
+
+      // Utility: get caret position and current token (since last whitespace or after '(')
+      function getContext() {
+        const pos = ta.selectionStart;
+        const text = ta.value;
+        const left = text.slice(0, pos);
+        // find the token start: after whitespace, after '(', after '-', after '{', after '"'
+        const m = left.match(/(?:^|[\s(\-"{])([^\s()"{}]*)$/);
+        const token = m ? m[1] : '';
+        const triggerStart = m ? (pos - token.length) : pos;
+        return { pos, token, triggerStart, text };
+      }
+
+      function buildCatalog(filter) {
+        const f = (filter || '').toUpperCase();
+        const out = [];
+        for (const section of CATALOG) {
+          for (const it of section.items) {
+            const hay = (it.label || it.insert || '').toUpperCase();
+            if (!f || hay.indexOf(f) >= 0) {
+              out.push({ section: section.cat, ...it });
+            }
+          }
+        }
+        // sensible priority: field codes first, then year, then booleans, proximity, snippets
+        const prio = { Fields: 0, 'Year/Compare': 1, Operators: 2, Proximity: 3, Snippets: 4 };
+        out.sort((a, b) => (prio[a.section] - prio[b.section]) || a.label.localeCompare(b.label));
+        return out.slice(0, 50);
+      }
+
+      function renderMenu(items) {
+        if (!items.length) { menu.style.display = 'none'; state.open = false; return; }
+        const html = items.map((it, idx) => {
+          const active = idx === state.activeIndex ? 'active' : '';
+          const hint = it.hint ? `<span class="scopus-ac-hint">${escapeHtml(it.hint)}</span>` : '';
+          return `<div class="scopus-ac-item ${active}" data-idx="${idx}">
                 <span><span class="badge bg-light text-dark me-2">${escapeHtml(it.section)}</span>${escapeHtml(it.label)}</span>
                 ${hint}
               </div>`;
-    }).join('');
-    menu.innerHTML = html;
-    menu.style.display = 'block';
-    state.open = true;
-  }
-
-  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-  function closeMenu(){ menu.style.display='none'; state.open=false; ghost.style.display='none'; }
-
-  // Position menu near the caret
-  function placeMenu() {
-    // simple heuristic: anchor to bottom-left of textarea; the box is wide enough
-    // For more precise placement, a caret pixel locator would be needed; not necessary here.
-    menu.style.top = (ta.offsetTop + ta.offsetHeight) + 'px';
-    menu.style.left = (ta.offsetLeft) + 'px';
-    menu.style.right = 'auto';
-  }
-
-  function setGhost(nextText) {
-    if (!nextText) { ghost.style.display='none'; return; }
-    const {pos, text} = {pos:ta.selectionStart, text:ta.value};
-    const before = text.slice(0, pos);
-    const after = text.slice(pos);
-    ghost.style.display='block';
-    ghost.style.padding = getComputedStyle(ta).padding;
-    ghost.style.font = getComputedStyle(ta).font;
-    ghost.style.lineHeight = getComputedStyle(ta).lineHeight;
-    ghost.style.borderRadius = getComputedStyle(ta).borderRadius;
-    ghost.innerHTML = escapeHtml(before) + '<span class="ghost-hint">' + escapeHtml(nextText) + '</span>' + escapeHtml(after);
-  }
-
-  // Insert selected item at current token
-  function applyItem(item) {
-    const ctx = getContext();
-    const insert = item.insert || item.label;
-    const before = ta.value.slice(0, ctx.triggerStart) + insert;
-    const after = ta.value.slice(ctx.pos);
-    ta.value = before + after;
-
-    // Caret placement with placeholders `${}`
-    let caret = ctx.triggerStart + insert.length;
-    if (typeof item.caretOffset === 'number') caret = ctx.triggerStart + insert.length + item.caretOffset;
-
-    // Expand `${}` placeholder by selecting it for immediate typing
-    const phStart = before.lastIndexOf('${');
-    if (phStart >= 0) {
-      const phEnd = before.indexOf('}', phStart);
-      if (phEnd > phStart) {
-        const s = phStart;
-        const e = phEnd + 1;
-        // remove ${} and place caret inside
-        ta.value = ta.value.slice(0, s) + ta.value.slice(s, e).replace('${}', '') + ta.value.slice(e);
-        caret = s;
+        }).join('');
+        menu.innerHTML = html;
+        menu.style.display = 'block';
+        state.open = true;
       }
-    }
 
-    ta.focus();
-    ta.setSelectionRange(caret, caret);
-    closeMenu();
-    textAreaChange && textAreaChange();
-  }
+      function escapeHtml(s) { return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
-  // Key handling
-  ta.addEventListener('keydown', (e) => {
-    if (!state.open) {
-      // quick expansions: on Enter with a trailing open function, auto add ')'
-      if (e.key === 'Enter') {
-        // let form logic proceed; no intervention
+      function closeMenu() { menu.style.display = 'none'; state.open = false; ghost.style.display = 'none'; }
+
+      // Position menu near the caret
+      function placeMenu() {
+        // simple heuristic: anchor to bottom-left of textarea; the box is wide enough
+        // For more precise placement, a caret pixel locator would be needed; not necessary here.
+        menu.style.top = (ta.offsetTop + ta.offsetHeight) + 'px';
+        menu.style.left = (ta.offsetLeft) + 'px';
+        menu.style.right = 'auto';
       }
-      return;
-    }
-    if (e.key === 'ArrowDown') { e.preventDefault(); state.activeIndex = Math.min(state.activeIndex+1, state.items.length-1); renderMenu(state.items); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); state.activeIndex = Math.max(state.activeIndex-1, 0); renderMenu(state.items); return; }
-    if (e.key === 'Tab' || e.key === 'Enter') {
-      e.preventDefault();
-      applyItem(state.items[state.activeIndex] || state.items[0]);
-      return;
-    }
-    if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
-  });
 
-  menu.addEventListener('mousedown', (e) => {
-    const item = e.target.closest('.scopus-ac-item');
-    if (!item) return;
-    const idx = Number(item.getAttribute('data-idx'));
-    applyItem(state.items[idx]);
-  });
+      function setGhost(nextText) {
+        if (!nextText) { ghost.style.display = 'none'; return; }
+        const { pos, text } = { pos: ta.selectionStart, text: ta.value };
+        const before = text.slice(0, pos);
+        const after = text.slice(pos);
+        ghost.style.display = 'block';
+        ghost.style.padding = getComputedStyle(ta).padding;
+        ghost.style.font = getComputedStyle(ta).font;
+        ghost.style.lineHeight = getComputedStyle(ta).lineHeight;
+        ghost.style.borderRadius = getComputedStyle(ta).borderRadius;
+        ghost.innerHTML = escapeHtml(before) + '<span class="ghost-hint">' + escapeHtml(nextText) + '</span>' + escapeHtml(after);
+      }
 
-  ta.addEventListener('input', handleInput);
-  ta.addEventListener('click', handleInput);
+      // Insert selected item at current token
+      function applyItem(item) {
+        const ctx = getContext();
+        const insert = item.insert || item.label;
+        const before = ta.value.slice(0, ctx.triggerStart) + insert;
+        const after = ta.value.slice(ctx.pos);
+        ta.value = before + after;
 
-  function handleInput() {
-    const {token, triggerStart} = getContext();
-    state.triggerStart = triggerStart;
-    state.filter = token;
+        // Caret placement with placeholders `${}`
+        let caret = ctx.triggerStart + insert.length;
+        if (typeof item.caretOffset === 'number') caret = ctx.triggerStart + insert.length + item.caretOffset;
 
-    // heuristics: open menu if starting a field, operator, comparator, or typing after space/(
-    // Show ghost hint for the top match
-    const items = buildCatalog(token);
-    state.items = items;
-    state.activeIndex = 0;
+        // Expand `${}` placeholder by selecting it for immediate typing
+        const phStart = before.lastIndexOf('${');
+        if (phStart >= 0) {
+          const phEnd = before.indexOf('}', phStart);
+          if (phEnd > phStart) {
+            const s = phStart;
+            const e = phEnd + 1;
+            // remove ${} and place caret inside
+            ta.value = ta.value.slice(0, s) + ta.value.slice(s, e).replace('${}', '') + ta.value.slice(e);
+            caret = s;
+          }
+        }
 
-    if (!token && ta.value.trim().length === 0) {
-      // prime with common starters
-      state.items = buildCatalog('TITLE-ABS-KEY');
-    }
+        ta.focus();
+        ta.setSelectionRange(caret, caret);
+        closeMenu();
+        textAreaChange && textAreaChange();
+      }
 
-    if (items.length) {
-      placeMenu();
-      renderMenu(items);
-      // ghost shows the remainder of the top suggestion minus what is already typed
-      const top = items[0].label || items[0].insert || '';
-      const remainder = (top.startsWith(token) ? top.slice(token.length) : '');
-      setGhost(remainder ? remainder : '');
-    } else {
-      closeMenu();
-    }
-  }
+      // Key handling
+      ta.addEventListener('keydown', (e) => {
+        if (!state.open) {
+          // quick expansions: on Enter with a trailing open function, auto add ')'
+          if (e.key === 'Enter') {
+            // let form logic proceed; no intervention
+          }
+          return;
+        }
+        if (e.key === 'ArrowDown') { e.preventDefault(); state.activeIndex = Math.min(state.activeIndex + 1, state.items.length - 1); renderMenu(state.items); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); state.activeIndex = Math.max(state.activeIndex - 1, 0); renderMenu(state.items); return; }
+        if (e.key === 'Tab' || e.key === 'Enter') {
+          e.preventDefault();
+          applyItem(state.items[state.activeIndex] || state.items[0]);
+          return;
+        }
+        if (e.key === 'Escape') { e.preventDefault(); closeMenu(); return; }
+      });
 
-  // Balanced delimiters: auto-close ) ] } and quotes
-  ta.addEventListener('keypress', (e) => {
-    const pairs = {'(' : ')', '{' : '}', '"' : '"'};
-    const closer = pairs[e.key];
-    if (!closer) return;
-    const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
-    const hasSelection = selEnd > selStart;
-    const val = ta.value;
-    e.preventDefault();
-    const insert = hasSelection ? e.key + val.slice(selStart, selEnd) + closer : e.key + closer;
-    ta.value = val.slice(0, selStart) + insert + val.slice(selEnd);
-    const caret = selStart + 1;
-    ta.setSelectionRange(caret, caret);
-    textAreaChange && textAreaChange();
-    handleInput();
-  });
+      menu.addEventListener('mousedown', (e) => {
+        const item = e.target.closest('.scopus-ac-item');
+        if (!item) return;
+        const idx = Number(item.getAttribute('data-idx'));
+        applyItem(state.items[idx]);
+      });
 
-  // Minimal validator: basic parentheses/braces balance + operator normalization
-  // Exposed globally to reuse before sending to backend if desired.
-  window.scopusQuery = {
-    normalize: function (q) {
-      // Normalize spacing around AND NOT, W/n, PRE/n
-      return q
-        .replace(/\s+/g,' ')
-        .replace(/\bAND\s+NOT\b/gi,'AND NOT')
-        .replace(/\bW\s*\/\s*(\d+)\b/gi,'W/$1')
-        .replace(/\bPRE\s*\/\s*(\d+)\b/gi,'PRE/$1')
-        .trim();
-    },
-    checkBalance: function(q) {
-      const stack = [];
-      const pairs = {')':'(', '}':'{'};
-      for (const ch of q) {
-        if (ch==='(' || ch==='{') stack.push(ch);
-        if (ch===')' || ch==='}') {
-          if (stack.pop() !== pairs[ch]) return false;
+      ta.addEventListener('input', handleInput);
+      ta.addEventListener('click', handleInput);
+
+      function handleInput() {
+        const { token, triggerStart } = getContext();
+        state.triggerStart = triggerStart;
+        state.filter = token;
+
+        // heuristics: open menu if starting a field, operator, comparator, or typing after space/(
+        // Show ghost hint for the top match
+        const items = buildCatalog(token);
+        state.items = items;
+        state.activeIndex = 0;
+
+        if (!token && ta.value.trim().length === 0) {
+          // prime with common starters
+          state.items = buildCatalog('TITLE-ABS-KEY');
+        }
+
+        if (items.length) {
+          placeMenu();
+          renderMenu(items);
+          // ghost shows the remainder of the top suggestion minus what is already typed
+          const top = items[0].label || items[0].insert || '';
+          const remainder = (top.startsWith(token) ? top.slice(token.length) : '');
+          setGhost(remainder ? remainder : '');
+        } else {
+          closeMenu();
         }
       }
-      return stack.length===0;
+
+      // Balanced delimiters: auto-close ) ] } and quotes
+      ta.addEventListener('keypress', (e) => {
+        const pairs = { '(': ')', '{': '}', '"': '"' };
+        const closer = pairs[e.key];
+        if (!closer) return;
+        const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+        const hasSelection = selEnd > selStart;
+        const val = ta.value;
+        e.preventDefault();
+        const insert = hasSelection ? e.key + val.slice(selStart, selEnd) + closer : e.key + closer;
+        ta.value = val.slice(0, selStart) + insert + val.slice(selEnd);
+        const caret = selStart + 1;
+        ta.setSelectionRange(caret, caret);
+        textAreaChange && textAreaChange();
+        handleInput();
+      });
+
+      // Minimal validator: basic parentheses/braces balance + operator normalization
+      // Exposed globally to reuse before sending to backend if desired.
+      window.scopusQuery = {
+        normalize: function (q) {
+          // Normalize spacing around AND NOT, W/n, PRE/n
+          return q
+            .replace(/\s+/g, ' ')
+            .replace(/\bAND\s+NOT\b/gi, 'AND NOT')
+            .replace(/\bW\s*\/\s*(\d+)\b/gi, 'W/$1')
+            .replace(/\bPRE\s*\/\s*(\d+)\b/gi, 'PRE/$1')
+            .trim();
+        },
+        checkBalance: function (q) {
+          const stack = [];
+          const pairs = { ')': '(', '}': '{' };
+          for (const ch of q) {
+            if (ch === '(' || ch === '{') stack.push(ch);
+            if (ch === ')' || ch === '}') {
+              if (stack.pop() !== pairs[ch]) return false;
+            }
+          }
+          return stack.length === 0;
+        }
+      };
+      // Expose internals so external hooks can be wired conditionally
+      try { window.__scopus_ac = { ta, menu, state, closeMenu }; } catch (_) { }
+    })();
+
+
+    // Wire global hooks only when completion is initialized
+    if (window.__scopus_ac) {
+      const { ta, menu, state, closeMenu } = window.__scopus_ac;
+      // Close on global Escape (even if the textarea is not focused)
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { try { closeMenu(); } catch (_) { } }
+      }, true);
+
+      // Close when the querybox loses focus, except when the blur is caused by interacting with the menu
+      state.suppressBlurClose = false;
+
+      // Mark that the next blur comes from interacting with the menu; use capture to run before blur
+      menu.addEventListener('pointerdown', function () {
+        state.suppressBlurClose = true;
+      }, true);
+
+      // If blur was not caused by menu interaction, close the panel
+      ta.addEventListener('blur', function () {
+        if (state.suppressBlurClose) {
+          setTimeout(function () { state.suppressBlurClose = false; }, 0);
+          return;
+        }
+        closeMenu();
+      });
+
+      // Optional: if the user clicks anywhere else in the document and the textarea
+      // is not focused, close the panel as well (defensive hardening).
+      document.addEventListener('pointerdown', function (e) {
+        if (!ta.contains(e.target) && !menu.contains(e.target)) {
+          try { closeMenu(); } catch (_) { }
+        }
+      }, true);
     }
-  };
-  // Expose internals so external hooks can be wired conditionally
-  try { window.__scopus_ac = { ta, menu, state, closeMenu }; } catch (_) {}
-})();
 
-
-// Wire global hooks only when completion is initialized
-if (window.__scopus_ac) {
-  const { ta, menu, state, closeMenu } = window.__scopus_ac;
-  // Close on global Escape (even if the textarea is not focused)
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { try { closeMenu(); } catch (_) {} }
-  }, true);
-
-  // Close when the querybox loses focus, except when the blur is caused by interacting with the menu
-  state.suppressBlurClose = false;
-
-  // Mark that the next blur comes from interacting with the menu; use capture to run before blur
-  menu.addEventListener('pointerdown', function () {
-    state.suppressBlurClose = true;
-  }, true);
-
-  // If blur was not caused by menu interaction, close the panel
-  ta.addEventListener('blur', function () {
-    if (state.suppressBlurClose) {
-      setTimeout(function(){ state.suppressBlurClose = false; }, 0);
-      return;
-    }
-    closeMenu();
-  });
-
-  // Optional: if the user clicks anywhere else in the document and the textarea
-  // is not focused, close the panel as well (defensive hardening).
-  document.addEventListener('pointerdown', function (e) {
-    if (!ta.contains(e.target) && !menu.contains(e.target)) {
-      try { closeMenu(); } catch (_) {}
-    }
-  }, true);
-}
-
-</script>
+  </script>
 
 </body>
+
 </html>

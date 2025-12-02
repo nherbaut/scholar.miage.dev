@@ -26,7 +26,12 @@
     
     
     <td>{{year}}</td>
-    <td>{{title}}</td>
+    <td>
+      {{title}}
+      {{#has_abstract}}
+      <i class="fas fa-file-alt text-muted ms-1" aria-hidden="true" title="{{abstract}}"></i>
+      {{/has_abstract}}
+    </td>
     
 
 <!--------------------- Authors -------------------->
@@ -56,13 +61,12 @@
 <!--------------------- Download Links -------------------->
 
  <td>
-      
-            {{#oa_url}}
-            <a target="_blank" href="{{oa_url}}">Open Access version</a>
-            {{/oa_url}}
-            {{^oa_url}}
+            {{#is_oa}}
+            <a target="_blank" href="{{oa_link}}">Open Access version</a>
+            {{/is_oa}}
+            {{^is_oa}}
             <a href="https://scholar.google.com/scholar?q={{title}}" target="_blank">No OA Found, check Google Scholar</a>
-            {{/oa_url}}</td>
+            {{/is_oa}}</td>
 
 <!--------------------- Snowball  -------------------->    
 

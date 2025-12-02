@@ -278,7 +278,7 @@ def get_ref_for_doi(doi):
 def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None, existing_data={}):
     dois = []
 
-    context = type('', (object,), {"success": 0, "failed": 0,"arxiv":0})()
+    context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0})()
     client_results_bucket_size = min(max(10, count / 20), 200)
     client_bucket = []
     for i in range(0, min(MAX_RESULTS_QUERY, count), 25):
@@ -319,11 +319,10 @@ def get_papers(count, query, xref, arxiv=False, emitt=lambda *args, **kwargs: No
             client_bucket = []
         dois = dois + bucket
 
-    if arxiv:
-        arxiv_papers = []
-        extract_data_arxiv(dois, arxiv_papers, get_arxiv_results(
-            query).entries, context, call_back)
-        emitt('doi_results', arxiv_papers)
+    arxiv_papers = []
+    extract_data_arxiv(dois, arxiv_papers, get_arxiv_results(
+        query).entries, context, call_back, add_arxiv_results=arxiv)
+    emitt('doi_results', arxiv_papers)
 
     print(len(dois))
     emitt('doi_export_done', dois)
@@ -392,7 +391,7 @@ def extract_data_scopus(bucket, entry, context, call_back):
         pass
 
 
-def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back):
+def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back, add_arxiv_results=False):
 
     scopus_papers = {d["title"]: d for d in dois}
 
@@ -408,33 +407,34 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back):
                 f"updated {scopus_papers[paper.title.value]['doi']} from arXiv")
             bucket.append(scopus_papers[paper.title.value])
         else:
-            authors_list = [{"display_name": a.name, "orcid": "",
-                             "openalex": ""} for a in paper.authors]
+            if add_arxiv_results:
+                authors_list = [{"display_name": a.name, "orcid": "",
+                                "openalex": ""} for a in paper.authors]
 
-            bucket.append({"doi": paper.id_, "title": paper.title.value,
-                           "year": paper.published.year,
-                           "x-precise-date": str(paper.published),
-                           "pubtitle": "arXiv.org",
-                           "pub_rank": "",
-                           "rank_source": "",
-                           "hindex": "",
-                           "X-OA": True,
-                           "X-FirstAuthor": paper.authors[0].name,
-                           "X-Country-First-Author": "",
-                           "X-Country-First-affiliation": "",
-                           "X-FirstAuthor-ORCID": "",
-                           "X-FirstAuthor-OpenAlex": "",
-                           "X-IsReferencedByCount": "",
-                           "X-subject": "",
-                           "X-refcount": "",
-                           "X-abstract": paper.summary.value,
-                           "X-authors": ", ".join([a.name for a in paper.authors]),
-                           "X-authors-list":  authors_list,
-                           "X-OA-URL": paper.links[0].href
-                           })
+                bucket.append({"doi": paper.id_, "title": paper.title.value,
+                            "year": paper.published.year,
+                            "x-precise-date": str(paper.published),
+                            "pubtitle": "arXiv.org",
+                            "pub_rank": "",
+                            "rank_source": "",
+                            "hindex": "",
+                            "X-OA": True,
+                            "X-FirstAuthor": paper.authors[0].name,
+                            "X-Country-First-Author": "",
+                            "X-Country-First-affiliation": "",
+                            "X-FirstAuthor-ORCID": "",
+                            "X-FirstAuthor-OpenAlex": "",
+                            "X-IsReferencedByCount": "",
+                            "X-subject": "",
+                            "X-refcount": "",
+                            "X-abstract": paper.summary.value,
+                            "X-authors": ", ".join([a.name for a in paper.authors]),
+                            "X-authors-list":  authors_list,
+                            "X-OA-URL": paper.links[0].href
+                            })
 
-            context.arxiv += 1
-            call_back(context.success, context.failed, context.arxiv)
+                context.arxiv += 1
+                call_back(context.success, context.failed, context.arxiv)
 
 
 def load_response_from_scpus(bucket, entry):
@@ -732,7 +732,7 @@ def escape_query(query):
     return urllib.parse.quote(query)
 
 
-def count_results_for_query(query, include_arxive=False):
+def count_results_for_query(query, include_arxiv=False):
     # print(f"query with {API_KEY} API_KEY")
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
@@ -740,7 +740,7 @@ def count_results_for_query(query, include_arxive=False):
     if "search-results" in response:
 
         count = int(response["search-results"]["opensearch:totalResults"])
-        if include_arxive:
+        if include_arxiv:
             return count+len(get_arxiv_results(query).entries)
         else:
             return count
