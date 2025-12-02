@@ -1,0 +1,59 @@
+{% set current = active_page|default('') %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css" rel="stylesheet" />
+<style>
+  /* Ensure navbar styling is consistent across pages */
+  .ms-navbar {
+    background: #ffffff !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+  .ms-navbar .nav-link {
+    color: #1b2430;
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+  }
+  .ms-navbar .nav-link.active {
+    font-weight: 600;
+  }
+  .ms-navbar .nav-link:hover {
+    color: #0d6efd;
+  }
+  .ms-navbar .navbar-brand {
+    color: #1b2430;
+  }
+</style>
+
+{% macro nav_link(path, label, key, icon_class='', helper_href='#', helper_title='Helper placeholder') -%}
+  <li class="nav-item d-flex align-items-center">
+    <a class="nav-link d-flex align-items-center gap-1 {% if current == key %}active{% endif %}" {% if current == key %}aria-current="page"{% endif %} href="{{ path }}">
+      {% if icon_class %}<i class="{{ icon_class }}" aria-hidden="true"></i>{% endif %}
+      <span>{{ label }}</span>
+    </a>
+    <a class="small text-muted ms-1 nav-link py-0" href="{{ helper_href }}" title="{{ helper_title }}" aria-label="{{ helper_title }}">
+      <i class="fas fa-question-circle" aria-hidden="true"></i>
+    </a>
+  </li>
+{%- endmacro %}
+
+<nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top ms-navbar">
+  <div class="container">
+    <a class="navbar-brand fw-bold" href="/"><span class="text-primary">MIAGE</span> Scholar</a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#msNav"
+            aria-controls="msNav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="msNav">
+      <ul class="navbar-nav ms-3">
+        {{ nav_link('/query/analysis', 'Query Debug', 'debug', 'fas fa-search', '#help-debug', 'Understand how the terms of your query influence your papers count') }}
+        {{ nav_link('/history', 'Query Logs', 'history', 'fas fa-history', '#help-history', 'Review all queries done through MiageScholar') }}
+        {{ nav_link('/networks', 'Citation Networks', 'networks', 'fas fa-project-diagram', '#help-networks', 'Analyze the snowball for your query') }}
+        {{ nav_link('/feeds', 'RSS Feeds', 'feeds', 'fas fa-rss', '#help-feeds', 'View RSS feeds on selected queries') }}
+        {{ nav_link('/venues', 'Authors tool', 'venues', 'fas fa-users', '#help-authors', 'Find where authors publish together') }}
+        {{ nav_link('/stars', 'Stars', 'stars', 'fas fa-star', '#help-stars', 'View your saved articles') }}
+      </ul>
+    </div>
+  </div>
+</nav>
