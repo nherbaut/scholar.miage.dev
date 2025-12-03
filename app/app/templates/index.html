@@ -347,6 +347,7 @@
             <fieldset>
               {% if count %}
               <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
+              <div id="arxivWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
             </fieldset>
             <div class="mt-3 d-flex flex-wrap align-items-center">
               <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
@@ -452,6 +453,7 @@
             </div>
 
             <textarea id="querybox" name="query" onkeyup="textAreaChange()">{{ query }}</textarea>
+            <div id="arxivWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
 
             <div class="mt-3 d-flex flex-wrap align-items-center">
               <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()" />
@@ -561,12 +563,27 @@
 
   <!-- Fetch/count behavior (xref based solely on checkbox state) -->
   <script>
+    function showArxivWarning(message) {
+      const el = document.getElementById("arxivWarning");
+      if (!el) { return; }
+      el.textContent = message || "arXiv results are unavailable for this query.";
+      el.classList.remove("d-none");
+    }
+
+    function clearArxivWarning() {
+      const el = document.getElementById("arxivWarning");
+      if (!el) { return; }
+      el.textContent = "";
+      el.classList.add("d-none");
+    }
+
     function sendDoisRequest(evt) {
       const btn = document.getElementById("main_button");
       document.getElementById("xref").disabled = true;
       const arxivCheckbox = document.getElementById("arxiv");
       if (arxivCheckbox) { arxivCheckbox.disabled = true; }
       btn.disabled = true;
+      clearArxivWarning();
 
       btn.textContent = "Fetching…";
       btn.classList.remove('btn-primary', 'btn-warning');
@@ -587,6 +604,7 @@
       btn.textContent = "Counting…";
       btn.classList.remove('btn-success', 'btn-warning');
       btn.classList.add('btn-primary');
+      clearArxivWarning();
       socket.emit('count', { query: document.getElementById("querybox").value, arxiv: arxivCheckbox ? arxivCheckbox.checked : false });
     }
 
@@ -653,6 +671,47 @@
         }
       }
       item_info.push(doiItem);
+    }
+
+    function dedupeItems(items) {
+      const deduped = [];
+      const seen = {};
+      for (const item of items || []) {
+        const doi = item["doi"];
+        if (doi && Object.prototype.hasOwnProperty.call(seen, doi)) {
+          deduped[seen[doi]] = item;
+        } else {
+          deduped.push(item);
+          if (doi) { seen[doi] = deduped.length - 1; }
+        }
+      }
+      return deduped;
+    }
+
+    function renderFullResults(items) {
+      bag_of_doi = {};
+      item_info = [];
+      const tbody = document.getElementById("doi_table");
+      if (!tbody) { return; }
+
+      // reset DataTable if already initialized
+      if (table && typeof table.destroy === 'function') {
+        try { table.destroy(); } catch (_) { }
+        table = undefined;
+      }
+
+      const dedupedItems = dedupeItems(items);
+      let rendered_html = "";
+      for (const doi_item of dedupedItems) {
+        rendered_html += add_item_to_table(doi_item);
+        if (doi_item["doi"]) {
+          bag_of_doi[doi_item["doi"]] = doi_item;
+        }
+        upsertItemInfo(doi_item);
+      }
+      tbody.innerHTML = rendered_html;
+      updateOpenAccessProgress();
+      try { MSStars.refreshStarIcons(); } catch (e) { }
     }
 
     function updateOpenAccessProgress() {
@@ -758,6 +817,7 @@ journal = { { ${content["pubtitle"]} } },
     function textAreaChange() {
       // Persist query
       updateQueryStorage(document.getElementById("querybox").value);
+      clearArxivWarning();
       // If user edits the query, reset UI to the "Count" state
       try {
         const btn = document.getElementById('main_button');
@@ -778,6 +838,11 @@ journal = { { ${content["pubtitle"]} } },
 
     const socket = io();
     socket.on('connect', function () { socket.emit('my event', { data: 'I\'m connected!' }); });
+
+    socket.on('arxiv_warning', (payload) => {
+      const msg = (payload && payload.message) ? payload.message : "arXiv results are unavailable for this query.";
+      showArxivWarning(msg);
+    });
 
     // Count handler: update main button label with actual number and switch to fetch
     socket.on('count', (count) => {
@@ -820,6 +885,9 @@ journal = { { ${content["pubtitle"]} } },
       const pbArxiv = document.getElementById("pb_arxiv");
       if (pbArxiv) { pbArxiv.classList.remove("progress-bar-striped"); }
       document.getElementById("pb_failure").classList.remove("progress-bar-striped");
+
+      // Replace table content with final, deduped payload
+      renderFullResults(data || []);
 
       // Reveal unified toolbar
       const grp = document.getElementById('postFetchGroup');
@@ -1003,6 +1071,7 @@ journal = { { ${content["pubtitle"]} } },
     function resetAll() {
       bag_of_doi = {};
       latestQueryId = null;
+      clearArxivWarning();
       // Reset UI
       const btn = document.getElementById("main_button");
       btn.textContent = "Count Results";

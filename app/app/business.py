@@ -60,6 +60,7 @@ _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
 
 
+
 def _cached_requests_session():
     REDIS_URL = os.environ.get("REDIS_URL", "")
 
@@ -275,7 +276,8 @@ def get_ref_for_doi(doi):
     print(result)
 
 
-def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None, existing_data={}, count_arxiv=0):
+def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
+               existing_data={}, count_arxiv=0, arxiv_warning=None):
     dois = []
 
     context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0})()
@@ -304,7 +306,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
         if xref:
             futures = [
-                executor_openAlex.submit(extract_data_openalex, bucket,
+                executor_openAlex.submit(extract_data_openalex_from_scopus, bucket,
                                          entry, context, call_back)
                 for entry in entries
             ]
@@ -322,17 +324,63 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         dois = dois + bucket
 
     arxiv_papers = []
-    extract_data_arxiv(dois, arxiv_papers, get_arxiv_results(
-        query).entries, context, call_back, add_arxiv_results=arxiv)
+    arxiv_entries = []
+    arxiv_id_overrides = {}
+    arxiv_workmap = {}
+    try:
+        arxiv_entries = get_arxiv_results(
+            query, on_unsupported=arxiv_warning).entries
+    except ValueError:
+        arxiv_entries = []
+
+    if xref and arxiv_entries:
+        arxiv_id_overrides, arxiv_workmap = enrich_arxiv_with_openalex(arxiv_entries)
+
+    extract_data_arxiv(dois, arxiv_papers, arxiv_entries,
+                       context, call_back, add_arxiv_results=arxiv,
+                       id_overrides=arxiv_id_overrides,
+                       works_by_arxiv_id=arxiv_workmap)
     if arxiv:
         emitt('doi_results', arxiv_papers)
 
     if arxiv:
         dois = dois + arxiv_papers
 
-    print(len(dois))
+    
     emitt('doi_export_done', dois)
     return dois
+
+
+def enrich_arxiv_with_openalex(arxiv_entries):
+    """
+    Resolve arXiv entries to OpenAlex works by title.
+    Returns:
+        overrides: mapping of original arXiv ids -> OpenAlex ids
+        works: mapping of original arXiv ids -> OpenAlex work payloads
+    """
+    overrides = {}
+    works = {}
+    for paper in arxiv_entries:
+        title = getattr(getattr(paper, "title", None), "value", "")
+        if not title:
+            continue
+        try:
+            candidates = Works().filter(title={"search": title}).get()
+            if candidates and len(candidates) > 0:
+                first = candidates[0]
+                if isinstance(first, dict):
+                    work = first
+                    oa_id = first.get("id")
+                else:
+                    work = first.__dict__ if hasattr(first, "__dict__") else None
+                    oa_id = getattr(first, "id", None)
+                if oa_id and work:
+                    overrides[paper.id_] = oa_id
+                    works[paper.id_] = work
+        except Exception:
+            # best-effort; skip on any API error
+            continue
+    return overrides, works
 
 
 def complete_scopus_extraction(scopus_partial_data, r):
@@ -352,7 +400,7 @@ def complete_scopus_extraction(scopus_partial_data, r):
     scopus_partial_data["X-OA-URL"] = oa_url
 
 
-def extract_data_openalex(bucket, entry, context, call_back):
+def extract_data_openalex_from_scopus(bucket, entry, context, call_back):
     if "prism:doi" in entry:
         context.success += 1
     else:
@@ -397,15 +445,20 @@ def extract_data_scopus(bucket, entry, context, call_back):
         pass
 
 
-def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back, add_arxiv_results=False):
+def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
+                       add_arxiv_results=False, complete_data_openalex=False,
+                       id_overrides=None, works_by_arxiv_id=None):
 
     scopus_papers = {d["title"]: d for d in dois}
+    id_overrides = id_overrides or {}
+    works_by_arxiv_id = works_by_arxiv_id or {}
 
     for idx, paper in enumerate(arxiv_results, start=1):
 
         if paper.title.value in scopus_papers:
+            target_id = id_overrides.get(paper.id_, paper.id_)
             if scopus_papers[paper.title.value]["doi"] == "":
-                scopus_papers[paper.title.value]["doi"] = paper.id_
+                scopus_papers[paper.title.value]["doi"] = target_id
             scopus_papers[paper.title.value]["X-OA-URL"] = paper.links[0].href
             scopus_papers[paper.title.value]["X-abstract"] = paper.summary.value
             scopus_papers[paper.title.value]["X-OA"] = True
@@ -417,27 +470,32 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back, add_arxi
                 authors_list = [{"display_name": a.name, "orcid": "",
                                 "openalex": ""} for a in paper.authors]
 
-                bucket.append({"doi": paper.id_, "title": paper.title.value,
-                               "year": paper.published.year,
-                               "x-precise-date": str(paper.published),
-                               "pubtitle": "arXiv.org",
-                               "pub_rank": "",
-                               "rank_source": "",
-                               "hindex": "",
-                               "X-OA": True,
-                               "X-FirstAuthor": paper.authors[0].name,
-                               "X-Country-First-Author": "",
-                               "X-Country-First-affiliation": "",
-                               "X-FirstAuthor-ORCID": "",
-                               "X-FirstAuthor-OpenAlex": "",
-                               "X-IsReferencedByCount": "",
-                               "X-subject": "",
-                               "X-refcount": "",
-                               "X-abstract": paper.summary.value,
-                               "X-authors": ", ".join([a.name for a in paper.authors]),
-                               "X-authors-list":  authors_list,
-                               "X-OA-URL": paper.links[0].href
-                               })
+                work = works_by_arxiv_id.get(paper.id_)
+                if work:
+                    load_response_from_openAlex_arxiv(
+                        bucket, work, paper, id_overrides.get(paper.id_, paper.id_))
+                else:
+                    bucket.append({"doi": id_overrides.get(paper.id_, paper.id_), "title": paper.title.value,
+                                   "year": paper.published.year,
+                                   "x-precise-date": str(paper.published),
+                                   "pubtitle": "arXiv.org",
+                                   "pub_rank": "",
+                                   "rank_source": "",
+                                   "hindex": "",
+                                   "X-OA": True,
+                                   "X-FirstAuthor": paper.authors[0].name,
+                                   "X-Country-First-Author": "",
+                                   "X-Country-First-affiliation": "",
+                                   "X-FirstAuthor-ORCID": "",
+                                   "X-FirstAuthor-OpenAlex": "",
+                                   "X-IsReferencedByCount": "",
+                                   "X-subject": "",
+                                   "X-refcount": "",
+                                   "X-abstract": paper.summary.value,
+                                   "X-authors": ", ".join([a.name for a in paper.authors]),
+                                   "X-authors-list":  authors_list,
+                                   "X-OA-URL": paper.links[0].href
+                                   })
 
                 context.arxiv += 1
                 if context.arxiv % 25 == 0:
@@ -688,6 +746,66 @@ def load_response_from_openAlex(bucket, r, entry):
                    })
 
 
+def load_response_from_openAlex_arxiv(bucket, work, paper, resolved_id):
+    """Build a full record for an arXiv paper using OpenAlex data."""
+
+    def from_obj(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    oa_url = from_obj(from_obj(work, "open_access", {}), "oa_url", "")
+    is_oa = from_obj(from_obj(work, "open_access", {}), "is_oa", True)
+
+    authorships = from_obj(work, "authorships", []) or []
+    authors_list = []
+    for a in authorships:
+        if isinstance(a, dict):
+            auth = a.get("author", {})
+            display_name = (auth or {}).get("display_name") or ""
+            orcid = (auth or {}).get("orcid") or ""
+            author_id = (auth or {}).get("id") or ""
+        else:
+            display_name = getattr(getattr(a, "author", None), "display_name", "") or ""
+            orcid = getattr(getattr(a, "author", None), "orcid", "") or ""
+            author_id = getattr(getattr(a, "author", None), "id", "") or ""
+        if display_name:
+            authors_list.append({"display_name": display_name,
+                                 "orcid": orcid.split("/")[-1] if orcid else "",
+                                 "openalex": author_id})
+
+    has_inv = isinstance(work, dict) and "abstract_inverted_index" in work
+    abstract = inverted_abstrct_to_abstract(from_obj(work, "abstract_inverted_index", None)) if has_inv else None
+    if not abstract:
+        abstract = paper.summary.value if getattr(paper, "summary", None) else ""
+
+    primary_topic = from_obj(work, "primary_topic", {}) or {}
+    subjects = from_obj(primary_topic, "display_name", "")
+
+    bucket.append({
+        "doi": resolved_id,
+        "title": from_obj(work, "title", paper.title.value if getattr(paper, "title", None) else ""),
+        "year": from_obj(work, "publication_year", getattr(getattr(paper, "published", None), "year", "")),
+        "x-precise-date": from_obj(work, "publication_date", str(getattr(paper, "published", ""))),
+        "pubtitle": from_obj(from_obj(work, "host_venue", {}), "display_name", "arXiv.org"),
+        "pub_rank": "",
+        "rank_source": "",
+        "hindex": "",
+        "X-OA": is_oa,
+        "X-FirstAuthor": authors_list[0]["display_name"] if authors_list else (paper.authors[0].name if getattr(paper, "authors", None) else ""),
+        "X-Country-First-Author": "",
+        "X-Country-First-affiliation": "",
+        "X-FirstAuthor-ORCID": authors_list[0].get("orcid", "") if authors_list else "",
+        "X-FirstAuthor-OpenAlex": authors_list[0].get("openalex", "") if authors_list else "",
+        "X-IsReferencedByCount": from_obj(work, "cited_by_count", ""),
+        "X-subject": subjects,
+        "X-refcount": from_obj(work, "referenced_works_count", ""),
+        "X-abstract": abstract,
+        "X-authors": ", ".join(a["display_name"] for a in authors_list) if authors_list else ", ".join([a.name for a in getattr(paper, "authors", [])]),
+        "X-authors-list": authors_list if authors_list else [{"display_name": a.name, "orcid": "", "openalex": ""} for a in getattr(paper, "authors", [])],
+        "X-OA-URL": oa_url or (paper.links[0].href if getattr(paper, "links", []) else "")
+    })
+
 def load_response_from_xref(bucket, xref_json_resp, entry):
     first_author = [a for a in xref_json_resp.get(
         "author", []) if a.get("sequence", "") == "first"]
@@ -743,7 +861,7 @@ def escape_query(query):
     return urllib.parse.quote(query)
 
 
-def count_results_for_query(query, include_arxiv=False):
+def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
     # print(f"query with {API_KEY} API_KEY")
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
@@ -752,7 +870,8 @@ def count_results_for_query(query, include_arxiv=False):
 
         count = int(response["search-results"]["opensearch:totalResults"])
         if include_arxiv:
-            return count, len(get_arxiv_results(query).entries)
+            return count, len(get_arxiv_results(query, on_unsupported=arxiv_warning).entries)
+            
         else:
             return count, 0
     else:

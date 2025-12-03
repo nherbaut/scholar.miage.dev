@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List
+from typing import Callable, List, Optional
 import urllib.request as libreq
 from urllib.parse import quote
 import xml.dom.minidom
@@ -277,15 +277,34 @@ def term_from_node(node: Node) -> str:
     raise ValueError(f"Function argument must be a simple term, got {node}")
 
 
-def func_to_target(name: str, arg_node: Node) -> str:
+def func_to_target(name: str, arg_node: Node, on_unsupported: Optional[Callable[[str], None]] = None) -> str:
     up = name.upper()
     term = term_from_node(arg_node)
 
-    if up == 'TITLE':
-        return f'ti:"{term}"'
-    if up == 'TITLE-ABS-KEY':
-        return f'(ti:"{term}" OR abs:"{term}")'
-    return f'{name}:"{term}"'
+    mapping = {
+        'TITLE': lambda t: f'ti:"{t}"',
+        'TITLE-ABS-KEY': lambda t: f'(ti:"{t}" OR abs:"{t}")',
+        'TITLE-ABS-KEY-AUTH': lambda t: f'(ti:"{t}" OR abs:"{t}" OR au:"{t}")',
+        'ABS': lambda t: f'abs:"{t}"',
+        'AUTHOR-NAME': lambda t: f'au:"{t}"',
+        'AUTH': lambda t: f'au:"{t}"',
+        'AUTHLASTNAME': lambda t: f'au:"{t}"',
+        'AUTHFIRST': lambda t: f'au:"{t}"',
+        'FIRSTAUTH': lambda t: f'au:"{t}"',
+        'ALL': lambda t: f'all:"{t}"',
+        'KEY': lambda t: f'all:"{t}"',
+    }
+
+    if up in mapping:
+        return mapping[up](term)
+
+    msg = f"arXiv results are unavailable because Scopus function '{name}' is not supported."
+    if on_unsupported:
+        try:
+            on_unsupported(msg)
+        except Exception:
+            pass
+    raise ValueError(f"Unsupported Scopus function '{name}'")
 
 
 def year_range_to_target(y_gt: str, y_lt: str, parent_prec: int) -> str:
@@ -298,7 +317,8 @@ def year_range_to_target(y_gt: str, y_lt: str, parent_prec: int) -> str:
     return s
 
 
-def to_target(node: Node, parent_prec: int = 0) -> str:
+def to_target(node: Node, parent_prec: int = 0,
+              on_unsupported: Optional[Callable[[str], None]] = None) -> str:
     if isinstance(node, Bin):
         # special-case: PUBYEAR > A AND PUBYEAR < B (any order)
         if node.op == 'AND':
@@ -312,15 +332,15 @@ def to_target(node: Node, parent_prec: int = 0) -> str:
                     return year_range_to_target(y_gt, y_lt, parent_prec)
 
         prec = 1 if node.op == 'OR' else 2
-        left_s = to_target(node.left, prec)
-        right_s = to_target(node.right, prec + 1)
+        left_s = to_target(node.left, prec, on_unsupported)
+        right_s = to_target(node.right, prec + 1, on_unsupported)
         s = f"{left_s} {node.op} {right_s}"
         if prec < parent_prec:
             return f"({s})"
         return s
 
     if isinstance(node, Func):
-        return func_to_target(node.name, node.arg)
+        return func_to_target(node.name, node.arg, on_unsupported)
 
     if isinstance(node, Year):
         if node.op == '>':
@@ -338,23 +358,24 @@ def to_target(node: Node, parent_prec: int = 0) -> str:
     raise TypeError(node)
 
 
-def convert_query(query: str) -> str:
+def convert_query(query: str, on_unsupported: Optional[Callable[[str], None]] = None) -> str:
     ast = canonicalize(query)
-    return to_target(ast)
+    return to_target(ast, on_unsupported=on_unsupported)
 
 
-def get_arxiv_results(scopus_query):
-    query = quote(convert_query(scopus_query), safe='')
-    print(f"arxive query: {query}")
+def get_arxiv_results(scopus_query: str,
+                      on_unsupported: Optional[Callable[[str], None]] = None):
+    
     try:
+        query = quote(convert_query(scopus_query, on_unsupported=on_unsupported), safe='')
+        print(f"arxive query: {query}")
         with libreq.urlopen(f'http://export.arxiv.org/api/query?search_query={query}&start=0&max_results=1000') as url:
             return atoma.parse_atom_bytes(url.read())
     except:
-        return []
+        return atoma.parse_atom_bytes('<?xml version="1.0" encoding="UTF-8"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom" ><id>https://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id></feed>'.encode("UTF-8"))
 
 
 if __name__ == "__main__":
-	for i in range(2010,2026):
-		q = f'TITLE("You Only Debias Once: Towards Flexible Accuracy-Fairness Trade-offs at Inference Time")'
+		q = f'(TITLE-ABS-KEY("life cycle assessment") AND TITLE-ABS-KEY("artificial intelligence")) AND (SUBJAREA("CENG") )'
 		data = get_arxiv_results(q)
-		print(f"{i}: {len(data.entries)}")
+		print(f"{len(data.entries)}")

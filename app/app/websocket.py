@@ -36,9 +36,17 @@ def create_feed(json_data):
 
 @socketio.on('count')
 def handle_count(json_data, log_query=False):
+    include_arxiv=json_data["arxiv"]
+    
+    if include_arxiv:
+        def arxiv_warning(message: str):
+            emit("arxiv_warning", {"message": message})
+    else:
+        def arxiv_warning(message: str):
+            pass
 
     count_scopus, count_arxiv = count_results_for_query(
-        json_data["query"], include_arxiv=json_data["arxiv"])
+        json_data["query"], include_arxiv=include_arxiv, arxiv_warning=arxiv_warning)
 
     n = ScpusRequest(query=json_data["query"],
                      ip="0.0.0.0", count=count_scopus+count_arxiv, fetched=False)
@@ -51,7 +59,7 @@ def handle_count(json_data, log_query=False):
 
 
 @socketio.on("get_venue_openalex")
-def handle_get_venues(openalex_id):
+def get_venue_openalex(openalex_id):
     def venue_emit(venue):
         emit("venue_update",  venue)
 
@@ -78,9 +86,18 @@ def handle_get_dois(json_data):
     the_query = json_data["query"]
     xref = json_data["xref"]
     arxiv = json_data["arxiv"]
-    count_scopus, count_arxiv = count_results_for_query(
-        the_query, include_arxiv=arxiv)
-    dois = get_papers(count_scopus, the_query, xref=xref,
-                      arxiv=arxiv, emitt=emit, count_arxiv=count_arxiv)
 
-    emit("dois", {"dois": dois})
+    if arxiv:
+        def arxiv_warning(message: str):
+            emit("arxiv_warning", {"message": message})
+    else:
+        def arxiv_warning(message: str):
+            pass
+
+    count_scopus, count_arxiv = count_results_for_query(
+        the_query, include_arxiv=arxiv, arxiv_warning=arxiv_warning)
+    dois = get_papers(count_scopus, the_query, xref=xref,
+                      arxiv=arxiv, emitt=emit, count_arxiv=count_arxiv,
+                      arxiv_warning=arxiv_warning)
+
+    #emit("dois", {"dois": dois})
