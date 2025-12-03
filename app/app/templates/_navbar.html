@@ -26,12 +26,12 @@
 
 {% macro nav_link(path, label, key, icon_class='', helper_href='#', helper_title='Helper placeholder') -%}
   <li class="nav-item d-flex align-items-center">
-    <a class="nav-link d-flex align-items-center gap-1 {% if current == key %}active{% endif %}" {% if current == key %}aria-current="page"{% endif %} href="{{ path }}">
-      {% if icon_class %}<i class="{{ icon_class }}" aria-hidden="true"></i>{% endif %}
-      <span>{{ label }}</span>
-    </a>
-    <a class="small text-muted ms-1 nav-link py-0" href="{{ helper_href }}" title="{{ helper_title }}" aria-label="{{ helper_title }}">
-      <i class="fas fa-question-circle" aria-hidden="true"></i>
+    <a class="nav-link d-inline-flex align-items-center gap-1 {% if current == key %}active{% endif %}"
+       {% if current == key %}aria-current="page"{% endif %}
+       href="{{ path }}" title="{{ helper_title }}" aria-label="{{ helper_title }}">
+      {% if icon_class %}<i class="{{ icon_class }}" aria-hidden="true" title="{{ helper_title }}"></i>{% endif %}
+      <span title="{{ helper_title }}">{{ label }}</span>
+      <sup class="fw-bold ms-1" title="{{ helper_title }}">?</sup>
     </a>
   </li>
 {%- endmacro %}

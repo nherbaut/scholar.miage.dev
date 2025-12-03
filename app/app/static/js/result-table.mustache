@@ -22,7 +22,15 @@
     </td>
 
     
-        <th scope="row"><a target="_blank" href="{{doi}}">{{doi}}</a></th>
+        <th scope="row">
+          {{#peer_reviewed}}
+          <i class="fas fa-check-circle text-success me-1" aria-hidden="true" title="Peer-reviewed (indexed)"></i>
+          {{/peer_reviewed}}
+          {{#uncertain_review}}
+          <i class="fas fa-exclamation-circle text-warning me-1" aria-hidden="true" title="Preprint / not peer-reviewed (arXiv)"></i>
+          {{/uncertain_review}}
+          <a target="_blank" href="{{doi}}">{{doi}}</a>
+        </th>
     
     
     <td>{{year}}</td>
