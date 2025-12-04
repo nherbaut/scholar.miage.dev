@@ -414,7 +414,9 @@ def analyze_query():
     query = payload.get("query")
     if not query:
         return abort(400, description="Missing query")
-    data = get_json_analyzed_query(query, count_results_for_query)
+    def count_results_for_query_sum(query):
+        return sum(count_results_for_query(query))
+    data = get_json_analyzed_query(query, count_results_for_query_sum)
     return app.response_class(
         response=data,
         status=200,

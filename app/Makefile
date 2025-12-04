@@ -1,4 +1,4 @@
-IMAGE ?= nherbaut/scpushack:nextnet
+IMAGE ?= nherbaut/scpushack:2.1
 
 .PHONY: build push run stop log
 
