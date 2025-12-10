@@ -24,10 +24,12 @@
     
         <th scope="row">
           {{#peer_reviewed}}
-          <i class="fas fa-check-circle text-success me-1" aria-hidden="true" title="Peer-reviewed (indexed)"></i>
+          <img src="https://cdn.simpleicons.org/scopus/009639" alt="Scopus" title="Peer-reviewed (indexed)"
+               style="width:18px;height:18px;vertical-align:middle;margin-right:6px;">
           {{/peer_reviewed}}
           {{#uncertain_review}}
-          <i class="fas fa-exclamation-circle text-warning me-1" aria-hidden="true" title="Preprint / not peer-reviewed (arXiv)"></i>
+          <img src="https://cdn.simpleicons.org/arxiv/B31B1B" alt="arXiv" title="Preprint / not peer-reviewed (arXiv)"
+               style="width:18px;height:18px;vertical-align:middle;margin-right:6px;">
           {{/uncertain_review}}
           <a target="_blank" href="{{doi}}">{{doi}}</a>
         </th>

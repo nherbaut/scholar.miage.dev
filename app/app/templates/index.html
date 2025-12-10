@@ -587,6 +587,12 @@
                                     <span id="pb_arxiv_count"></span>
                                 </div>
                                 <div role="progressbar" style="width: 0%"
+                                     class="progress-bar progress-bar-animated bg-danger"
+                                     id="pb_duplicate" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0"
+                                     title="Papers appearing in both Scopus and arXiv">
+                                    <span id="pb_duplicate_count"></span>
+                                </div>
+                                <div role="progressbar" style="width: 0%"
                                      class="progress-bar progress-bar-animated bg-nodoi"
                                      id="pb_failure" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0"
                                      title="Papers without DOI">
@@ -1010,6 +1016,10 @@ journal = { { ${content["pubtitle"]} } },
         if (pbArxiv) {
             pbArxiv.classList.remove("progress-bar-striped");
         }
+        const pbDuplicate = document.getElementById("pb_duplicate");
+        if (pbDuplicate) {
+            pbDuplicate.classList.remove("progress-bar-striped");
+        }
         document.getElementById("pb_failure").classList.remove("progress-bar-striped");
 
         // Replace table content with final, deduped payload
@@ -1044,11 +1054,13 @@ journal = { { ${content["pubtitle"]} } },
         const done = data["done"] || 0;
         const failed = data["failed"] || 0;
         const arxiv = data["arxiv"] || 0;
+        const duplicate = data["duplicate"] || 0;
         const successNonArxiv = Math.max(0, done);
         const denominator = total > 0 ? total : 1;
 
         const pbSuccess = document.getElementById("pb_success");
         const pbArxiv = document.getElementById("pb_arxiv");
+        const pbDuplicate = document.getElementById("pb_duplicate");
         const pbFailure = document.getElementById("pb_failure");
 
         pbSuccess.classList.add("progress-bar-striped");
@@ -1063,6 +1075,14 @@ journal = { { ${content["pubtitle"]} } },
             pbArxiv.setAttribute("aria-valuenow", arxiv);
             pbArxiv.style.width = (100 * arxiv / denominator) + "%";
             document.getElementById("pb_arxiv_count").innerHTML = arxiv;
+        }
+
+        if (pbDuplicate) {
+            pbDuplicate.classList.add("progress-bar-striped");
+            pbDuplicate.setAttribute("aria-valuemax", total);
+            pbDuplicate.setAttribute("aria-valuenow", duplicate);
+            pbDuplicate.style.width = (100 * duplicate / denominator) + "%";
+            document.getElementById("pb_duplicate_count").innerHTML = duplicate;
         }
 
         pbFailure.classList.add("progress-bar-striped");
@@ -1256,6 +1276,14 @@ journal = { { ${content["pubtitle"]} } },
             pbArxiv.setAttribute("value", 0);
             pbArxiv.style.width = "0%";
             document.getElementById("pb_arxiv_count").innerHTML = "";
+        }
+        const pbDuplicate = document.getElementById("pb_duplicate");
+        if (pbDuplicate) {
+            pbDuplicate.classList.remove("progress-bar-striped");
+            pbDuplicate.setAttribute("max", 0);
+            pbDuplicate.setAttribute("value", 0);
+            pbDuplicate.style.width = "0%";
+            document.getElementById("pb_duplicate_count").innerHTML = "";
         }
         document.getElementById("pb_failure").classList.remove("progress-bar-striped");
         document.getElementById("pb_failure").setAttribute("max", 0);
