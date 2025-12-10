@@ -15,6 +15,7 @@ import tempfile
 import contextlib
 from urllib.error import HTTPError
 from concurrent.futures import as_completed
+from threading import Lock
 
 
 # Third-party libraries
@@ -54,7 +55,7 @@ pyalex_config.retry_backoff_factor = 0.2
 pyalex_config.retry_http_codes = [429, 500, 503]
 
 executor_openAlex = ThreadPoolExecutor(max_workers=9)
-executor_scopus = ThreadPoolExecutor(max_workers=9)
+executor_scopus = ThreadPoolExecutor(max_workers=3)
 
 _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
@@ -289,64 +290,85 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         emitt('doi_update', {"total": count_scopus+count_arxiv,
                              "done": success, "failed": failure, "arxiv": arxiv})
 
-    for i in range(0, min(MAX_RESULTS_QUERY, count_scopus), 25):
+    def fetch_scopus_batch(offset):
         bucket = []
-        print(f"SCPUS_BACKEND {SCPUS_BACKEND % (i, 25, escape_query(query))}")
-        partial_results = session_scpus.get(
-            SCPUS_BACKEND % (i, 25, escape_query(query))).json()
+        try:
+            print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, 25, escape_query(query))}")
+            partial_results = session_scpus.get(
+                SCPUS_BACKEND % (offset, 25, escape_query(query))).json()
 
-        print(f'{partial_results["search-results"]}')
-        entries = partial_results["search-results"]["entry"]
+            print(f'{partial_results["search-results"]}')
+            entries = partial_results["search-results"]["entry"]
 
-        entries = [entry for entry in entries if (entry.get(
-            'prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
+            entries = [entry for entry in entries if (entry.get(
+                'prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
 
-        if len(entries) == 0:
-            break
+            if len(entries) == 0:
+                return bucket
 
-        if xref:
-            futures = [
-                executor_openAlex.submit(extract_data_openalex_from_scopus, bucket,
-                                         entry, context, call_back)
-                for entry in entries
-            ]
+            if xref:
+                futures = [
+                    executor_openAlex.submit(extract_data_openalex_from_scopus, bucket,
+                                             entry, context, call_back)
+                    for entry in entries
+                ]
 
-            for f in futures:
-                f.result()
-        else:
-            for entry in entries:
-                extract_data_scopus(bucket, entry, context, call_back)
+                for f in futures:
+                    f.result()
+            else:
+                for entry in entries:
+                    extract_data_scopus(bucket, entry, context, call_back)
+        except Exception as exc:
+            logger.exception("Failed to fetch scopus batch at offset %s", offset, exc_info=exc)
+        return bucket
 
+    batch_offsets = list(range(0, min(MAX_RESULTS_QUERY, count_scopus), 25))
+    futures = [executor_scopus.submit(fetch_scopus_batch, offset) for offset in batch_offsets]
+
+    arxiv_future = None
+    arxiv_enrich_future = None
+    arxiv_entries = []
+    arxiv_papers = []
+    arxiv_id_overrides = {}
+    arxiv_workmap = {}
+
+    if xref and arxiv:
+        def fetch_arxiv():
+            try:
+                return get_arxiv_results(query, on_unsupported=arxiv_warning).entries
+            except ValueError:
+                return []
+
+        arxiv_future = executor_scopus.submit(fetch_arxiv)
+
+    for future in as_completed(futures):
+        bucket = future.result()
+        if not bucket:
+            continue
         client_bucket += bucket
         if len(client_bucket) > client_results_bucket_size:
             emitt('doi_results', client_bucket)
             client_bucket = []
         dois = dois + bucket
 
-    arxiv_papers = []
-    arxiv_entries = []
-    arxiv_id_overrides = {}
-    arxiv_workmap = {}
+    if arxiv_future:
+        arxiv_entries = arxiv_future.result()
+        if arxiv_entries:
+            arxiv_enrich_future = executor_openAlex.submit(enrich_arxiv_with_openalex, arxiv_entries)
 
+    if arxiv_enrich_future:
+        arxiv_id_overrides, arxiv_workmap = arxiv_enrich_future.result()
 
-    if xref and arxiv:
-        try:
-            arxiv_entries = get_arxiv_results(            query, on_unsupported=arxiv_warning).entries
-        except ValueError:
-            arxiv_entries = []
-        arxiv_id_overrides, arxiv_workmap = enrich_arxiv_with_openalex(arxiv_entries)
-
+    if arxiv_entries:
         extract_data_arxiv(dois, arxiv_papers, arxiv_entries,
                         context, call_back, add_arxiv_results=arxiv,
                         id_overrides=arxiv_id_overrides,
                         works_by_arxiv_id=arxiv_workmap)
+
     if arxiv:
         emitt('doi_results', arxiv_papers)
-
-    if arxiv:
         dois = dois + arxiv_papers
 
-    
     emitt('doi_export_done', dois)
     return dois
 
@@ -360,10 +382,10 @@ def enrich_arxiv_with_openalex(arxiv_entries):
     """
     overrides = {}
     works = {}
-    for paper in arxiv_entries:
+    def resolve_paper(paper):
         title = getattr(getattr(paper, "title", None), "value", "")
         if not title:
-            continue
+            return None
         try:
             candidates = Works().filter(title={"search": title}).get()
             if candidates and len(candidates) > 0:
@@ -375,11 +397,20 @@ def enrich_arxiv_with_openalex(arxiv_entries):
                     work = first.__dict__ if hasattr(first, "__dict__") else None
                     oa_id = getattr(first, "id", None)
                 if oa_id and work:
-                    overrides[paper.id_] = oa_id
-                    works[paper.id_] = work
+                    return paper.id_, oa_id, work
         except Exception:
             # best-effort; skip on any API error
+            return None
+        return None
+
+    futures = [executor_openAlex.submit(resolve_paper, paper) for paper in arxiv_entries]
+    for future in as_completed(futures):
+        result = future.result()
+        if not result:
             continue
+        paper_id, oa_id, work = result
+        overrides[paper_id] = oa_id
+        works[paper_id] = work
     return overrides, works
 
 
@@ -452,30 +483,41 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
     scopus_papers = {d["title"]: d for d in dois}
     id_overrides = id_overrides or {}
     works_by_arxiv_id = works_by_arxiv_id or {}
+    scopus_lock = Lock()
+    context_lock = Lock()
 
-    for idx, paper in enumerate(arxiv_results, start=1):
+    def process_paper(paper):
+        local_bucket = []
+        arxiv_added = 0
+        title = getattr(getattr(paper, "title", None), "value", "")
 
-        if paper.title.value in scopus_papers:
+        if not title:
+            return local_bucket, arxiv_added
+
+        with scopus_lock:
+            existing = scopus_papers.get(title)
+
+        if existing:
             target_id = id_overrides.get(paper.id_, paper.id_)
-            if scopus_papers[paper.title.value]["doi"] == "":
-                scopus_papers[paper.title.value]["doi"] = target_id
-            scopus_papers[paper.title.value]["X-OA-URL"] = paper.links[0].href
-            scopus_papers[paper.title.value]["X-abstract"] = paper.summary.value
-            scopus_papers[paper.title.value]["X-OA"] = True
-            print(
-                f"updated {scopus_papers[paper.title.value]['doi']} from arXiv")
-            bucket.append(scopus_papers[paper.title.value])
-        else:
-            if add_arxiv_results:
-                authors_list = [{"display_name": a.name, "orcid": "",
-                                "openalex": ""} for a in paper.authors]
+            with scopus_lock:
+                if existing.get("doi", "") == "":
+                    existing["doi"] = target_id
+                existing["X-OA-URL"] = paper.links[0].href
+                existing["X-abstract"] = paper.summary.value
+                existing["X-OA"] = True
+            print(f"updated {existing['doi']} from arXiv")
+            local_bucket.append(existing)
+            return local_bucket, arxiv_added
 
-                work = works_by_arxiv_id.get(paper.id_)
-                if work:
-                    load_response_from_openAlex_arxiv(
-                        bucket, work, paper, id_overrides.get(paper.id_, paper.id_))
-                else:
-                    bucket.append({"doi": id_overrides.get(paper.id_, paper.id_), "title": paper.title.value,
+        if add_arxiv_results:
+            authors_list = [{"display_name": a.name, "orcid": "",
+                            "openalex": ""} for a in paper.authors]
+            work = works_by_arxiv_id.get(paper.id_)
+            if work:
+                load_response_from_openAlex_arxiv(
+                    local_bucket, work, paper, id_overrides.get(paper.id_, paper.id_))
+            else:
+                local_bucket.append({"doi": id_overrides.get(paper.id_, paper.id_), "title": paper.title.value,
                                    "year": paper.published.year,
                                    "x-precise-date": str(paper.published),
                                    "pubtitle": "arXiv.org",
@@ -496,14 +538,25 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
                                    "X-authors-list":  authors_list,
                                    "X-OA-URL": paper.links[0].href
                                    })
+            arxiv_added = 1
+        return local_bucket, arxiv_added
 
-                context.arxiv += 1
+    futures = [executor_scopus.submit(process_paper, paper)
+               for paper in arxiv_results]
+
+    for future in as_completed(futures):
+        local_bucket, added = future.result()
+        if local_bucket:
+            bucket += local_bucket
+        if added:
+            with context_lock:
+                context.arxiv += added
                 if context.arxiv % 25 == 0:
                     print("sending doi update")
                     call_back(context.success, context.failed, context.arxiv)
-        # For arXiv papers, only send periodic updates to avoid spamming clients
-        if add_arxiv_results and idx == len(arxiv_results):
-            call_back(context.success, context.failed, context.arxiv)
+
+    if add_arxiv_results and arxiv_results:
+        call_back(context.success, context.failed, context.arxiv)
 
 
 def load_response_from_scpus(bucket, entry):
