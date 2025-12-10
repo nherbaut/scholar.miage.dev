@@ -219,9 +219,9 @@ def cite():
 def history():
     limit = request.args.get('limit')
     if limit is None:
-        limit = 2000
+        limit = 100
     queries = db.session.query(ScpusRequest).order_by(
-        ScpusRequest.timestamp.desc()).limit(limit).all()
+        ScpusRequest.id.desc()).limit(limit).all()
     accepts = request.headers["Accept"].split(",")
     if "application/json" in accepts:
         return app.response_class(

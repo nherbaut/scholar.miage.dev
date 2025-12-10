@@ -40,7 +40,7 @@ class ScpusRequest(Base):
     query = Column(String(2048))
     ip = Column(String(64), default="0.0.0.0")
     count = Column(Integer, default=-1)
-    timestamp = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     fetched = Column(Boolean)
 
 class NetworkData(Base):
@@ -55,7 +55,7 @@ class ScpusFeed(Base):
     feed_content = Column(LargeBinary(length=(2 ** 32) - 1), default=pickle.dumps({}))
     count = Column(Integer)
     query = Column(String(4096))
-    lastBuildDate = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc))
+    lastBuildDate = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     hit = Column(Integer, default=0)
 
 
