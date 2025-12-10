@@ -192,6 +192,7 @@
 
     <script src="//cdn.datatables.net/1.11.3/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.3/js/dataTables.bootstrap4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
 
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
     <script src="/static/contrib/js/mustache.js"></script>
@@ -220,6 +221,22 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Hide</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Papers per Year modal -->
+<div class="modal fade" id="yearlyModal" tabindex="-1" aria-labelledby="yearlyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="yearlyModalLabel">Papers per Year</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <canvas id="yearlyChart" height="200" role="img" aria-label="Chart of papers per year"></canvas>
+                <small class="text-muted d-block mt-2">Current year is shown dashed; counts may be incomplete.</small>
             </div>
         </div>
     </div>
@@ -552,6 +569,12 @@
                                                 Cloud
                                             </button>
                                         </li>
+                                        <li>
+                                            <button class="dropdown-item requires-run" type="button"
+                                                    onclick="openYearlyModal()" disabled
+                                                    data-bs-toggle="tooltip" title="run the query first">Papers per Year
+                                            </button>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>
@@ -732,6 +755,8 @@
     var bag_of_doi = {};
     var item_info = [];
     var openAccessCount = 0;
+    var yearlyChart = null;
+    var yearlyData = [];
 
     function escapeDoiForSelector(value) {
         if (window.CSS && CSS.escape) {
@@ -791,6 +816,7 @@
     function renderFullResults(items) {
         bag_of_doi = {};
         item_info = [];
+        yearlyData = [];
         const tbody = document.getElementById("doi_table");
         if (!tbody) {
             return;
@@ -816,6 +842,7 @@
         }
         tbody.innerHTML = rendered_html;
         updateOpenAccessProgress();
+        updateYearlyData(dedupedItems);
         try {
             MSStars.refreshStarIcons();
         } catch (e) {
@@ -838,6 +865,82 @@
         if (label) {
             label.innerHTML = `${ratio}%`;
         }
+    }
+
+    function updateYearlyData(items) {
+        const counts = {};
+        for (const item of items) {
+            const y = parseInt(item["year"], 10);
+            if (!isNaN(y)) {
+                counts[y] = (counts[y] || 0) + 1;
+            }
+        }
+        yearlyData = Object.keys(counts)
+            .map(k => ({year: parseInt(k, 10), count: counts[k]}))
+            .sort((a, b) => a.year - b.year);
+        if (yearlyChart) {
+            yearlyChart.destroy();
+            yearlyChart = null;
+        }
+    }
+
+    function openYearlyModal() {
+        if (!yearlyData || yearlyData.length === 0) {
+            return;
+        }
+        renderYearlyChart();
+        const modalEl = document.getElementById('yearlyModal');
+        if (!modalEl) return;
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+
+    function renderYearlyChart() {
+        const ctx = document.getElementById('yearlyChart');
+        if (!ctx) return;
+        if (yearlyChart) {
+            yearlyChart.destroy();
+        }
+        const nowYear = new Date().getFullYear();
+        const labels = yearlyData.map(d => d.year);
+        const dataPoints = yearlyData.map(d => ({x: d.year, y: d.count}));
+        yearlyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Papers per Year',
+                    data: dataPoints,
+                    borderColor: '#0d6efd',
+                    backgroundColor: 'rgba(13,110,253,0.1)',
+                    fill: true,
+                    tension: 0.25,
+                    borderWidth: 2,
+                    segment: {
+                        borderDash: ctx => ctx.p1.parsed.x === nowYear ? [6, 4] : undefined,
+                        borderColor: ctx => ctx.p1.parsed.x === nowYear ? '#dc3545' : '#0d6efd'
+                    },
+                    pointRadius: ctx => ctx.parsed.x === nowYear ? 5 : 3,
+                    pointBackgroundColor: ctx => ctx.parsed.x === nowYear ? '#dc3545' : '#0d6efd'
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        title: {display: true, text: 'Year'},
+                        ticks: {autoSkip: true, maxTicksLimit: 12}
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {display: true, text: 'Count'}
+                    }
+                },
+                plugins: {
+                    legend: {display: false},
+                    tooltip: {mode: 'nearest', intersect: false}
+                }
+            }
+        });
     }
 
     // New: last query id from backend
@@ -1251,6 +1354,11 @@ journal = { { ${content["pubtitle"]} } },
     function resetAll() {
         bag_of_doi = {};
         latestQueryId = null;
+        yearlyData = [];
+        if (yearlyChart) {
+            yearlyChart.destroy();
+            yearlyChart = null;
+        }
         clearArxivWarning();
         // Reset UI
         const btn = document.getElementById("main_button");
