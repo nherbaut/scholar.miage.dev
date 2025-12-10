@@ -54,9 +54,33 @@ pyalex_config.max_retries = 3
 pyalex_config.retry_backoff_factor = 0.2
 pyalex_config.retry_http_codes = [429, 500, 503]
 
-executor_openAlex = ThreadPoolExecutor(max_workers=9)
-executor_scopus = ThreadPoolExecutor(max_workers=3)
-executor_arxiv = ThreadPoolExecutor(max_workers=3)
+_executor_pool: Dict[str, ThreadPoolExecutor] = {}
+_executor_lock = Lock()
+
+
+def _get_executor(name: str, max_workers: int) -> ThreadPoolExecutor:
+    """
+    Application-scoped executors (shared across requests) so that the concurrency
+    cap applies process-wide rather than per request.
+    """
+    with _executor_lock:
+        executor = _executor_pool.get(name)
+        if executor is None:
+            executor = ThreadPoolExecutor(max_workers=max_workers)
+            _executor_pool[name] = executor
+        return executor
+
+
+def get_openalex_executor() -> ThreadPoolExecutor:
+    return _get_executor("openalex", 8)
+
+
+def get_scopus_executor() -> ThreadPoolExecutor:
+    return _get_executor("scopus", 5)
+
+
+def get_arxiv_executor() -> ThreadPoolExecutor:
+    return _get_executor("arxiv", 3)
 
 _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
@@ -275,7 +299,7 @@ def get_ref_for_doi(doi):
     resp = requests.get(SCPUS_ABTRACT_BACKEND %
                         doi, headers={"Accept": "application/json"})
     result = resp.json()
-    print(result)
+    #print(result)
 
 
 def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
@@ -319,11 +343,11 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     def fetch_scopus_batch(offset):
         try:
-            print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, 25, escape_query(query))}")
+            #print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, 25, escape_query(query))}")
             partial_results = session_scpus.get(
                 SCPUS_BACKEND % (offset, 25, escape_query(query))).json()
 
-            print(f'{partial_results["search-results"]}')
+            #print(f'{partial_results["search-results"]}')
             entries = partial_results["search-results"]["entry"]
 
             entries = [entry for entry in entries if (entry.get(
@@ -343,8 +367,10 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         bucket = []
         try:
             if xref:
+                logger.info("enriching from openalex")
                 extract_data_openalex_from_scopus(bucket, entry, context, call_back)
             else:
+                logger.info("not enriching from openalex")
                 extract_data_scopus(bucket, entry, context, call_back)
         except Exception as exc:
             logger.exception("Failed to enrich scopus entry", exc_info=exc)
@@ -406,18 +432,20 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     batch_offsets = list(range(0, min(MAX_RESULTS_QUERY, count_scopus), 25))
     for offset in batch_offsets:
-        provider_futures.add(executor_scopus.submit(fetch_scopus_batch, offset))
+        provider_futures.add(get_scopus_executor().submit(fetch_scopus_batch, offset))
 
     if arxiv:
-        provider_futures.add(executor_arxiv.submit(fetch_arxiv_entries))
+        provider_futures.add(get_arxiv_executor().submit(fetch_arxiv_entries))
 
     def submit_enrichment(provider_name, payload):
         if provider_name == "scopus":
             if xref:
-                return executor_openAlex.submit(enrich_scopus_entry, payload)
-            return executor_scopus.submit(enrich_scopus_entry, payload)
+                #logger.debug("sumitting enrichment from openalex")
+                return get_openalex_executor().submit(enrich_scopus_entry, payload)
+            #logger.debug("just loading data from scopus")
+            return get_scopus_executor().submit(enrich_scopus_entry, payload)
         if provider_name == "arxiv":
-            return executor_openAlex.submit(enrich_arxiv_entry, payload)
+            return get_openalex_executor().submit(enrich_arxiv_entry, payload)
         raise ValueError(f"Unknown provider {provider_name}")
 
     while provider_futures or enrichment_futures:
@@ -427,6 +455,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 provider_futures.remove(fut)
                 provider_name, payloads = fut.result()
                 for payload in payloads:
+                    logger.info(f"enrichment request submitted for {provider_name}")
                     enrichment_futures.add(submit_enrichment(provider_name, payload))
             else:
                 enrichment_futures.remove(fut)
@@ -471,29 +500,27 @@ def complete_scopus_extraction(scopus_partial_data, r):
 
 
 def extract_data_openalex_from_scopus(bucket, entry, context, call_back):
+    
     if "prism:doi" in entry:
         context.success += 1
     else:
         context.failed += 1
 
     doi = entry.get("prism:doi", "")
+    
+    
 
     if len(doi) > 0:
         try:
             oa_response = Works()[f"https://doi.org/{doi}"]
-            load_response_from_openAlex(bucket, oa_response, entry)
+            
+            load_response_from_openAlex_scopus(bucket, oa_response, entry)
         except Exception as e:
+            logging.warning(f"failed to load from oa, getting scopus data  {doi}")
             load_response_from_scpus(bucket, entry)
     else:
-        try:
-            oa_responses = Works().filter(
-                title={"search": entry.get('prism:publicationName', "")}).get()
-            if len(oa_responses) > 1:
-                load_response_from_scpus(bucket, entry)
-                complete_scopus_extraction(bucket[-1], oa_responses[1])
-        except Exception as e:
-            # something wrong with the openalex query, not much we can do now
-            pass
+        # No DOI available; avoid fuzzy OpenAlex title matching to prevent mis-associations.
+        load_response_from_scpus(bucket, entry)
 
     try:
         call_back(context.success, context.failed, context.arxiv, context.duplicate)
@@ -542,13 +569,13 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
             with scopus_lock:
                 if existing.get("doi", "") == "":
                     existing["doi"] = target_id
-                existing["X-OA-URL"] = paper.links[0].href
-                existing["X-abstract"] = paper.summary.value
-                existing["X-OA"] = True
-            print(f"updated {existing['doi']} from arXiv")
-            local_bucket.append(existing)
-            duplicate_added = 1
-            return local_bucket, arxiv_added, duplicate_added
+                    existing["X-OA-URL"] = paper.links[0].href
+                    existing["X-abstract"] = paper.summary.value
+                    existing["X-OA"] = True
+                logger.info("Updated %s from arXiv enrichment", existing["doi"])
+                local_bucket.append(existing)
+                duplicate_added = 1
+                return local_bucket, arxiv_added, duplicate_added
 
         if add_arxiv_results:
             authors_list = [{"display_name": a.name, "orcid": "",
@@ -582,7 +609,7 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
             arxiv_added = 1
         return local_bucket, arxiv_added, duplicate_added
 
-    futures = [executor_scopus.submit(process_paper, paper)
+    futures = [get_scopus_executor().submit(process_paper, paper)
                for paper in arxiv_results]
 
     for future in as_completed(futures):
@@ -593,7 +620,7 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
             with context_lock:
                 context.arxiv += added
                 if context.arxiv % 25 == 0:
-                    print("sending doi update")
+                    logger.debug("Sending DOI update (arXiv count=%s)", context.arxiv)
                     call_back(context.success, context.failed, context.arxiv, context.duplicate)
         if dup_added:
             with context_lock:
@@ -628,6 +655,8 @@ def load_response_from_scpus(bucket, entry):
         doi = "https://doi.org/"+entry.get("prism:doi", "")
     else:
         doi = ""
+        
+    
     bucket.append(
         {"doi": doi,
          "issn": issn,
@@ -678,6 +707,22 @@ def inverted_abstrct_to_abstract(ia):
     return " ".join([iaa[k] for k in sorted(iaa.keys())])
 
 
+def _strip_markup(text: str) -> str:
+    """
+    Remove simple HTML tags and LaTeX markers from a title string.
+    This is intentionally conservative to avoid noisy OpenAlex titles.
+    """
+    if not text:
+        return ""
+    no_html = re.sub(r"<[^>]+>", "", text)
+    # Drop math fragments delimited by $, \( \), or \[ \]
+    no_math = re.sub(r"(\\\[.*?\\\]|\\\(.*?\\\)|\\begin\{.*?\}.*?\\end\{.*?\}|\$.*?\$)", "", no_html)
+    # Remove lightweight LaTeX commands like \alpha, \beta
+    no_commands = re.sub(r"\\[A-Za-z]+", "", no_math)
+    # Collapse extra whitespace after stripping
+    return " ".join(no_commands.split())
+
+
 def get_abstract_semanticscholar(doi: str):
     """
     Retrieve paper abstract from Semantic Scholar Graph API.
@@ -687,6 +732,7 @@ def get_abstract_semanticscholar(doi: str):
     params = {"fields": "title,abstract"}
     r = requests.get(url, timeout=10)
     if r.status_code != 200:
+        logger.warning("Abstract retrieval from Semantic Scholar failed for DOI %s (status %s)", doi, r.status_code)
         return None
     data = r.json()
     return data.get("abstract", "") or ""
@@ -798,16 +844,18 @@ def get_abstract_from_pdf_sources(doi: str, openalex_oa_url: str | None, email: 
     return ""
 
 
-def load_response_from_openAlex(bucket, r, entry):
+def load_response_from_openAlex_scopus(bucket, openalex_response, entry):
 
-    oa_url = (r.get("open_access") or {}).get("oa_url", None)
+    
+
+    oa_url = (openalex_response.get("open_access") or {}).get("oa_url", None)
     authors_list = [{"display_name": a["author"]["display_name"], "orcid": a["author"]["orcid"]
-                     if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in r["authorships"]]
+                     if a["author"]["orcid"] else "", "openalex": a["author"]["id"]} for a in openalex_response["authorships"]]
 
     abstract = inverted_abstrct_to_abstract(
-        r["abstract_inverted_index"]) if "abstract_inverted_index" in r else None
-    if not abstract:
-        abstract = get_abstract_semanticscholar(r["doi"])
+        openalex_response["abstract_inverted_index"]) if "abstract_inverted_index" in openalex_response else None
+    #if not abstract:
+    #    abstract = get_abstract_semanticscholar(openalex_response["doi"])
 
     # it's too slow
     # if not abstract:
@@ -819,25 +867,26 @@ def load_response_from_openAlex(bucket, r, entry):
     if len(authors_list) == 0:
         authors_list = [{"display_name": entry.get(
             'dc:creator', "unknown"), "orcid": "", "openalex": ""}]
+    title = _strip_markup(openalex_response.get("title", ""))
 
-    bucket.append({"doi": r["doi"], "title": r["title"],
-                   "year": r["publication_year"],
-                   "x-precise-date": r["publication_date"],
+    bucket.append({"doi": openalex_response["doi"], "title": title,
+                   "year": openalex_response["publication_year"],
+                   "x-precise-date": openalex_response["publication_date"],
                    "pubtitle": entry.get('prism:publicationName', ""),
                    "pub_rank": "",
                    "rank_source": "",
                    "hindex": "",
-                   "X-OA": r["open_access"]["is_oa"],
+                   "X-OA": openalex_response["open_access"]["is_oa"],
                    "X-FirstAuthor": authors_list[0]["display_name"] if len(authors_list) > 0 else "",
                    "X-Country-First-Author": get_first_auth_country(entry),
                    "X-Country-First-affiliation": get_first_auth_affil(entry),
                    "X-FirstAuthor-ORCID": "",
                    "X-FirstAuthor-OpenAlex": "",
-                   "X-IsReferencedByCount": r["cited_by_count"],
-                   "X-subject": (r["primary_topic"] if "primary_topic" in r and r["primary_topic"] and len(r["primary_topic"]) else {}).get("display_name", ""),
-                   "X-refcount": r["referenced_works_count"],
+                   "X-IsReferencedByCount": openalex_response["cited_by_count"],
+                   "X-subject": (openalex_response["primary_topic"] if "primary_topic" in openalex_response and openalex_response["primary_topic"] and len(openalex_response["primary_topic"]) else {}).get("display_name", ""),
+                   "X-refcount": openalex_response["referenced_works_count"],
                    "X-abstract": abstract,
-                   "X-authors": ", ".join([a["author"]["display_name"] for a in r["authorships"]]),
+                   "X-authors": ", ".join([a["author"]["display_name"] for a in openalex_response["authorships"]]),
                    "X-authors-list": authors_list,
                    "X-OA-URL": oa_url or ""
 
@@ -1080,7 +1129,7 @@ def net_build_graph(
     dois_or_ids: Iterable[str],
     min_count: int = 2,
     emitt=lambda *args, **kwargs: None,
-    executor: ThreadPoolExecutor = executor_openAlex,
+    executor: ThreadPoolExecutor | None = None,
     cites_limit_per_work: int = 200,   # cap for backward refs per input work
 ) -> dict:
     """
@@ -1102,6 +1151,9 @@ def net_build_graph(
     # -------------------------
     # Phase 1: fetch input works in parallel
     # -------------------------
+    if executor is None:
+        executor = get_openalex_executor()
+
     normalized_idents: List[str] = [
         net_normalize_input(raw) for raw in dois_or_ids]
     total_inputs = len(normalized_idents)
@@ -1183,7 +1235,7 @@ def net_build_graph(
                     citer_ids.add(item["id"].rsplit("/", 1)[-1])
             return citer_ids
         except Exception as e:
-            print(e)
+            logger.exception("Failed to fetch citers for %s", wid, exc_info=e)
             return set()
 
     futures_citers = {executor.submit(
