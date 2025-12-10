@@ -327,19 +327,19 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     arxiv_entries = []
     arxiv_id_overrides = {}
     arxiv_workmap = {}
-    try:
-        arxiv_entries = get_arxiv_results(
-            query, on_unsupported=arxiv_warning).entries
-    except ValueError:
-        arxiv_entries = []
 
-    if xref and arxiv_entries:
+
+    if xref and arxiv:
+        try:
+            arxiv_entries = get_arxiv_results(            query, on_unsupported=arxiv_warning).entries
+        except ValueError:
+            arxiv_entries = []
         arxiv_id_overrides, arxiv_workmap = enrich_arxiv_with_openalex(arxiv_entries)
 
-    extract_data_arxiv(dois, arxiv_papers, arxiv_entries,
-                       context, call_back, add_arxiv_results=arxiv,
-                       id_overrides=arxiv_id_overrides,
-                       works_by_arxiv_id=arxiv_workmap)
+        extract_data_arxiv(dois, arxiv_papers, arxiv_entries,
+                        context, call_back, add_arxiv_results=arxiv,
+                        id_overrides=arxiv_id_overrides,
+                        works_by_arxiv_id=arxiv_workmap)
     if arxiv:
         emitt('doi_results', arxiv_papers)
 
