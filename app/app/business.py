@@ -27,6 +27,7 @@ from Levenshtein.StringMatcher import distance
 from feedgen.feed import FeedGenerator
 from flask import copy_current_request_context
 from requests_cache import CachedSession, FileCache, RedisCache
+import networkx as nx
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.exc import MultipleResultsFound
 from sqlalchemy import or_
@@ -1119,6 +1120,75 @@ def net_get_graph_data(id):
         return None, "Too many results"
     except NoResultFound as e:
         return None, "Not Found"
+
+
+def _net_parse_graph_data(data):
+    if isinstance(data, str):
+        try:
+            return json.loads(data)
+        except Exception:
+            return None
+    if isinstance(data, dict):
+        return data
+    return None
+
+
+def net_detect_communities(data, resolution: float = 1.0) -> dict | None:
+    """
+    Detect communities using a modularity-based algorithm (Louvain if available,
+    otherwise greedy modularity). Returns a graph dict with node 'community' ids.
+    """
+    graph_data = _net_parse_graph_data(data)
+    if not graph_data:
+        return None
+
+    G = nx.Graph()
+    nodes = graph_data.get("nodes", [])
+    links = graph_data.get("links", [])
+
+    for n in nodes:
+        node_id = str(n.get("id"))
+        if node_id:
+            G.add_node(node_id)
+
+    for l in links:
+        s = l.get("source")
+        t = l.get("target")
+        s_id = str(s.get("id") if isinstance(s, dict) else s)
+        t_id = str(t.get("id") if isinstance(t, dict) else t)
+        if not s_id or not t_id or s_id == t_id:
+            continue
+        if G.has_edge(s_id, t_id):
+            G[s_id][t_id]["weight"] = G[s_id][t_id].get("weight", 1) + 1
+        else:
+            G.add_edge(s_id, t_id, weight=1)
+
+    if G.number_of_nodes() == 0:
+        return graph_data
+
+    algo = "louvain"
+    try:
+        from networkx.algorithms.community import louvain_communities
+        communities = louvain_communities(G, weight="weight", resolution=resolution, seed=42)
+    except Exception:
+        from networkx.algorithms.community import greedy_modularity_communities
+        communities = greedy_modularity_communities(G, weight="weight", resolution=resolution)
+        algo = "greedy"
+
+    node_to_comm = {}
+    for idx, comm in enumerate(communities):
+        for node_id in comm:
+            node_to_comm[str(node_id)] = idx
+
+    for n in nodes:
+        node_id = str(n.get("id"))
+        n["community"] = node_to_comm.get(node_id, -1)
+
+    graph_data.setdefault("meta", {})
+    graph_data["meta"]["community_resolution"] = resolution
+    graph_data["meta"]["community_algo"] = algo
+    graph_data["communities"] = [{"id": i, "size": len(c)} for i, c in enumerate(communities)]
+    return graph_data
 
 
 # -------------------------------------

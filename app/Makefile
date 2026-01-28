@@ -55,7 +55,9 @@ run:
 		-e SHLINK_API_KEY=${SHLINK_API_KEY} \
 		-e API_KEY=${API_KEY} \
 		-e PYALEX_EMAIL=nicolas.herbaut@u-bordeaux.fr \
-		--name "scpushack" $(IMAGE)
+		--name "scpushack" \
+                -v ./.docker-db:/srv/scpushack/:rw \
+                $(IMAGE)
 
 stop:
 	docker rm -f scpushack | true

@@ -1,6 +1,22 @@
 import os
 
-DEFAULT_DB = "sqlite:////tmp/memory"
+DEFAULT_DB = "sqlite:////srv/scpushack/database.sqlite"
+
+
+def _ensure_sqlite_dir(uri: str) -> None:
+    if not uri or not uri.startswith("sqlite:"):
+        return
+    if uri.startswith("sqlite:////"):
+        path = "/" + uri[len("sqlite:////"):]
+    elif uri.startswith("sqlite:///"):
+        path = uri[len("sqlite:///"):]
+    else:
+        return
+    if not path:
+        return
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
 
 
 class Config(object):
@@ -15,3 +31,5 @@ class Config(object):
     SQLALCHEMY_ECHO = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+
+_ensure_sqlite_dir(Config.SQLALCHEMY_DATABASE_URI)

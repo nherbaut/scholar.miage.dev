@@ -3,7 +3,7 @@ import requests
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
 from app.business import count_results_for_query, get_papers, update_feed, generate_rss, get_sources, \
-    get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data
+    get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data, net_detect_communities
 from app.query_analyzer import get_json_analyzed_query
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
@@ -375,6 +375,26 @@ def get_network_data(id):
         mimetype='application/json'
     )
 
+
+@app.route("/network/communities/<id>", methods=["GET"])
+def get_network_communities(id):
+    try:
+        resolution = float(request.args.get("resolution", 1.0))
+    except Exception:
+        resolution = 1.0
+    raw = net_get_graph_data(id)
+    data = net_detect_communities(raw, resolution=resolution)
+    if data is None:
+        return app.response_class(
+            response=json.dumps({"error": "network not found"}),
+            status=404,
+            mimetype='application/json'
+        )
+    return app.response_class(
+        response=json.dumps(data),
+        status=200,
+        mimetype='application/json'
+    )
 
 @app.route('/network/<work_list_id>', methods=["GET"])
 def get_network_page(work_list_id):

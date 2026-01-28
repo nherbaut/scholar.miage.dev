@@ -68,6 +68,7 @@
       <button id="btn-fit" title="Zoom/Pan to fit graph">Fit to view</button>
       <button id="btn-download" title="Download JSON">Download JSON</button>
       <button id="btn-filters" title="Configure filters">Filters</button>
+      <button id="btn-communities" title="Show community view">Communities</button>
       <div class="meta" id="meta">Loading…</div>
     </header>
     <div id="container">
@@ -101,6 +102,10 @@
       <div class="row">
         <label for="maxYear">Max year</label>
         <input id="maxYear" type="number" min="0" max="9999" />
+      </div>
+      <div class="row">
+        <label for="resolution">Resolution</label>
+        <input id="resolution" type="number" min="0.1" max="5" step="0.1" value="1.0" />
       </div>
       <div class="row">
         <label for="kwWork"><span class="kw-dot" style="background: var(--work)"></span> Keyword (works)</label>
@@ -140,6 +145,7 @@
   const thBackVal= document.getElementById('thBackVal');
   const minYearEl = document.getElementById('minYear');
   const maxYearEl = document.getElementById('maxYear');
+  const resolutionEl = document.getElementById('resolution');
   const kwWorkEl = document.getElementById('kwWork');
   const kwFwdEl = document.getElementById('kwFwd');
   const kwBackEl = document.getElementById('kwBack');
@@ -147,9 +153,13 @@
   const btnFilters = document.getElementById('btn-filters');
   const btnApplyFilters = document.getElementById('btn-apply-filters');
   const btnCloseFilters = document.getElementById('btn-close-filters');
+  const btnCommunities = document.getElementById('btn-communities');
   const btnDownload = document.getElementById('btn-download');
 
   let fullData = null;
+  let communityData = null;
+  let communityResolution = null;
+  let viewMode = 'graph';
   // Data URL (backend-provided ID must be templated on server side)
   const DATA_URL = '/network/compute/{{work_list_id}}';
   let currentDataURL = DATA_URL;
@@ -159,6 +169,7 @@
     thBack: 1,
     minYear: 1900,
     maxYear: currentYear,
+    resolution: 1.0,
     keywordWork: '',
     keywordFwd: '',
     keywordBack: ''
@@ -173,6 +184,7 @@
     .force('center', d3.forceCenter(width/2, height/2))
     .force('collide', d3.forceCollide().radius(d => d.type === 'ref' ? 18 + Math.sqrt(d.count || 1)*2 : 10))
     .alphaDecay(0.05);
+  const simCommunity = d3.forceSimulation();
 
   function computeInitialPositions(data){
     const cx = width/2, cy = height/2;
@@ -220,8 +232,8 @@
       );
   }
 
-  function render(data, activeFilters){
-    // Keep refs by separate thresholds
+  function filterData(data, activeFilters){
+    if (!data || !data.nodes || !data.links) return {nodes: [], links: []};
     const refsKept     = new Set(data.nodes.filter(n => n.type==='ref'      && (n.count||0) >= activeFilters.thFwd).map(n=>n.id));
     const refsBackKept = new Set(data.nodes.filter(n => n.type==='ref_back' && (n.count||0) >= activeFilters.thBack).map(n=>n.id));
 
@@ -284,11 +296,18 @@
       return finalNodeIds.has(t);
     });
 
+    return {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack};
+  }
+
+  function renderGraph(data, activeFilters){
+    simCommunity.stop();
+    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(data, activeFilters);
+
     // Adjacency maps
-    const refsByWorkFwd   = new Map(); // workId -> Set(refIds)
-    const refsByWorkBack  = new Map(); // workId -> Set(refBackIds)
-    const worksByRefFwd   = new Map(); // refId      -> Set(workIds)
-    const worksByRefBack  = new Map(); // refBackId  -> Set(workIds)
+    const refsByWorkFwd   = new Map();
+    const refsByWorkBack  = new Map();
+    const worksByRefFwd   = new Map();
+    const worksByRefBack  = new Map();
 
     const nodeIds = new Set(finalNodes.map(n => String(n.id)));
 
@@ -311,7 +330,6 @@
       }
     }
 
-    // Work sizing by number of backward citations currently displayed
     const workIds = finalNodes.filter(n => n.type === 'work').map(n => String(n.id));
     const workCiteCount = new Map(workIds.map(id => [id, 0]));
     for (const [refb, ws] of worksByRefBack.entries()) {
@@ -331,10 +349,9 @@
     computeInitialPositions({nodes: finalNodes});
 
     const refSize = d3.scaleSqrt()
-      .domain(d3.extent(filteredNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
+      .domain(d3.extent(finalNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
       .range([8, 24]);
 
-    // Links
     const link = gLinks.selectAll('line').data(finalLinks, d => {
       const s = String(typeof d.source === 'object' ? d.source.id : d.source);
       const t = String(typeof d.target === 'object' ? d.target.id : d.target);
@@ -348,7 +365,6 @@
       exit => exit.remove()
     );
 
-    // Nodes
     const node = gNodes.selectAll('circle').data(finalNodes, d => d.id);
     node.join(
       enter => enter.append('circle')
@@ -374,7 +390,6 @@
       exit => exit.remove()
     );
 
-    // Labels (forward refs only)
     const label = gLabels.selectAll('text').data(finalNodes.filter(d => d.type==='ref'), d => d.id);
     label.join(
       enter => enter.append('text').attr('class','label').attr('text-anchor','middle')
@@ -383,7 +398,6 @@
       exit => exit.remove()
     );
 
-    // Simulation on forward refs only
     const refNodes = finalNodes.filter(d => d.type==='ref');
     sim.nodes(refNodes).on('tick', () => {
       gLinks.selectAll('line')
@@ -394,6 +408,131 @@
       gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
       gLabels.selectAll('text').attr('x', d => d.x).attr('y', d => d.y - 2);
     });
+  }
+
+  function renderCommunity(data, activeFilters){
+    sim.stop();
+    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(data, activeFilters);
+
+    gRings.selectAll('circle').remove();
+
+    const communityIds = Array.from(new Set(finalNodes.map(n => (n.community ?? -1)))).sort((a,b)=>a-b);
+    const color = d3.scaleOrdinal()
+      .domain(communityIds)
+      .range(communityIds.map((_, i) => d3.interpolateRainbow(i / Math.max(1, communityIds.length))));
+
+    const R = Math.min(width, height) * 0.38;
+    const centers = new Map();
+    communityIds.forEach((cid, i) => {
+      const theta = i * 2.399963229728653; // golden angle
+      const radius = R * Math.sqrt((i + 1) / Math.max(1, communityIds.length));
+      centers.set(cid, {x: width/2 + radius * Math.cos(theta), y: height/2 + radius * Math.sin(theta)});
+    });
+
+    const workIds = finalNodes.filter(n => n.type === 'work').map(n => String(n.id));
+    const workCiteCount = new Map(workIds.map(id => [id, 0]));
+    for (const l of finalLinks) {
+      const s = String(typeof l.source === 'object' ? l.source.id : l.source);
+      const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+      if (String(l.kind || '') === 'back' && workCiteCount.has(s)) {
+        workCiteCount.set(s, workCiteCount.get(s) + 1);
+      }
+    }
+    const maxCites = Math.max(1, ...workIds.map(id => workCiteCount.get(id) || 0));
+    const workSize = d3.scaleSqrt().domain([0, maxCites]).range([7, 18]);
+    const refSize = d3.scaleSqrt()
+      .domain(d3.extent(finalNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
+      .range([8, 24]);
+
+    const kwParts = [];
+    if (keywordWork) kwParts.push(`works="${keywordWork}"`);
+    if (keywordFwd) kwParts.push(`forward="${keywordFwd}"`);
+    if (keywordBack) kwParts.push(`backward="${keywordBack}"`);
+    const kwSummary = kwParts.length ? `, keywords ${kwParts.join(', ')}` : '';
+    metaEl.textContent = `${finalNodes.length} nodes, ${finalLinks.length} links (communities ${communityIds.length}, resolution ${activeFilters.resolution}, years ${activeFilters.minYear}-${activeFilters.maxYear}${kwSummary})`;
+
+    const link = gLinks.selectAll('line').data(finalLinks, d => {
+      const s = String(typeof d.source === 'object' ? d.source.id : d.source);
+      const t = String(typeof d.target === 'object' ? d.target.id : d.target);
+      return `${s}->${t}->${d.kind||'forward'}`;
+    });
+    link.join(
+      enter => enter.append('line')
+        .attr('class', d => `link ${d.kind === 'back' ? 'back' : ''}`)
+        .attr('stroke-width', 1.1),
+      update => update.attr('class', d => `link ${d.kind === 'back' ? 'back' : ''}`),
+      exit => exit.remove()
+    );
+
+    const node = gNodes.selectAll('circle').data(finalNodes, d => d.id);
+    const nodeJoin = node.join(
+      enter => enter.append('circle')
+        .attr('class', 'node')
+        .attr('r', d =>
+          d.type === 'ref' ? refSize(d.count || 1) :
+          d.type === 'ref_back' ? 8 :
+          workSize(workCiteCount.get(String(d.id)) || 0)
+        )
+        .attr('fill', d => color(d.community ?? -1))
+        .on('mouseover', (ev, d) => { showTooltip(ev, d); })
+        .on('mousemove', (ev) => { moveTooltip(ev); })
+        .on('mouseout',  () => { hideTooltip(); })
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); })
+        .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); }),
+      update => update
+        .attr('r', d =>
+          d.type === 'ref' ? refSize(d.count || 1) :
+          d.type === 'ref_back' ? 8 :
+          workSize(workCiteCount.get(String(d.id)) || 0)
+        )
+        .attr('class', 'node')
+        .attr('fill', d => color(d.community ?? -1)),
+      exit => exit.remove()
+    );
+    nodeJoin.on('.drag', null);
+
+    const label = gLabels.selectAll('text').data([], d => d.id);
+    label.join(
+      enter => enter,
+      update => update,
+      exit => exit.remove()
+    );
+
+    finalNodes.forEach(n => {
+      const center = centers.get(n.community ?? -1) || {x: width/2, y: height/2};
+      n.x = center.x + (Math.random()-0.5)*60;
+      n.y = center.y + (Math.random()-0.5)*60;
+      n.fx = null;
+      n.fy = null;
+    });
+
+    simCommunity.nodes(finalNodes)
+      .force('charge', d3.forceManyBody().strength(-35))
+      .force('link', d3.forceLink(finalLinks).id(d => String(d.id)).distance(45).strength(0.12))
+      .force('x', d3.forceX(d => (centers.get(d.community ?? -1) || {x: width/2}).x).strength(0.25))
+      .force('y', d3.forceY(d => (centers.get(d.community ?? -1) || {y: height/2}).y).strength(0.25))
+      .force('collide', d3.forceCollide().radius(d =>
+        (d.type === 'ref' ? refSize(d.count || 1) : d.type === 'ref_back' ? 8 : workSize(workCiteCount.get(String(d.id)) || 0)) + 2
+      ))
+      .alpha(0.9)
+      .alphaDecay(0.08)
+      .restart()
+      .on('tick', () => {
+        gLinks.selectAll('line')
+          .attr('x1', d => nodeById(d.source, finalNodes).x)
+          .attr('y1', d => nodeById(d.source, finalNodes).y)
+          .attr('x2', d => nodeById(d.target, finalNodes).x)
+          .attr('y2', d => nodeById(d.target, finalNodes).y);
+        gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
+      });
+  }
+
+  function renderCurrent(){
+    if (viewMode === 'community') {
+      renderCommunity(communityData || fullData || {nodes: [], links: []}, filters);
+    } else {
+      renderGraph(fullData || {nodes: [], links: []}, filters);
+    }
   }
 
   function nodeById(id, nodes){
@@ -477,7 +616,7 @@
 
   document.getElementById('btn-reset').onclick = () => {
     if (!fullData) return;
-    render(fullData, filters);
+    renderCurrent();
   };
   document.getElementById('btn-fit').onclick = () => fitToView();
 
@@ -491,6 +630,29 @@
     a.remove();
   };
 
+  function communityURL(){
+    return `/network/communities/{{work_list_id}}?resolution=${encodeURIComponent(filters.resolution)}`;
+  }
+
+  function loadCommunityData(){
+    const url = communityURL();
+    if (communityData && communityResolution === filters.resolution) {
+      currentDataURL = url;
+      renderCurrent();
+      return;
+    }
+    metaEl.textContent = 'Loading communities…';
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        communityData = data;
+        communityResolution = filters.resolution;
+        currentDataURL = url;
+        renderCurrent();
+      })
+      .catch(err => { metaEl.textContent = 'Error loading communities: ' + err; });
+  }
+
   function syncFilterUI(){
     thFwdEl.value = String(filters.thFwd);
     thBackEl.value = String(filters.thBack);
@@ -498,6 +660,7 @@
     thBackVal.textContent = String(filters.thBack);
     minYearEl.value = String(filters.minYear);
     maxYearEl.value = String(filters.maxYear);
+    resolutionEl.value = String(filters.resolution);
     kwWorkEl.value = filters.keywordWork;
     kwFwdEl.value = filters.keywordFwd;
     kwBackEl.value = filters.keywordBack;
@@ -506,10 +669,12 @@
   function applyFiltersFromUI(){
     const minYear = parseInt(minYearEl.value, 10);
     const maxYear = parseInt(maxYearEl.value, 10);
+    const resolution = parseFloat(resolutionEl.value);
     filters.thFwd = parseInt(thFwdEl.value, 10);
     filters.thBack = parseInt(thBackEl.value, 10);
     filters.minYear = Number.isFinite(minYear) ? minYear : 1900;
     filters.maxYear = Number.isFinite(maxYear) ? maxYear : currentYear;
+    filters.resolution = Number.isFinite(resolution) && resolution > 0 ? resolution : 1.0;
     if (filters.minYear > filters.maxYear) {
       const tmp = filters.minYear;
       filters.minYear = filters.maxYear;
@@ -520,7 +685,11 @@
     filters.keywordBack = String(kwBackEl.value || '').trim();
     thFwdVal.textContent = String(filters.thFwd);
     thBackVal.textContent = String(filters.thBack);
-    if (fullData) render(fullData, filters);
+    if (viewMode === 'community') {
+      loadCommunityData();
+    } else {
+      renderCurrent();
+    }
   }
 
   btnFilters.onclick = () => {
@@ -543,10 +712,23 @@
     filterOverlay.style.display = 'none';
     filterOverlay.setAttribute('aria-hidden', 'true');
   };
+  btnCommunities.onclick = () => {
+    if (viewMode === 'graph') {
+      viewMode = 'community';
+      btnCommunities.textContent = 'Graph View';
+      loadCommunityData();
+    } else {
+      viewMode = 'graph';
+      btnCommunities.textContent = 'Communities';
+      currentDataURL = DATA_URL;
+      renderCurrent();
+    }
+  };
   thFwdEl.oninput = () => { thFwdVal.textContent = thFwdEl.value; applyFiltersFromUI(); };
   thBackEl.oninput = () => { thBackVal.textContent = thBackEl.value; applyFiltersFromUI(); };
   minYearEl.oninput = () => applyFiltersFromUI();
   maxYearEl.oninput = () => applyFiltersFromUI();
+  resolutionEl.oninput = () => applyFiltersFromUI();
   kwWorkEl.oninput = () => applyFiltersFromUI();
   kwFwdEl.oninput = () => applyFiltersFromUI();
   kwBackEl.oninput = () => applyFiltersFromUI();
@@ -579,7 +761,8 @@
       filters.minYear = 1900;
       filters.thFwd = parseInt(thFwdEl.value, 10);
       filters.thBack = parseInt(thBackEl.value, 10);
-      render(fullData, filters);
+      filters.resolution = parseFloat(resolutionEl.value) || 1.0;
+      renderCurrent();
     })
     .catch(err => { metaEl.textContent = 'Error loading data: ' + err; });
 
