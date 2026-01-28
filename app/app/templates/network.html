@@ -20,8 +20,6 @@
     header{display:flex;gap:.75rem;align-items:center;padding:.6rem .9rem;background:var(--panel);border-bottom:1px solid #1b2530;position:sticky;top:0;z-index:2}
     header button{background:#182330;color:var(--fg);border:1px solid #2a394b;padding:.45rem .7rem;border-radius:.5rem;cursor:pointer;font-size:14px}
     header button:hover{border-color:#3b516b}
-    header .group{display:flex;align-items:center;gap:.35rem;font-size:12px;color:var(--muted)}
-    header input[type=range]{width:180px;vertical-align:middle}
     header .meta{font-size:12px;color:var(--muted);margin-left:.5rem}
     #container{position:relative}
     svg{width:100%;height:100%;display:block}
@@ -51,6 +49,16 @@
     #tooltip a:hover{text-decoration:underline}
 
     .ring{fill:none;stroke:#223042;stroke-dasharray:4 6;stroke-opacity:.5}
+
+    .modal-overlay{position:fixed;inset:0;background:rgba(3,6,10,.6);display:none;align-items:center;justify-content:center;z-index:20}
+    .modal{background:#0f141b;border:1px solid #223042;border-radius:10px;min-width:340px;max-width:520px;padding:16px 18px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+    .modal h3{margin:0 0 10px 0;font-size:16px}
+    .modal .row{display:flex;align-items:center;gap:10px;margin:10px 0}
+    .modal .kw-dot{width:10px;height:10px;border-radius:999px;display:inline-block;border:1px solid #1b2530}
+    .modal label{font-size:12px;color:var(--muted);min-width:110px}
+    .modal input[type=range]{width:220px}
+    .modal input[type=number], .modal input[type=text]{background:#0b0f14;border:1px solid #223042;color:var(--fg);padding:.35rem .5rem;border-radius:.4rem;width:120px}
+    .modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
   </style>
 </head>
 <body>
@@ -59,15 +67,7 @@
       <button id="btn-reset" title="Reset nodes to initial layout">Reset layout</button>
       <button id="btn-fit" title="Zoom/Pan to fit graph">Fit to view</button>
       <button id="btn-download" title="Download JSON">Download JSON</button>
-      <div class="group">Threshold (forward)
-        <!-- forward min threshold is 2 -->
-        <input id="thFwd" type="range" min="2" max="20" value="2" />
-        <span id="thFwdVal">2</span>
-      </div>
-      <div class="group">Threshold (backward)
-        <input id="thBack" type="range" min="1" max="20" value="1" />
-        <span id="thBackVal">1</span>
-      </div>
+      <button id="btn-filters" title="Configure filters">Filters</button>
       <div class="meta" id="meta">Loading…</div>
     </header>
     <div id="container">
@@ -78,6 +78,46 @@
         <div><span class="swatch" style="background: var(--ref-back)"></span>Backward refs (outer ring)</div>
       </div>
       <div id="tooltip"></div>
+    </div>
+  </div>
+
+  <div id="filter-overlay" class="modal-overlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="filter-title">
+      <h3 id="filter-title">Filters</h3>
+      <div class="row">
+        <label for="thFwd">Threshold (forward)</label>
+        <input id="thFwd" type="range" min="2" max="20" value="2" />
+        <span id="thFwdVal">2</span>
+      </div>
+      <div class="row">
+        <label for="thBack">Threshold (backward)</label>
+        <input id="thBack" type="range" min="1" max="20" value="1" />
+        <span id="thBackVal">1</span>
+      </div>
+      <div class="row">
+        <label for="minYear">Min year</label>
+        <input id="minYear" type="number" min="0" max="9999" />
+      </div>
+      <div class="row">
+        <label for="maxYear">Max year</label>
+        <input id="maxYear" type="number" min="0" max="9999" />
+      </div>
+      <div class="row">
+        <label for="kwWork"><span class="kw-dot" style="background: var(--work)"></span> Keyword (works)</label>
+        <input id="kwWork" type="text" placeholder="e.g. transformer" />
+      </div>
+      <div class="row">
+        <label for="kwFwd"><span class="kw-dot" style="background: var(--ref)"></span> Keyword (forward)</label>
+        <input id="kwFwd" type="text" placeholder="e.g. citation" />
+      </div>
+      <div class="row">
+        <label for="kwBack"><span class="kw-dot" style="background: var(--ref-back)"></span> Keyword (backward)</label>
+        <input id="kwBack" type="text" placeholder="e.g. survey" />
+      </div>
+      <div class="actions">
+        <button id="btn-close-filters">Close</button>
+        <button id="btn-apply-filters">Apply</button>
+      </div>
     </div>
   </div>
 
@@ -98,12 +138,31 @@
   const thBackEl = document.getElementById('thBack');
   const thFwdVal = document.getElementById('thFwdVal');
   const thBackVal= document.getElementById('thBackVal');
+  const minYearEl = document.getElementById('minYear');
+  const maxYearEl = document.getElementById('maxYear');
+  const kwWorkEl = document.getElementById('kwWork');
+  const kwFwdEl = document.getElementById('kwFwd');
+  const kwBackEl = document.getElementById('kwBack');
+  const filterOverlay = document.getElementById('filter-overlay');
+  const btnFilters = document.getElementById('btn-filters');
+  const btnApplyFilters = document.getElementById('btn-apply-filters');
+  const btnCloseFilters = document.getElementById('btn-close-filters');
   const btnDownload = document.getElementById('btn-download');
 
   let fullData = null;
   // Data URL (backend-provided ID must be templated on server side)
   const DATA_URL = '/network/compute/{{work_list_id}}';
   let currentDataURL = DATA_URL;
+  const currentYear = new Date().getFullYear();
+  const filters = {
+    thFwd: 2,
+    thBack: 1,
+    minYear: 1900,
+    maxYear: currentYear,
+    keywordWork: '',
+    keywordFwd: '',
+    keywordBack: ''
+  };
 
   const zoom = d3.zoom().scaleExtent([0.25, 3]).on('zoom', (ev)=>{ gZoom.attr('transform', ev.transform); });
   svg.call(zoom);
@@ -161,17 +220,68 @@
       );
   }
 
-  function render(data, thFwd, thBack){
+  function render(data, activeFilters){
     // Keep refs by separate thresholds
-    const refsKept     = new Set(data.nodes.filter(n => n.type==='ref'      && (n.count||0) >= thFwd).map(n=>n.id));
-    const refsBackKept = new Set(data.nodes.filter(n => n.type==='ref_back' && (n.count||0) >= thBack).map(n=>n.id));
-    const filteredNodes = data.nodes.filter(n =>
-      n.type === 'work' || refsKept.has(n.id) || refsBackKept.has(n.id)
-    );
+    const refsKept     = new Set(data.nodes.filter(n => n.type==='ref'      && (n.count||0) >= activeFilters.thFwd).map(n=>n.id));
+    const refsBackKept = new Set(data.nodes.filter(n => n.type==='ref_back' && (n.count||0) >= activeFilters.thBack).map(n=>n.id));
+
+    const keywordWork = String(activeFilters.keywordWork || '').trim().toLowerCase();
+    const keywordFwd = String(activeFilters.keywordFwd || '').trim().toLowerCase();
+    const keywordBack = String(activeFilters.keywordBack || '').trim().toLowerCase();
+
+    const worksFiltered = data.nodes.filter(n => n.type === 'work').filter(n => {
+      const py = Number(n.publication_year);
+      const yearOk = Number.isFinite(py) ? (py >= activeFilters.minYear && py <= activeFilters.maxYear) : true;
+      if (!yearOk) return false;
+      if (!keywordWork) return true;
+      const hay = [
+        n.title || '',
+        n.venue || '',
+        (n.authors || []).join(' ')
+      ].join(' ').toLowerCase();
+      return hay.includes(keywordWork);
+    });
+    const keepWorkIds = new Set(worksFiltered.map(n => String(n.id)));
 
     const filteredLinks = data.links.filter(l => {
+      const s = String(typeof l.source === 'object' ? l.source.id : l.source);
       const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+      if (!keepWorkIds.has(s)) return false;
       return refsKept.has(t) || refsBackKept.has(t);
+    });
+
+    const linkedRefIds = new Set(filteredLinks.map(l => String(typeof l.target === 'object' ? l.target.id : l.target)));
+    const filteredNodes = data.nodes.filter(n => {
+      if (n.type === 'work') return keepWorkIds.has(String(n.id));
+      return linkedRefIds.has(String(n.id));
+    });
+
+    const finalNodes = filteredNodes.filter(n => {
+      if (n.type === 'ref') {
+        if (!keywordFwd) return true;
+        const hay = [
+          n.title || '',
+          n.venue || '',
+          (n.authors || []).join(' ')
+        ].join(' ').toLowerCase();
+        return hay.includes(keywordFwd);
+      }
+      if (n.type === 'ref_back') {
+        if (!keywordBack) return true;
+        const hay = [
+          n.title || '',
+          n.venue || '',
+          (n.authors || []).join(' ')
+        ].join(' ').toLowerCase();
+        return hay.includes(keywordBack);
+      }
+      return true;
+    });
+
+    const finalNodeIds = new Set(finalNodes.map(n => String(n.id)));
+    const finalLinks = filteredLinks.filter(l => {
+      const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+      return finalNodeIds.has(t);
     });
 
     // Adjacency maps
@@ -180,9 +290,9 @@
     const worksByRefFwd   = new Map(); // refId      -> Set(workIds)
     const worksByRefBack  = new Map(); // refBackId  -> Set(workIds)
 
-    const nodeIds = new Set(filteredNodes.map(n => String(n.id)));
+    const nodeIds = new Set(finalNodes.map(n => String(n.id)));
 
-    for(const l of filteredLinks){
+    for(const l of finalLinks){
       const s = String(typeof l.source === 'object' ? l.source.id : l.source);
       const t = String(typeof l.target === 'object' ? l.target.id : l.target);
       const kind = (l.kind === 'back') ? 'back' : 'forward';
@@ -202,7 +312,7 @@
     }
 
     // Work sizing by number of backward citations currently displayed
-    const workIds = filteredNodes.filter(n => n.type === 'work').map(n => String(n.id));
+    const workIds = finalNodes.filter(n => n.type === 'work').map(n => String(n.id));
     const workCiteCount = new Map(workIds.map(id => [id, 0]));
     for (const [refb, ws] of worksByRefBack.entries()) {
       for (const w of ws) {
@@ -212,15 +322,20 @@
     const maxCites = Math.max(1, ...workIds.map(id => workCiteCount.get(id) || 0));
     const workSize = d3.scaleSqrt().domain([0, maxCites]).range([7, 18]);
 
-    metaEl.textContent = `${filteredNodes.length} nodes, ${filteredLinks.length} links (forward≥${thFwd}, backward≥${thBack})`;
-    computeInitialPositions({nodes: filteredNodes});
+    const kwParts = [];
+    if (keywordWork) kwParts.push(`works="${keywordWork}"`);
+    if (keywordFwd) kwParts.push(`forward="${keywordFwd}"`);
+    if (keywordBack) kwParts.push(`backward="${keywordBack}"`);
+    const kwSummary = kwParts.length ? `, keywords ${kwParts.join(', ')}` : '';
+    metaEl.textContent = `${finalNodes.length} nodes, ${finalLinks.length} links (forward≥${activeFilters.thFwd}, backward≥${activeFilters.thBack}, years ${activeFilters.minYear}-${activeFilters.maxYear}${kwSummary})`;
+    computeInitialPositions({nodes: finalNodes});
 
     const refSize = d3.scaleSqrt()
       .domain(d3.extent(filteredNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
       .range([8, 24]);
 
     // Links
-    const link = gLinks.selectAll('line').data(filteredLinks, d => {
+    const link = gLinks.selectAll('line').data(finalLinks, d => {
       const s = String(typeof d.source === 'object' ? d.source.id : d.source);
       const t = String(typeof d.target === 'object' ? d.target.id : d.target);
       return `${s}->${t}->${d.kind||'forward'}`;
@@ -234,7 +349,7 @@
     );
 
     // Nodes
-    const node = gNodes.selectAll('circle').data(filteredNodes, d => d.id);
+    const node = gNodes.selectAll('circle').data(finalNodes, d => d.id);
     node.join(
       enter => enter.append('circle')
         .attr('class', d => `node ${d.type}`)
@@ -247,7 +362,8 @@
         .on('mouseover', (ev, d) => { showTooltip(ev, d); applyHighlight(d, true, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
         .on('mousemove', (ev) => { moveTooltip(ev); })
         .on('mouseout',  (ev, d) => { hideTooltip(); applyHighlight(d, false, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
-        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); }),
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); })
+        .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); }),
       update => update
         .attr('r', d =>
           d.type === 'ref' ? refSize(d.count || 1) :
@@ -259,7 +375,7 @@
     );
 
     // Labels (forward refs only)
-    const label = gLabels.selectAll('text').data(filteredNodes.filter(d => d.type==='ref'), d => d.id);
+    const label = gLabels.selectAll('text').data(finalNodes.filter(d => d.type==='ref'), d => d.id);
     label.join(
       enter => enter.append('text').attr('class','label').attr('text-anchor','middle')
         .attr('dy', d => -(refSize(d.count || 1) + 6)).text(d => truncate(d.title || d.id, 36)),
@@ -268,13 +384,13 @@
     );
 
     // Simulation on forward refs only
-    const refNodes = filteredNodes.filter(d => d.type==='ref');
+    const refNodes = finalNodes.filter(d => d.type==='ref');
     sim.nodes(refNodes).on('tick', () => {
       gLinks.selectAll('line')
-        .attr('x1', d => nodeById(d.source, filteredNodes).x)
-        .attr('y1', d => nodeById(d.source, filteredNodes).y)
-        .attr('x2', d => nodeById(d.target, filteredNodes).x)
-        .attr('y2', d => nodeById(d.target, filteredNodes).y);
+        .attr('x1', d => nodeById(d.source, finalNodes).x)
+        .attr('y1', d => nodeById(d.source, finalNodes).y)
+        .attr('x2', d => nodeById(d.target, finalNodes).x)
+        .attr('y2', d => nodeById(d.target, finalNodes).y);
       gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
       gLabels.selectAll('text').attr('x', d => d.x).attr('y', d => d.y - 2);
     });
@@ -354,9 +470,14 @@
     }
   }
 
+  function openDoi(d){
+    const url = d.doi || (d.openalex ? d.openalex : '');
+    if (url) window.open(url, '_blank');
+  }
+
   document.getElementById('btn-reset').onclick = () => {
     if (!fullData) return;
-    render(fullData, parseInt(thFwdEl.value, 10), parseInt(thBackEl.value, 10));
+    render(fullData, filters);
   };
   document.getElementById('btn-fit').onclick = () => fitToView();
 
@@ -370,14 +491,65 @@
     a.remove();
   };
 
-  thFwdEl.oninput = () => {
-    thFwdVal.textContent = thFwdEl.value;
-    if (fullData) render(fullData, parseInt(thFwdEl.value, 10), parseInt(thBackEl.value, 10));
+  function syncFilterUI(){
+    thFwdEl.value = String(filters.thFwd);
+    thBackEl.value = String(filters.thBack);
+    thFwdVal.textContent = String(filters.thFwd);
+    thBackVal.textContent = String(filters.thBack);
+    minYearEl.value = String(filters.minYear);
+    maxYearEl.value = String(filters.maxYear);
+    kwWorkEl.value = filters.keywordWork;
+    kwFwdEl.value = filters.keywordFwd;
+    kwBackEl.value = filters.keywordBack;
+  }
+
+  function applyFiltersFromUI(){
+    const minYear = parseInt(minYearEl.value, 10);
+    const maxYear = parseInt(maxYearEl.value, 10);
+    filters.thFwd = parseInt(thFwdEl.value, 10);
+    filters.thBack = parseInt(thBackEl.value, 10);
+    filters.minYear = Number.isFinite(minYear) ? minYear : 1900;
+    filters.maxYear = Number.isFinite(maxYear) ? maxYear : currentYear;
+    if (filters.minYear > filters.maxYear) {
+      const tmp = filters.minYear;
+      filters.minYear = filters.maxYear;
+      filters.maxYear = tmp;
+    }
+    filters.keywordWork = String(kwWorkEl.value || '').trim();
+    filters.keywordFwd = String(kwFwdEl.value || '').trim();
+    filters.keywordBack = String(kwBackEl.value || '').trim();
+    thFwdVal.textContent = String(filters.thFwd);
+    thBackVal.textContent = String(filters.thBack);
+    if (fullData) render(fullData, filters);
+  }
+
+  btnFilters.onclick = () => {
+    syncFilterUI();
+    filterOverlay.style.display = 'flex';
+    filterOverlay.setAttribute('aria-hidden', 'false');
   };
-  thBackEl.oninput = () => {
-    thBackVal.textContent = thBackEl.value;
-    if (fullData) render(fullData, parseInt(thFwdEl.value, 10), parseInt(thBackEl.value, 10));
+  btnCloseFilters.onclick = () => {
+    filterOverlay.style.display = 'none';
+    filterOverlay.setAttribute('aria-hidden', 'true');
   };
+  filterOverlay.addEventListener('click', (ev) => {
+    if (ev.target === filterOverlay) {
+      filterOverlay.style.display = 'none';
+      filterOverlay.setAttribute('aria-hidden', 'true');
+    }
+  });
+  btnApplyFilters.onclick = () => {
+    applyFiltersFromUI();
+    filterOverlay.style.display = 'none';
+    filterOverlay.setAttribute('aria-hidden', 'true');
+  };
+  thFwdEl.oninput = () => { thFwdVal.textContent = thFwdEl.value; applyFiltersFromUI(); };
+  thBackEl.oninput = () => { thBackVal.textContent = thBackEl.value; applyFiltersFromUI(); };
+  minYearEl.oninput = () => applyFiltersFromUI();
+  maxYearEl.oninput = () => applyFiltersFromUI();
+  kwWorkEl.oninput = () => applyFiltersFromUI();
+  kwFwdEl.oninput = () => applyFiltersFromUI();
+  kwBackEl.oninput = () => applyFiltersFromUI();
 
   function fitToView(){
     const pad = 40;
@@ -403,9 +575,11 @@
     .then(data => {
       fullData = data;
       currentDataURL = DATA_URL;
-      thFwdVal.textContent = thFwdEl.value;
-      thBackVal.textContent = thBackEl.value;
-      render(fullData, parseInt(thFwdEl.value, 10), parseInt(thBackEl.value, 10));
+      filters.maxYear = currentYear;
+      filters.minYear = 1900;
+      filters.thFwd = parseInt(thFwdEl.value, 10);
+      filters.thBack = parseInt(thBackEl.value, 10);
+      render(fullData, filters);
     })
     .catch(err => { metaEl.textContent = 'Error loading data: ' + err; });
 

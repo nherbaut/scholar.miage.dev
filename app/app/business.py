@@ -1052,10 +1052,10 @@ def net_fetch_work(identifier: str) -> dict | None:
         return None
 
 
-def net_work_metadata(w: dict) -> Tuple[str, List[str], str, str, str]:
-    """Extract title, authors, venue, doi_url, openalex_url."""
+def net_work_metadata(w: dict) -> Tuple[str, List[str], str, str, str, int | None]:
+    """Extract title, authors, venue, doi_url, openalex_url, publication_year."""
     if not w:
-        return "", [], "", "", ""
+        return "", [], "", "", "", None
     title = w.get("title") or ""
     authors = []
     for a in (w.get("authorships") or []):
@@ -1082,7 +1082,8 @@ def net_work_metadata(w: dict) -> Tuple[str, List[str], str, str, str]:
     if isinstance(ids, dict):
         doi_url = ids.get("doi")
     openalex_url = w.get("id") or ""
-    return title, authors, venue, doi_url, openalex_url
+    publication_year = w.get("publication_year")
+    return title, authors, venue, doi_url, openalex_url, publication_year
 
 
 def net_referenced_ids(w: dict) -> List[str]:
@@ -1271,7 +1272,7 @@ def net_build_graph(
     references_processed = 0
 
     for wid, w in works.items():
-        title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+        title, authors, venue, doi_url, openalex_url, publication_year = net_work_metadata(w)
         # FIX: reuse the canonical id we decided earlier
         node_id = work_node_id[wid]
         nodes.append({
@@ -1282,6 +1283,7 @@ def net_build_graph(
             "venue": venue,
             "doi": doi_url,
             "openalex": openalex_url,
+            "publication_year": publication_year,
         })
         references_processed = len(counts_forward) + len(nodes)
         emitt({
@@ -1309,7 +1311,7 @@ def net_build_graph(
             w = None
 
         if w:
-            title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+            title, authors, venue, doi_url, openalex_url, _ = net_work_metadata(w)
             nodes.append({
                 "id": rid,
                 "type": "ref",  # forward reference (center cluster in UI)
@@ -1347,7 +1349,7 @@ def net_build_graph(
             w = None
 
         if w:
-            title, authors, venue, doi_url, openalex_url = net_work_metadata(w)
+            title, authors, venue, doi_url, openalex_url, _ = net_work_metadata(w)
             nodes.append({
                 "id": rid,
                 "type": "ref_back",  # backward reference (outside ring in UI)
