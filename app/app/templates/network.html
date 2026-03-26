@@ -27,12 +27,14 @@
     .link{stroke:var(--link);stroke-opacity:.35}
     .link.highlight{stroke-opacity:.85}
     .link.back{stroke-dasharray:5 4}
+    .link.author-hit{stroke:#eab308;stroke-opacity:.95}
 
     .node{stroke:#0a0f14;stroke-width:1px;cursor:grab}
     .node:active{cursor:grabbing}
     .node.work{fill:var(--work)}
     .node.ref{fill:var(--ref)}
     .node.ref_back{fill:var(--ref-back)}
+    .node.author-hit{stroke:#facc15;stroke-width:2.5px}
 
     .node.work.neighbor{fill:var(--work-neigh)}
     .node.ref.neighbor{fill:var(--ref-neigh)}
@@ -59,6 +61,19 @@
     .modal input[type=range]{width:220px}
     .modal input[type=number], .modal input[type=text]{background:#0b0f14;border:1px solid #223042;color:var(--fg);padding:.35rem .5rem;border-radius:.4rem;width:120px}
     .modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+
+    #ctx-menu{position:absolute;z-index:30;display:none;background:#0f141b;border:1px solid #223042;border-radius:8px;min-width:180px;box-shadow:0 12px 24px rgba(0,0,0,.45);padding:6px}
+    #ctx-menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--fg);border:0;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+    #ctx-menu button:hover{background:#19212b}
+    #ctx-menu button[disabled]{opacity:.45;cursor:not-allowed}
+
+    #authors-panel{position:absolute;top:48px;left:12px;background:#0f141b;border:1px solid #223042;border-radius:10px;min-width:260px;max-height:60vh;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,.45);display:none;z-index:25}
+    #authors-panel header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #1b2530;background:#0f141b;position:sticky;top:0}
+    #authors-panel input{flex:1;background:#0b0f14;border:1px solid #223042;color:var(--fg);padding:.35rem .5rem;border-radius:.4rem;font-size:12px}
+    #authors-panel .list{max-height:50vh;overflow:auto;padding:6px}
+    #authors-panel button.item{display:block;width:100%;text-align:left;background:transparent;color:var(--fg);border:0;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px}
+    #authors-panel button.item:hover{background:#19212b}
+    #authors-panel .muted{color:var(--muted);font-size:12px;padding:6px 8px}
   </style>
 </head>
 <body>
@@ -67,8 +82,9 @@
       <button id="btn-reset" title="Reset nodes to initial layout">Reset layout</button>
       <button id="btn-fit" title="Zoom/Pan to fit graph">Fit to view</button>
       <button id="btn-download" title="Download JSON">Download JSON</button>
-      <button id="btn-filters" title="Configure filters">Filters</button>
+      <button id="btn-filters" title="Configure options">Options</button>
       <button id="btn-communities" title="Show community view">Communities</button>
+      <button id="btn-authors" title="Filter by author">Authors</button>
       <div class="meta" id="meta">Loading…</div>
     </header>
     <div id="container">
@@ -79,12 +95,24 @@
         <div><span class="swatch" style="background: var(--ref-back)"></span>Backward refs (outer ring)</div>
       </div>
       <div id="tooltip"></div>
+      <div id="authors-panel">
+        <header>
+          <button id="authors-reset" title="Clear author selection">Reset</button>
+          <input id="authors-filter" type="text" placeholder="Filter authors…" />
+        </header>
+        <div class="list" id="authors-list"></div>
+      </div>
+      <div id="ctx-menu">
+        <button id="ctx-export-all">Export community CSV (all)</button>
+        <button id="ctx-export-visible">Export community CSV (visible)</button>
+        <button id="ctx-go">Go to paper</button>
+      </div>
     </div>
   </div>
 
   <div id="filter-overlay" class="modal-overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="filter-title">
-      <h3 id="filter-title">Filters</h3>
+      <h3 id="filter-title">Options</h3>
       <div class="row">
         <label for="thFwd">Threshold (forward)</label>
         <input id="thFwd" type="range" min="2" max="20" value="2" />
@@ -106,6 +134,12 @@
       <div class="row">
         <label for="resolution">Resolution</label>
         <input id="resolution" type="number" min="0.1" max="5" step="0.1" value="1.0" />
+      </div>
+      <div class="row">
+        <label for="shadeByAge">Shade by age</label>
+        <input id="shadeByAge" type="checkbox" />
+        <input id="shadeSensitivity" type="range" min="0.5" max="5" step="0.1" value="1" />
+        <span id="shadeSensitivityVal">1.0</span>
       </div>
       <div class="row">
         <label for="kwWork"><span class="kw-dot" style="background: var(--work)"></span> Keyword (works)</label>
@@ -146,6 +180,9 @@
   const minYearEl = document.getElementById('minYear');
   const maxYearEl = document.getElementById('maxYear');
   const resolutionEl = document.getElementById('resolution');
+  const shadeByAgeEl = document.getElementById('shadeByAge');
+  const shadeSensitivityEl = document.getElementById('shadeSensitivity');
+  const shadeSensitivityVal = document.getElementById('shadeSensitivityVal');
   const kwWorkEl = document.getElementById('kwWork');
   const kwFwdEl = document.getElementById('kwFwd');
   const kwBackEl = document.getElementById('kwBack');
@@ -154,26 +191,86 @@
   const btnApplyFilters = document.getElementById('btn-apply-filters');
   const btnCloseFilters = document.getElementById('btn-close-filters');
   const btnCommunities = document.getElementById('btn-communities');
+  const btnAuthors = document.getElementById('btn-authors');
+  const authorsPanel = document.getElementById('authors-panel');
+  const authorsListEl = document.getElementById('authors-list');
+  const authorsFilterEl = document.getElementById('authors-filter');
+  const authorsResetEl = document.getElementById('authors-reset');
   const btnDownload = document.getElementById('btn-download');
+  const ctxMenu = document.getElementById('ctx-menu');
+  const ctxExportAll = document.getElementById('ctx-export-all');
+  const ctxExportVisible = document.getElementById('ctx-export-visible');
+  const ctxGo = document.getElementById('ctx-go');
+  let ctxNode = null;
+  let ctxVisibleNodes = null;
 
   let fullData = null;
   let communityData = null;
   let communityResolution = null;
   let viewMode = 'graph';
+  let currentVisibleNodes = [];
+  let currentVisibleLinks = [];
+  let selectedAuthor = '';
   // Data URL (backend-provided ID must be templated on server side)
   const DATA_URL = '/network/compute/{{work_list_id}}';
   let currentDataURL = DATA_URL;
   const currentYear = new Date().getFullYear();
+  const rootStyles = getComputedStyle(document.documentElement);
   const filters = {
     thFwd: 2,
     thBack: 1,
     minYear: 1900,
     maxYear: currentYear,
     resolution: 1.0,
+    shadeByAge: false,
+    shadeSensitivity: 1.0,
     keywordWork: '',
     keywordFwd: '',
     keywordBack: ''
   };
+
+  function cssVar(name, fallback){
+    const value = rootStyles.getPropertyValue(name).trim();
+    return value || fallback;
+  }
+
+  function yearExtent(nodes){
+    const years = (nodes || [])
+      .map(n => Number(n.publication_year))
+      .filter(y => Number.isFinite(y));
+    if (!years.length) return [currentYear - 1, currentYear];
+    const min = Math.min(...years);
+    const max = Math.max(...years);
+    return min === max ? [min - 1, max] : [min, max];
+  }
+
+  function nodeBaseColor(d, colorScale){
+    if (colorScale) return colorScale(d.community ?? -1);
+    if (d.type === 'work') return cssVar('--work', '#7aa2f7');
+    if (d.type === 'ref_back') return cssVar('--ref-back', '#94e2d5');
+    return cssVar('--ref', '#f7768e');
+  }
+
+  function buildNodeFill(activeNodes, activeFilters, colorScale){
+    if (!activeFilters.shadeByAge) {
+      return (d) => nodeBaseColor(d, colorScale);
+    }
+    const [minYear, maxYear] = yearExtent(activeNodes);
+    const ageScale = d3.scaleLinear()
+      .domain([minYear, maxYear])
+      .range([0, 1])
+      .clamp(true);
+    return (d) => {
+      const base = d3.color(nodeBaseColor(d, colorScale));
+      const publicationYear = Number(d.publication_year);
+      if (!base || !Number.isFinite(publicationYear)) return nodeBaseColor(d, colorScale);
+      const rawMix = 1 - ageScale(publicationYear);
+      const sensitivity = Number.isFinite(activeFilters.shadeSensitivity) ? activeFilters.shadeSensitivity : 1.0;
+      const adjustedMix = Math.pow(rawMix, 1 / Math.max(0.1, sensitivity));
+      const mix = 0.18 + (adjustedMix * 0.77);
+      return d3.interpolateRgb(base.formatRgb(), '#ffffff')(mix);
+    };
+  }
 
   const zoom = d3.zoom().scaleExtent([0.25, 3]).on('zoom', (ev)=>{ gZoom.attr('transform', ev.transform); });
   svg.call(zoom);
@@ -301,7 +398,10 @@
 
   function renderGraph(data, activeFilters){
     simCommunity.stop();
-    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(data, activeFilters);
+    const safeData = JSON.parse(JSON.stringify(data || {nodes: [], links: []}));
+    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(safeData, activeFilters);
+    currentVisibleNodes = finalNodes;
+    currentVisibleLinks = finalLinks;
 
     // Adjacency maps
     const refsByWorkFwd   = new Map();
@@ -351,6 +451,7 @@
     const refSize = d3.scaleSqrt()
       .domain(d3.extent(finalNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
       .range([8, 24]);
+    const nodeFill = buildNodeFill(finalNodes, activeFilters);
 
     const link = gLinks.selectAll('line').data(finalLinks, d => {
       const s = String(typeof d.source === 'object' ? d.source.id : d.source);
@@ -366,21 +467,17 @@
     );
 
     const node = gNodes.selectAll('circle').data(finalNodes, d => d.id);
-    node.join(
+    const nodeJoin = node.join(
       enter => enter.append('circle')
         .attr('class', d => `node ${d.type}`)
+        .attr('fill', d => nodeFill(d))
         .attr('r', d =>
           d.type === 'ref' ? refSize(d.count || 1) :
           d.type === 'ref_back' ? 8 :
           workSize(workCiteCount.get(String(d.id)) || 0)
-        )
-        .call(d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended))
-        .on('mouseover', (ev, d) => { showTooltip(ev, d); applyHighlight(d, true, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
-        .on('mousemove', (ev) => { moveTooltip(ev); })
-        .on('mouseout',  (ev, d) => { hideTooltip(); applyHighlight(d, false, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
-        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); })
-        .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); }),
+        ),
       update => update
+        .attr('fill', d => nodeFill(d))
         .attr('r', d =>
           d.type === 'ref' ? refSize(d.count || 1) :
           d.type === 'ref_back' ? 8 :
@@ -389,6 +486,13 @@
         .attr('class', d => `node ${d.type}`),
       exit => exit.remove()
     );
+    nodeJoin
+      .call(d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended))
+      .on('mouseover', (ev, d) => { showTooltip(ev, d); applyHighlight(d, true, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
+      .on('mousemove', (ev) => { moveTooltip(ev); })
+      .on('mouseout',  (ev, d) => { hideTooltip(); applyHighlight(d, false, refsByWorkFwd, worksByRefFwd, refsByWorkBack, worksByRefBack); })
+      .on('contextmenu', (ev, d) => { ev.preventDefault(); showContextMenu(ev, d, false, finalNodes); })
+      .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); });
 
     const label = gLabels.selectAll('text').data(finalNodes.filter(d => d.type==='ref'), d => d.id);
     label.join(
@@ -399,7 +503,7 @@
     );
 
     const refNodes = finalNodes.filter(d => d.type==='ref');
-    sim.nodes(refNodes).on('tick', () => {
+    sim.nodes(refNodes).alpha(0.7).restart().on('tick', () => {
       gLinks.selectAll('line')
         .attr('x1', d => nodeById(d.source, finalNodes).x)
         .attr('y1', d => nodeById(d.source, finalNodes).y)
@@ -408,11 +512,16 @@
       gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
       gLabels.selectAll('text').attr('x', d => d.x).attr('y', d => d.y - 2);
     });
+    updateAuthorsList();
+    applyAuthorHighlight();
   }
 
   function renderCommunity(data, activeFilters){
     sim.stop();
-    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(data, activeFilters);
+    const safeData = JSON.parse(JSON.stringify(data || {nodes: [], links: []}));
+    const {nodes: finalNodes, links: finalLinks, keywordWork, keywordFwd, keywordBack} = filterData(safeData, activeFilters);
+    currentVisibleNodes = finalNodes;
+    currentVisibleLinks = finalLinks;
 
     gRings.selectAll('circle').remove();
 
@@ -443,6 +552,7 @@
     const refSize = d3.scaleSqrt()
       .domain(d3.extent(finalNodes.filter(d => d.type==='ref').map(d => d.count || 1)) || [1,1])
       .range([8, 24]);
+    const nodeFill = buildNodeFill(finalNodes, activeFilters, color);
 
     const kwParts = [];
     if (keywordWork) kwParts.push(`works="${keywordWork}"`);
@@ -473,11 +583,11 @@
           d.type === 'ref_back' ? 8 :
           workSize(workCiteCount.get(String(d.id)) || 0)
         )
-        .attr('fill', d => color(d.community ?? -1))
+        .attr('fill', d => nodeFill(d))
         .on('mouseover', (ev, d) => { showTooltip(ev, d); })
         .on('mousemove', (ev) => { moveTooltip(ev); })
         .on('mouseout',  () => { hideTooltip(); })
-        .on('contextmenu', (ev, d) => { ev.preventDefault(); copyOpenAlex(d); })
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); showContextMenu(ev, d, true, finalNodes); })
         .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); }),
       update => update
         .attr('r', d =>
@@ -486,7 +596,12 @@
           workSize(workCiteCount.get(String(d.id)) || 0)
         )
         .attr('class', 'node')
-        .attr('fill', d => color(d.community ?? -1)),
+        .attr('fill', d => nodeFill(d))
+        .on('mouseover', (ev, d) => { showTooltip(ev, d); })
+        .on('mousemove', (ev) => { moveTooltip(ev); })
+        .on('mouseout',  () => { hideTooltip(); })
+        .on('contextmenu', (ev, d) => { ev.preventDefault(); showContextMenu(ev, d, true, finalNodes); })
+        .on('dblclick', (ev, d) => { ev.preventDefault(); openDoi(d); }),
       exit => exit.remove()
     );
     nodeJoin.on('.drag', null);
@@ -525,6 +640,8 @@
           .attr('y2', d => nodeById(d.target, finalNodes).y);
         gNodes.selectAll('circle').attr('cx', d => d.x).attr('cy', d => d.y);
       });
+    updateAuthorsList();
+    applyAuthorHighlight();
   }
 
   function renderCurrent(){
@@ -586,6 +703,7 @@
     if (d.title)   lines.push('<div class="row"><strong>Title:</strong> ' + escapeHTML(d.title) + '</div>');
     if (d.authors && d.authors.length) lines.push('<div class="row"><strong>Authors:</strong> ' + escapeHTML(d.authors.join(', ')) + '</div>');
     if (d.venue)   lines.push('<div class="row"><strong>Venue:</strong> ' + escapeHTML(d.venue) + '</div>');
+    if (Number.isFinite(Number(d.publication_year))) lines.push('<div class="row"><strong>Publication year:</strong> ' + escapeHTML(String(d.publication_year)) + '</div>');
     if (d.doi)     lines.push('<div class="row"><strong>DOI:</strong> <a href="' + d.doi + '" target="_blank">' + escapeHTML(d.doi) + '</a></div>');
     if (d.openalex)lines.push('<div class="row"><strong>OpenAlex:</strong> <a href="' + d.openalex + '" target="_blank">' + escapeHTML(d.openalex) + '</a></div>');
     if (Number.isFinite(d.count)) lines.push('<div class="row"><strong>Connections to input works:</strong> ' + d.count + '</div>');
@@ -614,10 +732,163 @@
     if (url) window.open(url, '_blank');
   }
 
-  document.getElementById('btn-reset').onclick = () => {
+  function exportCommunityCSVFromNodes(node, nodes, label){
+    if (!node || !nodes) return;
+    const communityId = node.community ?? -1;
+    const rows = nodes.filter(n => (n.community ?? -1) === communityId);
+    if (!rows.length) return;
+    const header = ['id','title','doi','openalex','venue','publication_year','type','authors'];
+    const escapeCSV = (val) => {
+      const s = String(val ?? '');
+      if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const lines = [header.join(',')];
+    for (const n of rows) {
+      const line = [
+        escapeCSV(n.id),
+        escapeCSV(n.title),
+        escapeCSV(n.doi),
+        escapeCSV(n.openalex),
+        escapeCSV(n.venue),
+        escapeCSV(n.publication_year),
+        escapeCSV(n.type),
+        escapeCSV((n.authors || []).join('; '))
+      ];
+      lines.push(line.join(','));
+    }
+    const blob = new Blob([lines.join('\n')], {type: 'text/csv;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `community_${communityId}_${label}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    metaEl.textContent = `Exported community ${communityId} (${rows.length} papers, ${label})`;
+  }
+
+  function openPaper(d){
+    const url = d.openalex || d.doi || (String(d.id).startsWith('W') ? ('https://openalex.org/' + d.id) : '');
+    if (url) window.open(url, '_blank');
+  }
+
+  function showContextMenu(ev, node, allowExport, nodes){
+    ctxNode = node;
+    ctxVisibleNodes = nodes || null;
+    ctxMenu.style.display = 'block';
+    const rect = document.getElementById('container').getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+    ctxMenu.style.left = `${x + 6}px`;
+    ctxMenu.style.top = `${y + 6}px`;
+    ctxExportAll.disabled = !allowExport;
+    ctxExportVisible.disabled = !allowExport;
+    ctxExportAll.style.display = allowExport ? 'block' : 'none';
+    ctxExportVisible.style.display = allowExport ? 'block' : 'none';
+    ctxGo.disabled = !node;
+    ctxMenu.dataset.allowExport = allowExport ? '1' : '0';
+    ctxMenu.dataset.nodeCount = nodes ? String(nodes.length) : '0';
+  }
+
+  function hideContextMenu(){
+    ctxMenu.style.display = 'none';
+    ctxNode = null;
+  }
+
+  function collectAuthors(nodes){
+    const counts = new Map();
+    for (const n of nodes || []) {
+      const authors = n.authors || [];
+      for (const a of authors) {
+        const name = String(a || '').trim();
+        if (!name) continue;
+        if (!counts.has(name)) counts.set(name, {work: 0, ref: 0, ref_back: 0});
+        const bucket = counts.get(name);
+        if (n.type === 'work') bucket.work += 1;
+        else if (n.type === 'ref') bucket.ref += 1;
+        else if (n.type === 'ref_back') bucket.ref_back += 1;
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([name, c]) => ({name, counts: c}))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function updateAuthorsList(){
+    const filter = String(authorsFilterEl.value || '').trim().toLowerCase();
+    const authors = collectAuthors(currentVisibleNodes)
+      .filter(a => a.name.toLowerCase().includes(filter));
+    authorsListEl.innerHTML = '';
+    if (!authors.length) {
+      const div = document.createElement('div');
+      div.className = 'muted';
+      div.textContent = 'No authors found';
+      authorsListEl.appendChild(div);
+      return;
+    }
+    for (const a of authors) {
+      const btn = document.createElement('button');
+      btn.className = 'item';
+      btn.textContent = `${a.name} (w:${a.counts.work}, f:${a.counts.ref}, b:${a.counts.ref_back})`;
+      if (a.name === selectedAuthor) {
+        btn.style.background = '#1f2a36';
+      }
+      btn.onclick = () => {
+        selectedAuthor = a.name;
+        applyAuthorHighlight();
+      };
+      authorsListEl.appendChild(btn);
+    }
+  }
+
+  function applyAuthorHighlight(){
+    const name = String(selectedAuthor || '').trim();
+    gNodes.selectAll('circle').classed('author-hit', false);
+    gLinks.selectAll('line').classed('author-hit', false);
+    if (!name) return;
+
+    const nodeMap = new Map((currentVisibleNodes || []).map(n => [String(n.id), n]));
+    const hitNodes = new Set();
+    for (const n of currentVisibleNodes || []) {
+      const authors = (n.authors || []).map(a => String(a));
+      if (authors.includes(name)) {
+        hitNodes.add(String(n.id));
+      }
+    }
+
+    gNodes.selectAll('circle').filter(d => hitNodes.has(String(d.id))).classed('author-hit', true);
+
+    gLinks.selectAll('line').classed('author-hit', l => {
+      const s = String(typeof l.source === 'object' ? l.source.id : l.source);
+      const t = String(typeof l.target === 'object' ? l.target.id : l.target);
+      return hitNodes.has(s) || hitNodes.has(t);
+    });
+  }
+
+  function resetLayout(){
     if (!fullData) return;
-    renderCurrent();
-  };
+    if (viewMode !== 'graph') {
+      viewMode = 'graph';
+      btnCommunities.textContent = 'Communities';
+      currentDataURL = DATA_URL;
+    }
+    const resetNodes = (nodes) => {
+      for (const n of nodes || []) {
+        delete n.x; delete n.y; delete n.vx; delete n.vy; delete n.fx; delete n.fy;
+        delete n.initialX; delete n.initialY;
+      }
+    };
+    resetNodes(fullData.nodes);
+    if (communityData && communityData.nodes) resetNodes(communityData.nodes);
+    simCommunity.stop();
+    sim.stop();
+    renderGraph(fullData, filters);
+  }
+  document.getElementById('btn-reset').onclick = () => resetLayout();
   document.getElementById('btn-fit').onclick = () => fitToView();
 
   // Download JSON (forward request to the same data URL)
@@ -629,6 +900,30 @@
     a.click();
     a.remove();
   };
+
+  ctxGo.onclick = () => {
+    if (ctxNode) openPaper(ctxNode);
+    hideContextMenu();
+  };
+  ctxExportAll.onclick = () => {
+    if (ctxNode && viewMode === 'community') {
+      exportCommunityCSVFromNodes(ctxNode, (communityData && communityData.nodes) ? communityData.nodes : [], 'all');
+    }
+    hideContextMenu();
+  };
+  ctxExportVisible.onclick = () => {
+    if (ctxNode && viewMode === 'community') {
+      exportCommunityCSVFromNodes(ctxNode, ctxVisibleNodes || [], 'visible');
+    }
+    hideContextMenu();
+  };
+  document.addEventListener('click', () => hideContextMenu());
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hideContextMenu(); });
+  document.addEventListener('click', (ev) => {
+    if (!authorsPanel.contains(ev.target) && ev.target !== btnAuthors) {
+      authorsPanel.style.display = 'none';
+    }
+  });
 
   function communityURL(){
     return `/network/communities/{{work_list_id}}?resolution=${encodeURIComponent(filters.resolution)}`;
@@ -661,6 +956,9 @@
     minYearEl.value = String(filters.minYear);
     maxYearEl.value = String(filters.maxYear);
     resolutionEl.value = String(filters.resolution);
+    shadeByAgeEl.checked = !!filters.shadeByAge;
+    shadeSensitivityEl.value = String(filters.shadeSensitivity);
+    shadeSensitivityVal.textContent = Number(filters.shadeSensitivity).toFixed(1);
     kwWorkEl.value = filters.keywordWork;
     kwFwdEl.value = filters.keywordFwd;
     kwBackEl.value = filters.keywordBack;
@@ -670,11 +968,15 @@
     const minYear = parseInt(minYearEl.value, 10);
     const maxYear = parseInt(maxYearEl.value, 10);
     const resolution = parseFloat(resolutionEl.value);
+    const shadeSensitivity = parseFloat(shadeSensitivityEl.value);
     filters.thFwd = parseInt(thFwdEl.value, 10);
     filters.thBack = parseInt(thBackEl.value, 10);
     filters.minYear = Number.isFinite(minYear) ? minYear : 1900;
     filters.maxYear = Number.isFinite(maxYear) ? maxYear : currentYear;
     filters.resolution = Number.isFinite(resolution) && resolution > 0 ? resolution : 1.0;
+    filters.shadeByAge = !!shadeByAgeEl.checked;
+    filters.shadeSensitivity = Number.isFinite(shadeSensitivity) && shadeSensitivity > 0 ? shadeSensitivity : 1.0;
+    shadeSensitivityVal.textContent = filters.shadeSensitivity.toFixed(1);
     if (filters.minYear > filters.maxYear) {
       const tmp = filters.minYear;
       filters.minYear = filters.maxYear;
@@ -729,9 +1031,18 @@
   minYearEl.oninput = () => applyFiltersFromUI();
   maxYearEl.oninput = () => applyFiltersFromUI();
   resolutionEl.oninput = () => applyFiltersFromUI();
+  shadeByAgeEl.oninput = () => applyFiltersFromUI();
+  shadeSensitivityEl.oninput = () => applyFiltersFromUI();
   kwWorkEl.oninput = () => applyFiltersFromUI();
   kwFwdEl.oninput = () => applyFiltersFromUI();
   kwBackEl.oninput = () => applyFiltersFromUI();
+  authorsFilterEl.oninput = () => updateAuthorsList();
+  authorsResetEl.onclick = () => { selectedAuthor = ''; applyAuthorHighlight(); updateAuthorsList(); };
+  btnAuthors.onclick = () => {
+    const show = authorsPanel.style.display !== 'block';
+    authorsPanel.style.display = show ? 'block' : 'none';
+    if (show) updateAuthorsList();
+  };
 
   function fitToView(){
     const pad = 40;
@@ -762,6 +1073,7 @@
       filters.thFwd = parseInt(thFwdEl.value, 10);
       filters.thBack = parseInt(thBackEl.value, 10);
       filters.resolution = parseFloat(resolutionEl.value) || 1.0;
+      filters.shadeSensitivity = parseFloat(shadeSensitivityEl.value) || 1.0;
       renderCurrent();
     })
     .catch(err => { metaEl.textContent = 'Error loading data: ' + err; });

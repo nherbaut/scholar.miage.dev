@@ -1381,7 +1381,7 @@ def net_build_graph(
             w = None
 
         if w:
-            title, authors, venue, doi_url, openalex_url, _ = net_work_metadata(w)
+            title, authors, venue, doi_url, openalex_url, publication_year = net_work_metadata(w)
             nodes.append({
                 "id": rid,
                 "type": "ref",  # forward reference (center cluster in UI)
@@ -1390,6 +1390,7 @@ def net_build_graph(
                 "venue": venue,
                 "doi": doi_url,
                 "openalex": openalex_url,
+                "publication_year": publication_year,
                 "count": counts_forward[rid],
             })
             keyword_counter.update(set(net_extract_keywords(w)))
@@ -1419,7 +1420,7 @@ def net_build_graph(
             w = None
 
         if w:
-            title, authors, venue, doi_url, openalex_url, _ = net_work_metadata(w)
+            title, authors, venue, doi_url, openalex_url, publication_year = net_work_metadata(w)
             nodes.append({
                 "id": rid,
                 "type": "ref_back",  # backward reference (outside ring in UI)
@@ -1428,6 +1429,7 @@ def net_build_graph(
                 "venue": venue,
                 "doi": doi_url,
                 "openalex": openalex_url,
+                "publication_year": publication_year,
                 "count": counts_back[rid],
             })
             keyword_counter.update(set(net_extract_keywords(w)))
