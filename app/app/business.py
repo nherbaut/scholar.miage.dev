@@ -297,10 +297,80 @@ def refresh_ranking():
 
 
 def get_ref_for_doi(doi):
-    resp = requests.get(SCPUS_ABTRACT_BACKEND %
-                        doi, headers={"Accept": "application/json"})
-    result = resp.json()
-    #print(result)
+    doi_url = net_normalize_input(doi)
+
+    try:
+        work = Works()[doi_url]
+    except Exception as exc:
+        logger.warning("OpenAlex DOI lookup failed for %s", doi_url, exc_info=exc)
+        status = 404 if "404" in str(exc) else 502
+        error = "doi_not_found" if status == 404 else "openalex_lookup_failed"
+        return {"error": error, "doi": doi}, status
+
+    return _build_ref_response_from_openalex(work)
+
+
+def _build_ref_response_from_openalex(work: dict) -> dict:
+    open_access = work.get("open_access") or {}
+    authorships = work.get("authorships") or []
+    primary_location = work.get("primary_location") or {}
+    primary_source = primary_location.get("source") or {}
+    biblio = work.get("biblio") or {}
+
+    authors_list = []
+    for authorship in authorships:
+        author = authorship.get("author") or {}
+        institutions = authorship.get("institutions") or []
+        country = "xxx"
+        affiliation = ""
+        if institutions:
+            first_institution = institutions[0] or {}
+            country_code = first_institution.get("country_code") or ""
+            country = country_code.lower() if country_code else "xxx"
+            affiliation = first_institution.get("display_name") or ""
+        authors_list.append({
+            "display_name": author.get("display_name") or authorship.get("raw_author_name") or "",
+            "orcid": author.get("orcid") or "",
+            "openalex": author.get("id") or "",
+            "country": country,
+            "affiliation": affiliation,
+        })
+
+    first_author = authors_list[0] if authors_list else {}
+    pubtitle = primary_source.get("display_name") or ""
+    ranking = get_ranking(pubtitle) if pubtitle else get_blank_ranking()
+
+    return {
+        "doi": work.get("doi") or doi_url,
+        "openalex": work.get("id") or "",
+        "title": _strip_markup(work.get("title", "")),
+        "year": work.get("publication_year"),
+        "x-precise-date": work.get("publication_date") or "",
+        "pubtitle": pubtitle,
+        "pub_rank": ranking.get("rank", ""),
+        "rank_source": ranking.get("source", ""),
+        "hindex": ranking.get("hindex", ""),
+        "volume": biblio.get("volume") or "",
+        "issue": biblio.get("issue") or "",
+        "first_page": biblio.get("first_page") or "",
+        "last_page": biblio.get("last_page") or "",
+        "type": work.get("type") or "",
+        "X-OA": bool(open_access.get("is_oa")),
+        "X-OA-URL": open_access.get("oa_url") or "",
+        "X-abstract": inverted_abstrct_to_abstract(work.get("abstract_inverted_index")) if work.get("abstract_inverted_index") else "",
+        "X-IsReferencedByCount": work.get("cited_by_count", 0),
+        "X-refcount": work.get("referenced_works_count", 0),
+        "X-subject": ((work.get("primary_topic") or {}).get("display_name")) or "",
+        "X-authors": ", ".join([a["display_name"] for a in authors_list if a.get("display_name")]),
+        "X-authors-list": authors_list,
+        "X-FirstAuthor": first_author.get("display_name", ""),
+        "X-FirstAuthor-ORCID": first_author.get("orcid", ""),
+        "X-FirstAuthor-OpenAlex": first_author.get("openalex", ""),
+        "X-Country-First-Author": first_author.get("country", "xxx"),
+        "X-Country-First-affiliation": first_author.get("affiliation", ""),
+        "referenced_works": work.get("referenced_works") or [],
+        "cited_by_api_url": work.get("cited_by_api_url") or "",
+    }
 
 
 def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,

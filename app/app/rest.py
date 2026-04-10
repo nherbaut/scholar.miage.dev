@@ -172,7 +172,7 @@ def stars_page():
 
 @app.route("/doi/<doi1>/<doi2>", methods=["GET"])
 def get_info_for_doi(doi1, doi2):
-    get_ref_for_doi(doi1 + "/" + doi2)
+    return get_ref_for_doi(doi1 + "/" + doi2)
 
 
 @app.route("/doi", methods=["GET"])
