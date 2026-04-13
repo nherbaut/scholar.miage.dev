@@ -17,6 +17,7 @@
     <td>query</td>
     <td>lastUpdateDate</td>
     <td>hit</td>
+    <td>actions</td>
     </thead>
     {% for feed in feeds %}
         <tr>
@@ -25,9 +26,45 @@
             <td>{{ feed.query }}</td>
             <td>{{ feed.lastBuildDate }}</td>
             <td>{{ feed.hit }}</td>
+            <td>
+                <a
+                    class="btn btn-sm btn-outline-primary js-paper-monitor"
+                    data-feed-path="/feed/{{ feed.id }}.rss"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >Open in paper monitor</a>
+            </td>
 
         </tr>
     {% endfor %}
 </table>
+<script>
+    function formatPaperMonitorTimestamp(date) {
+        const pad = (value) => String(value).padStart(2, '0');
+        return [
+            date.getFullYear(),
+            pad(date.getMonth() + 1),
+            pad(date.getDate())
+        ].join('-') + ':' + [
+            pad(date.getHours()),
+            pad(date.getMinutes()),
+            pad(date.getSeconds())
+        ].join(':');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const timestamp = formatPaperMonitorTimestamp(new Date());
+        const paperFeedName = `Miage Scholar Import ${timestamp}`;
+        document.querySelectorAll('.js-paper-monitor').forEach((link) => {
+            const feedPath = link.dataset.feedPath || '';
+            const rssUrl = new URL(feedPath, window.location.origin).toString();
+            const targetUrl = 'https://papers.home.nextnet.top/admin/quick-setup/run'
+                + '?paperFeedName=' + encodeURIComponent(paperFeedName)
+                + '&rssUrl=' + encodeURIComponent(rssUrl);
+            link.href = targetUrl;
+        });
+    });
+</script>
 </body>
 </html>
