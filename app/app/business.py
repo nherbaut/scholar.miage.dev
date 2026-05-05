@@ -430,8 +430,15 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     def fetch_arxiv_entries():
         try:
-            return ("arxiv", get_arxiv_results(query, on_unsupported=arxiv_warning).entries)
-        except ValueError:
+            logger.info("Fetching arXiv entries for query=%r", query)
+            entries = get_arxiv_results(query, on_unsupported=arxiv_warning).entries
+            logger.info("Fetched arXiv entries for query=%r count=%s", query, len(entries))
+            return ("arxiv", entries)
+        except ValueError as exc:
+            logger.warning("Skipping arXiv fetch for unsupported query=%r error=%s", query, exc)
+            return ("arxiv", [])
+        except Exception as exc:
+            logger.exception("Failed to fetch arXiv entries for query=%r", query, exc_info=exc)
             return ("arxiv", [])
 
     def enrich_scopus_entry(entry):
@@ -1088,7 +1095,17 @@ def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
 
         count = int(response["search-results"]["opensearch:totalResults"])
         if include_arxiv:
-            return count, len(get_arxiv_results(query, on_unsupported=arxiv_warning).entries)
+            try:
+                arxiv_results = get_arxiv_results(query, on_unsupported=arxiv_warning)
+                arxiv_count = len(arxiv_results.entries)
+                logger.info("arXiv count success query=%r entries=%s", query, arxiv_count)
+                return count, arxiv_count
+            except ValueError as exc:
+                logger.warning("arXiv count skipped for unsupported query=%r error=%s", query, exc)
+                return count, 0
+            except Exception as exc:
+                logger.exception("arXiv count failed query=%r", query, exc_info=exc)
+                return count, 0
             
         else:
             return count, 0

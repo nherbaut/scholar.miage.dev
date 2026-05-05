@@ -1,9 +1,18 @@
 from dataclasses import dataclass
+import logging
+import socket
+import time
 from typing import Callable, List, Optional
 import urllib.request as libreq
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 import xml.dom.minidom
 import atoma
+
+logger = logging.getLogger(__name__)
+ARXIV_API_URL = "https://export.arxiv.org/api/query"
+ARXIV_TIMEOUT_SECONDS = 20
+ARXIV_EMPTY_FEED = '<?xml version="1.0" encoding="UTF-8"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom" ><id>https://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id></feed>'.encode("UTF-8")
 
 # Token types
 AND = 'AND'
@@ -365,14 +374,56 @@ def convert_query(query: str, on_unsupported: Optional[Callable[[str], None]] = 
 
 def get_arxiv_results(scopus_query: str,
                       on_unsupported: Optional[Callable[[str], None]] = None):
-    
+
     try:
-        query = quote(convert_query(scopus_query, on_unsupported=on_unsupported), safe='')
-        print(f"arxive query: {query}")
-        with libreq.urlopen(f'http://export.arxiv.org/api/query?search_query={query}&start=0&max_results=1000') as url:
-            return atoma.parse_atom_bytes(url.read())
-    except:
-        return atoma.parse_atom_bytes('<?xml version="1.0" encoding="UTF-8"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom" ><id>https://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id></feed>'.encode("UTF-8"))
+        converted_query = convert_query(scopus_query, on_unsupported=on_unsupported)
+        query = quote(converted_query, safe='')
+        request_url = f'{ARXIV_API_URL}?search_query={query}&start=0&max_results=1000'
+        request = libreq.Request(
+            request_url,
+            headers={"User-Agent": "miage-scholar/1.0 (+https://scholar.miage.dev)"}
+        )
+        logger.info(
+            "arXiv request start query=%r converted=%r url=%s timeout=%ss",
+            scopus_query,
+            converted_query,
+            request_url,
+            ARXIV_TIMEOUT_SECONDS,
+        )
+        started_at = time.monotonic()
+        with libreq.urlopen(request, timeout=ARXIV_TIMEOUT_SECONDS) as url:
+            payload = url.read()
+            duration = time.monotonic() - started_at
+            logger.info(
+                "arXiv request success status=%s bytes=%s duration=%.2fs url=%s",
+                getattr(url, "status", "unknown"),
+                len(payload),
+                duration,
+                request_url,
+            )
+            parsed = atoma.parse_atom_bytes(payload)
+            logger.info(
+                "arXiv parse success entries=%s url=%s",
+                len(parsed.entries),
+                request_url,
+            )
+            return parsed
+    except ValueError:
+        raise
+    except HTTPError as exc:
+        logger.exception(
+            "arXiv request HTTP error status=%s reason=%s query=%r",
+            exc.code,
+            exc.reason,
+            scopus_query,
+        )
+    except URLError as exc:
+        logger.exception("arXiv request URL error reason=%r query=%r", exc.reason, scopus_query)
+    except socket.timeout:
+        logger.exception("arXiv request timeout after %ss query=%r", ARXIV_TIMEOUT_SECONDS, scopus_query)
+    except Exception:
+        logger.exception("arXiv request unexpected failure query=%r", scopus_query)
+    return atoma.parse_atom_bytes(ARXIV_EMPTY_FEED)
 
 
 if __name__ == "__main__":
