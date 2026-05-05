@@ -81,7 +81,7 @@ def get_scopus_executor() -> ThreadPoolExecutor:
 
 
 def get_arxiv_executor() -> ThreadPoolExecutor:
-    return _get_executor("arxiv", 3)
+    return _get_executor("arxiv", 1)
 
 _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
@@ -431,7 +431,11 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     def fetch_arxiv_entries():
         try:
             logger.info("Fetching arXiv entries for query=%r", query)
-            entries = get_arxiv_results(query, on_unsupported=arxiv_warning).entries
+            entries = get_arxiv_results(
+                query,
+                on_unsupported=arxiv_warning,
+                on_warning=arxiv_warning,
+            ).entries
             logger.info("Fetched arXiv entries for query=%r count=%s", query, len(entries))
             return ("arxiv", entries)
         except ValueError as exc:
@@ -1096,7 +1100,11 @@ def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
         count = int(response["search-results"]["opensearch:totalResults"])
         if include_arxiv:
             try:
-                arxiv_results = get_arxiv_results(query, on_unsupported=arxiv_warning)
+                arxiv_results = get_arxiv_results(
+                    query,
+                    on_unsupported=arxiv_warning,
+                    on_warning=arxiv_warning,
+                )
                 arxiv_count = len(arxiv_results.entries)
                 logger.info("arXiv count success query=%r entries=%s", query, arxiv_count)
                 return count, arxiv_count

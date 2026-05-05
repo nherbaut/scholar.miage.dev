@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import logging
+import os
 import socket
+from threading import Lock
 import time
 from typing import Callable, List, Optional
 import urllib.request as libreq
@@ -8,11 +10,20 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 import xml.dom.minidom
 import atoma
+import redis
+import shlex
 
 logger = logging.getLogger(__name__)
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ARXIV_TIMEOUT_SECONDS = 20
+ARXIV_CACHE_TTL_SECONDS = 43200
+ARXIV_MAX_RETRIES = 3
+ARXIV_RETRY_BASE_DELAY_SECONDS = 5
 ARXIV_EMPTY_FEED = '<?xml version="1.0" encoding="UTF-8"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom" ><id>https://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id></feed>'.encode("UTF-8")
+_ARXIV_CACHE = {}
+_ARXIV_CACHE_LOCK = Lock()
+_ARXIV_REDIS_CLIENT = None
+_ARXIV_REDIS_LOCK = Lock()
 
 # Token types
 AND = 'AND'
@@ -372,45 +383,160 @@ def convert_query(query: str, on_unsupported: Optional[Callable[[str], None]] = 
     return to_target(ast, on_unsupported=on_unsupported)
 
 
+def _emit_warning(callback: Optional[Callable[[str], None]], message: str) -> None:
+    if callback:
+        try:
+            callback(message)
+        except Exception:
+            logger.exception("Failed to emit arXiv warning message=%r", message)
+
+
+def _redis_client():
+    global _ARXIV_REDIS_CLIENT
+    with _ARXIV_REDIS_LOCK:
+        if _ARXIV_REDIS_CLIENT is False:
+            return None
+        if _ARXIV_REDIS_CLIENT is not None:
+            return _ARXIV_REDIS_CLIENT
+        redis_url = os.environ.get("REDIS_URL", "").strip()
+        if not redis_url:
+            return None
+        try:
+            redis_host, redis_port = redis_url.split(":")
+            client = redis.Redis(host=redis_host, port=int(redis_port), decode_responses=False)
+            client.ping()
+            _ARXIV_REDIS_CLIENT = client
+            logger.info("arXiv cache using redis host=%s port=%s", redis_host, redis_port)
+            return _ARXIV_REDIS_CLIENT
+        except Exception:
+            logger.exception("Failed to initialize redis for arXiv cache REDIS_URL=%r", redis_url)
+            _ARXIV_REDIS_CLIENT = False
+            return None
+
+
+def _cache_get(cache_key: str):
+    redis_client = _redis_client()
+    redis_cache_key = f"arxiv:query:{cache_key}"
+    if redis_client is not None:
+        try:
+            payload = redis_client.get(redis_cache_key)
+            if payload is not None:
+                return payload
+        except Exception:
+            logger.exception("Failed redis arXiv cache get key=%r", redis_cache_key)
+    now = time.monotonic()
+    with _ARXIV_CACHE_LOCK:
+        cached = _ARXIV_CACHE.get(cache_key)
+        if not cached:
+            return None
+        expires_at, payload = cached
+        if expires_at <= now:
+            _ARXIV_CACHE.pop(cache_key, None)
+            return None
+        return payload
+
+
+def _cache_put(cache_key: str, payload: bytes) -> None:
+    redis_client = _redis_client()
+    redis_cache_key = f"arxiv:query:{cache_key}"
+    if redis_client is not None:
+        try:
+            redis_client.setex(redis_cache_key, ARXIV_CACHE_TTL_SECONDS, payload)
+            return
+        except Exception:
+            logger.exception("Failed redis arXiv cache put key=%r", redis_cache_key)
+    with _ARXIV_CACHE_LOCK:
+        _ARXIV_CACHE[cache_key] = (time.monotonic() + ARXIV_CACHE_TTL_SECONDS, payload)
+
+
 def get_arxiv_results(scopus_query: str,
-                      on_unsupported: Optional[Callable[[str], None]] = None):
+                      on_unsupported: Optional[Callable[[str], None]] = None,
+                      on_warning: Optional[Callable[[str], None]] = None):
 
     try:
         converted_query = convert_query(scopus_query, on_unsupported=on_unsupported)
         query = quote(converted_query, safe='')
         request_url = f'{ARXIV_API_URL}?search_query={query}&start=0&max_results=1000'
+        cached_payload = _cache_get(converted_query)
+        if cached_payload is not None:
+            logger.info(
+                "arXiv cache hit query=%r converted=%r bytes=%s ttl=%ss",
+                scopus_query,
+                converted_query,
+                len(cached_payload),
+                ARXIV_CACHE_TTL_SECONDS,
+            )
+            return atoma.parse_atom_bytes(cached_payload)
         request = libreq.Request(
             request_url,
             headers={"User-Agent": "miage-scholar/1.0 (+https://scholar.miage.dev)"}
         )
+        curl_command = (
+            "curl -i --max-time "
+            f"{ARXIV_TIMEOUT_SECONDS} "
+            f"-H {shlex.quote('User-Agent: miage-scholar/1.0 (+https://scholar.miage.dev)')} "
+            f"{shlex.quote(request_url)}"
+        )
         logger.info(
-            "arXiv request start query=%r converted=%r url=%s timeout=%ss",
+            "arXiv request start query=%r converted=%r url=%s timeout=%ss curl=%s",
             scopus_query,
             converted_query,
             request_url,
             ARXIV_TIMEOUT_SECONDS,
+            curl_command,
         )
-        started_at = time.monotonic()
-        with libreq.urlopen(request, timeout=ARXIV_TIMEOUT_SECONDS) as url:
-            payload = url.read()
-            duration = time.monotonic() - started_at
-            logger.info(
-                "arXiv request success status=%s bytes=%s duration=%.2fs url=%s",
-                getattr(url, "status", "unknown"),
-                len(payload),
-                duration,
-                request_url,
-            )
-            parsed = atoma.parse_atom_bytes(payload)
-            logger.info(
-                "arXiv parse success entries=%s url=%s",
-                len(parsed.entries),
-                request_url,
-            )
-            return parsed
+        last_429 = None
+        for attempt in range(1, ARXIV_MAX_RETRIES + 1):
+            started_at = time.monotonic()
+            try:
+                with libreq.urlopen(request, timeout=ARXIV_TIMEOUT_SECONDS) as url:
+                    payload = url.read()
+                    duration = time.monotonic() - started_at
+                    logger.info(
+                        "arXiv request success status=%s bytes=%s duration=%.2fs url=%s attempt=%s",
+                        getattr(url, "status", "unknown"),
+                        len(payload),
+                        duration,
+                        request_url,
+                        attempt,
+                    )
+                    _cache_put(converted_query, payload)
+                    parsed = atoma.parse_atom_bytes(payload)
+                    logger.info(
+                        "arXiv parse success entries=%s url=%s attempt=%s",
+                        len(parsed.entries),
+                        request_url,
+                        attempt,
+                    )
+                    return parsed
+            except HTTPError as exc:
+                if exc.code == 429:
+                    last_429 = exc
+                    delay = ARXIV_RETRY_BASE_DELAY_SECONDS * attempt
+                    message = (
+                        f"arXiv rate-limited this server (HTTP 429). "
+                        f"Retrying in {delay}s, attempt {attempt}/{ARXIV_MAX_RETRIES}."
+                    )
+                    _emit_warning(on_warning, message)
+                    logger.warning(
+                        "arXiv request rate limited query=%r attempt=%s/%s delay=%ss",
+                        scopus_query,
+                        attempt,
+                        ARXIV_MAX_RETRIES,
+                        delay,
+                    )
+                    if attempt < ARXIV_MAX_RETRIES:
+                        time.sleep(delay)
+                        continue
+                raise
     except ValueError:
         raise
     except HTTPError as exc:
+        if exc.code == 429:
+            _emit_warning(
+                on_warning,
+                "arXiv is currently rate-limiting this server (HTTP 429). Results may be incomplete."
+            )
         logger.exception(
             "arXiv request HTTP error status=%s reason=%s query=%r",
             exc.code,
