@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 import logging
-import os
 import socket
 from threading import Lock
 import time
@@ -10,8 +9,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 import xml.dom.minidom
 import atoma
-import redis
 import shlex
+from app.cache import get_redis_client
 
 logger = logging.getLogger(__name__)
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
@@ -22,8 +21,6 @@ ARXIV_RETRY_BASE_DELAY_SECONDS = 5
 ARXIV_EMPTY_FEED = '<?xml version="1.0" encoding="UTF-8"?><feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom" ><id>https://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id></feed>'.encode("UTF-8")
 _ARXIV_CACHE = {}
 _ARXIV_CACHE_LOCK = Lock()
-_ARXIV_REDIS_CLIENT = None
-_ARXIV_REDIS_LOCK = Lock()
 
 # Token types
 AND = 'AND'
@@ -391,31 +388,8 @@ def _emit_warning(callback: Optional[Callable[[str], None]], message: str) -> No
             logger.exception("Failed to emit arXiv warning message=%r", message)
 
 
-def _redis_client():
-    global _ARXIV_REDIS_CLIENT
-    with _ARXIV_REDIS_LOCK:
-        if _ARXIV_REDIS_CLIENT is False:
-            return None
-        if _ARXIV_REDIS_CLIENT is not None:
-            return _ARXIV_REDIS_CLIENT
-        redis_url = os.environ.get("REDIS_URL", "").strip()
-        if not redis_url:
-            return None
-        try:
-            redis_host, redis_port = redis_url.split(":")
-            client = redis.Redis(host=redis_host, port=int(redis_port), decode_responses=False)
-            client.ping()
-            _ARXIV_REDIS_CLIENT = client
-            logger.info("arXiv cache using redis host=%s port=%s", redis_host, redis_port)
-            return _ARXIV_REDIS_CLIENT
-        except Exception:
-            logger.exception("Failed to initialize redis for arXiv cache REDIS_URL=%r", redis_url)
-            _ARXIV_REDIS_CLIENT = False
-            return None
-
-
 def _cache_get(cache_key: str):
-    redis_client = _redis_client()
+    redis_client = get_redis_client()
     redis_cache_key = f"arxiv:query:{cache_key}"
     if redis_client is not None:
         try:
@@ -437,7 +411,7 @@ def _cache_get(cache_key: str):
 
 
 def _cache_put(cache_key: str, payload: bytes) -> None:
-    redis_client = _redis_client()
+    redis_client = get_redis_client()
     redis_cache_key = f"arxiv:query:{cache_key}"
     if redis_client is not None:
         try:

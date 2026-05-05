@@ -12,10 +12,69 @@ from flask import abort, Response, render_template, request, session, redirect, 
 import json
 import pickle
 import os
+import datetime
+import logging
+import time
+from threading import Lock
 from app.researchers import get_venue_for_orcid, get_venue_for_openalex
 from collections import Counter
+from app.cache import get_redis_client
 
 # mendeley = Mendeley(MENDELEY_CLIENT_ID, MENDELEY_SECRET, redirect_uri="http://localhost:5000/oauth")
+
+logger = logging.getLogger(__name__)
+RSS_CACHE_TTL_SECONDS = 86400
+_RSS_MEMORY_CACHE = {}
+_RSS_MEMORY_CACHE_LOCK = Lock()
+
+
+def _rss_cache_key(feed_id):
+    return f"rss:feed:{feed_id}"
+
+
+def _get_cached_rss(feed_id):
+    client = get_redis_client()
+    if client is None:
+        now = time.monotonic()
+        with _RSS_MEMORY_CACHE_LOCK:
+            cached = _RSS_MEMORY_CACHE.get(feed_id)
+            if not cached:
+                return None
+            expires_at, payload = cached
+            if expires_at <= now:
+                _RSS_MEMORY_CACHE.pop(feed_id, None)
+                return None
+            return payload
+    try:
+        return client.get(_rss_cache_key(feed_id))
+    except Exception:
+        logger.exception("Failed to read RSS cache feed_id=%s", feed_id)
+        return None
+
+
+def _set_cached_rss(feed_id, rss):
+    client = get_redis_client()
+    payload = rss.encode("utf-8") if isinstance(rss, str) else rss
+    if client is None:
+        with _RSS_MEMORY_CACHE_LOCK:
+            _RSS_MEMORY_CACHE[feed_id] = (time.monotonic() + RSS_CACHE_TTL_SECONDS, payload)
+        return
+    try:
+        client.setex(_rss_cache_key(feed_id), RSS_CACHE_TTL_SECONDS, payload)
+    except Exception:
+        logger.exception("Failed to write RSS cache feed_id=%s", feed_id)
+
+
+def _delete_cached_rss(feed_id):
+    client = get_redis_client()
+    if client is None:
+        with _RSS_MEMORY_CACHE_LOCK:
+            _RSS_MEMORY_CACHE.pop(feed_id, None)
+        return
+    try:
+        client.delete(_rss_cache_key(feed_id))
+    except Exception:
+        logger.exception("Failed to delete RSS cache feed_id=%s", feed_id)
 
 
 @app.route('/favicon.ico')
@@ -82,6 +141,7 @@ def remove_rss(id):
         db.session.commit()
     except db.orm.exc.NoResultFound as e:
         return abort(404, description="No feed with this id")
+    _delete_cached_rss(id)
     db.session.commit()
     return "DELETED", 204
 
@@ -95,6 +155,7 @@ def purge_items(id):
     feed.feed_content = None
     feed.count = -1
     db.session.commit()
+    _delete_cached_rss(id)
     return "DELETED", 204
 
 
@@ -107,7 +168,15 @@ def get_feed(id):
 
     count_scopus, count_arxiv = count_results_for_query(
         feed.query, include_arxiv=True)
-    if count_scopus+count_arxiv != feed.count:
+    cached_rss = _get_cached_rss(feed.id)
+    current_total = count_scopus + count_arxiv
+    if current_total == feed.count and cached_rss is not None:
+        feed.lastBuildDate = datetime.datetime.now(datetime.timezone.utc)
+        feed.hit += 1
+        db.session.commit()
+        return Response(cached_rss, mimetype='application/atom+xml')
+
+    if current_total != feed.count:
         dois = get_papers(count_scopus, feed.query, arxiv=True, xref=True,
                           existing_data=pickle.loads(feed.feed_content), count_arxiv=count_arxiv)
     else:
@@ -118,8 +187,9 @@ def get_feed(id):
         feed_content = {}
 
     update_feed(dois, feed_content)
-    feed.count = count_scopus+count_arxiv
+    feed.count = current_total
     feed.feed_content = pickle.dumps(feed_content)
+    feed.lastBuildDate = datetime.datetime.now(datetime.timezone.utc)
     feed.hit += 1
     db.session.commit()
 
@@ -127,6 +197,7 @@ def get_feed(id):
                         key=lambda x: x["pubdate"], reverse=True)
 
     rss = generate_rss(feed_items, feed.id, feed.query)
+    _set_cached_rss(feed.id, rss)
 
     return Response(rss, mimetype='application/atom+xml')
 
