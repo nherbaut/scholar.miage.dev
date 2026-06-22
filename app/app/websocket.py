@@ -37,7 +37,6 @@ def create_feed(json_data):
 @socketio.on('count')
 def handle_count(json_data, log_query=False):
     include_arxiv = json_data["arxiv"]
-    include_hal = json_data.get("hal", False)
     
     if include_arxiv:
         def arxiv_warning(message: str):
@@ -46,29 +45,20 @@ def handle_count(json_data, log_query=False):
         def arxiv_warning(message: str):
             pass
 
-    if include_hal:
-        def hal_warning(message: str):
-            emit("hal_warning", {"message": message})
-    else:
-        def hal_warning(message: str):
-            pass
-
-    count_scopus, count_arxiv, count_hal = count_results_for_query(
+    count_scopus, count_arxiv = count_results_for_query(
         json_data["query"],
         include_arxiv=include_arxiv,
-        include_hal=include_hal,
         arxiv_warning=arxiv_warning,
-        hal_warning=hal_warning,
     )
 
     n = ScpusRequest(query=json_data["query"],
-                     ip="0.0.0.0", count=count_scopus + count_arxiv + count_hal, fetched=False)
+                     ip="0.0.0.0", count=count_scopus + count_arxiv, fetched=False)
     db.session.add(n)
     db.session.commit()
 
     emit("query_id", n.id)
 
-    emit("count", count_scopus + count_arxiv + count_hal)
+    emit("count", count_scopus + count_arxiv)
 
 
 @socketio.on("get_venue_openalex")
@@ -99,7 +89,6 @@ def handle_get_dois(json_data):
     the_query = json_data["query"]
     xref = json_data["xref"]
     arxiv = json_data["arxiv"]
-    hal = json_data.get("hal", False)
 
     if arxiv:
         def arxiv_warning(message: str):
@@ -108,23 +97,13 @@ def handle_get_dois(json_data):
         def arxiv_warning(message: str):
             pass
 
-    if hal:
-        def hal_warning(message: str):
-            emit("hal_warning", {"message": message})
-    else:
-        def hal_warning(message: str):
-            pass
-
-    count_scopus, count_arxiv, count_hal = count_results_for_query(
+    count_scopus, count_arxiv = count_results_for_query(
         the_query,
         include_arxiv=arxiv,
-        include_hal=hal,
         arxiv_warning=arxiv_warning,
-        hal_warning=hal_warning,
     )
     dois = get_papers(count_scopus, the_query, xref=xref,
                       arxiv=arxiv, emitt=emit, count_arxiv=count_arxiv,
-                      hal=hal, count_hal=count_hal,
-                      arxiv_warning=arxiv_warning, hal_warning=hal_warning)
+                      arxiv_warning=arxiv_warning)
 
     #emit("dois", {"dois": dois})

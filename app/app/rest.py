@@ -192,7 +192,7 @@ def get_feed(id):
     # burst of RSS refreshes can exhaust the SQLAlchemy pool.
     db.session.remove()
 
-    count_scopus, count_arxiv, _ = count_results_for_query(
+    count_scopus, count_arxiv = count_results_for_query(
         feed_query, include_arxiv=True)
     cached_rss = _get_cached_rss(feed_id)
     current_total = count_scopus + count_arxiv
@@ -284,7 +284,7 @@ def get_info_for_doi(doi1, doi2):
 def get_doi_for_title():
     title = request.args.get('title')
     query = f"TITLE({title})"
-    count_scopus, _, _ = count_results_for_query(query)
+    count_scopus, _ = count_results_for_query(query)
     dois = get_papers(count_scopus, query, False)
     if (len(dois) == 0):
         abort(404)
@@ -388,7 +388,7 @@ def snowball():
     if "application/json" in accepts:
         title = request.args.get('title')
         query = f"REFTITLE(\"{title}\")"
-        count_scopus, _, _ = count_results_for_query(query)
+        count_scopus, _ = count_results_for_query(query)
         dois = get_papers(count_scopus, query, False)
         return app.response_class(
             response=json.dumps([doi["doi"] for doi in dois]),
