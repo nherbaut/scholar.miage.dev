@@ -11,6 +11,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     force=True,
 )
+logging.getLogger(__name__).info("MIAGE Scholar application boot logging configured")
 
 print("creating flask application")
 app = Flask(__name__)

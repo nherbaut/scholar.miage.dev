@@ -648,7 +648,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     def submit_enrichment(provider_name, payload):
         if provider_name == "scopus":
-            if xref:
+            if xref and ENABLE_OPENALEX_ENRICHMENT:
                 #logger.debug("sumitting enrichment from openalex")
                 return get_openalex_executor().submit(enrich_scopus_entry, payload)
             #logger.debug("just loading data from scopus")
