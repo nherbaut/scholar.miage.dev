@@ -164,6 +164,7 @@ MAX_RESULTS_QUERY = 1000
 OPENALEX_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_TIMEOUT_SECONDS", "20"))
 OPENALEX_CONNECT_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_CONNECT_TIMEOUT_SECONDS", "5"))
 OPENALEX_API_URL = "https://api.openalex.org/works"
+ENABLE_OPENALEX_ENRICHMENT = os.environ.get("ENABLE_OPENALEX_ENRICHMENT", "false").lower() in {"1", "true", "yes", "on"}
 
 
 def get_sources():
@@ -575,12 +576,27 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         try:
             doi = entry.get("prism:doi", "")
             title = entry.get("dc:title", "")
-            logger.info("scopus enrich start run_id=%s doi=%r title=%r xref=%s", run_id, doi, title, xref)
-            if xref:
+            logger.info(
+                "scopus enrich start run_id=%s doi=%r title=%r xref=%s openalex_enabled=%s",
+                run_id,
+                doi,
+                title,
+                xref,
+                ENABLE_OPENALEX_ENRICHMENT,
+            )
+            if xref and ENABLE_OPENALEX_ENRICHMENT:
                 logger.info("enriching from openalex")
                 extract_data_openalex_from_scopus(bucket, entry, context, call_back)
             else:
-                logger.info("not enriching from openalex")
+                if xref:
+                    logger.warning(
+                        "OpenAlex enrichment disabled; using Scopus data only run_id=%s doi=%r title=%r",
+                        run_id,
+                        doi,
+                        title,
+                    )
+                else:
+                    logger.info("not enriching from openalex")
                 extract_data_scopus(bucket, entry, context, call_back)
         except Exception as exc:
             logger.exception("Failed to enrich scopus entry run_id=%s", run_id, exc_info=exc)
