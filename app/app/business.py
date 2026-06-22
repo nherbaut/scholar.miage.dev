@@ -162,6 +162,8 @@ logger = logging.getLogger('business')
 
 MAX_RESULTS_QUERY = 1000
 OPENALEX_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_TIMEOUT_SECONDS", "20"))
+OPENALEX_CONNECT_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_CONNECT_TIMEOUT_SECONDS", "5"))
+OPENALEX_API_URL = "https://api.openalex.org/works"
 
 
 def get_sources():
@@ -750,6 +752,32 @@ def complete_scopus_extraction(scopus_partial_data, r):
     scopus_partial_data["X-OA-URL"] = oa_url
 
 
+def get_openalex_work_for_doi(doi: str) -> dict:
+    doi_url = f"https://doi.org/{doi}"
+    encoded_id = urllib.parse.quote(doi_url, safe="")
+    url = f"{OPENALEX_API_URL}/{encoded_id}"
+    params = {"mailto": pyalex_config.email} if pyalex_config.email else {}
+    timeout = (OPENALEX_CONNECT_TIMEOUT_SECONDS, OPENALEX_TIMEOUT_SECONDS)
+    started_at = time.monotonic()
+    logger.info(
+        "OpenAlex direct DOI lookup start doi=%s url=%s timeout=%s",
+        doi,
+        url,
+        timeout,
+    )
+    response = requests.get(url, params=params, timeout=timeout)
+    duration = time.monotonic() - started_at
+    logger.info(
+        "OpenAlex direct DOI lookup done doi=%s status=%s bytes=%s duration=%.2fs",
+        doi,
+        response.status_code,
+        len(response.content or b""),
+        duration,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 def extract_data_openalex_from_scopus(bucket, entry, context, call_back):
     
     if "prism:doi" in entry:
@@ -763,11 +791,11 @@ def extract_data_openalex_from_scopus(bucket, entry, context, call_back):
 
     if len(doi) > 0:
         try:
-            oa_response = Works()[f"https://doi.org/{doi}"]
+            oa_response = get_openalex_work_for_doi(doi)
             
             load_response_from_openAlex_scopus(bucket, oa_response, entry)
-        except Exception as e:
-            logging.warning(f"failed to load from oa, getting scopus data  {doi}")
+        except Exception:
+            logger.exception("OpenAlex enrichment failed; falling back to Scopus data doi=%s", doi)
             load_response_from_scpus(bucket, entry)
     else:
         # No DOI available; avoid fuzzy OpenAlex title matching to prevent mis-associations.
