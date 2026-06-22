@@ -456,6 +456,38 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             logger.exception("Failed to fetch arXiv entries for query=%r", query, exc_info=exc)
             return ("arxiv", [])
 
+    def build_arxiv_entry(paper):
+        title = getattr(getattr(paper, "title", None), "value", "")
+        authors = getattr(paper, "authors", []) or []
+        links = getattr(paper, "links", []) or []
+        published = getattr(paper, "published", None)
+        summary = getattr(getattr(paper, "summary", None), "value", "")
+        authors_list = [{"display_name": a.name, "orcid": "", "openalex": ""} for a in authors]
+        return {
+            "doi": getattr(paper, "id_", ""),
+            "title": title,
+            "year": getattr(published, "year", ""),
+            "x-precise-date": str(published or ""),
+            "pubtitle": "arXiv.org",
+            "pub_rank": "",
+            "rank_source": "",
+            "hindex": "",
+            "X-OA": True,
+            "X-FirstAuthor": authors[0].name if authors else "",
+            "X-Country-First-Author": "",
+            "X-Country-First-affiliation": "",
+            "X-FirstAuthor-ORCID": "",
+            "X-FirstAuthor-OpenAlex": "",
+            "X-IsReferencedByCount": "",
+            "X-subject": "",
+            "X-refcount": "",
+            "X-abstract": summary,
+            "X-authors": ", ".join([a.name for a in authors]),
+            "X-authors-list": authors_list,
+            "X-OA-URL": links[0].href if links else "",
+            "source_provider": "arxiv",
+        }
+
     def enrich_scopus_entry(entry):
         bucket = []
         try:
@@ -472,51 +504,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     def enrich_arxiv_entry(paper):
         bucket = []
         try:
-            work = None
-            override_id = getattr(paper, "id_", "")
-            title = getattr(getattr(paper, "title", None), "value", "")
-            if title:
-                try:
-                    candidates = Works().filter(title={"search": title}).get()
-                    if candidates and len(candidates) > 0:
-                        first = candidates[0]
-                        if isinstance(first, dict):
-                            work = first
-                            override_id = first.get("id", override_id)
-                        else:
-                            work = first.__dict__ if hasattr(first, "__dict__") else None
-                            override_id = getattr(first, "id", override_id)
-                except Exception:
-                    work = None
-
-            if work:
-                load_response_from_openAlex_arxiv(bucket, work, paper, override_id)
-            else:
-                authors_list = [{"display_name": a.name, "orcid": "", "openalex": ""} for a in paper.authors]
-                bucket.append({
-                    "doi": override_id,
-                    "title": title,
-                    "year": paper.published.year,
-                    "x-precise-date": str(paper.published),
-                    "pubtitle": "arXiv.org",
-                    "pub_rank": "",
-                    "rank_source": "",
-                    "hindex": "",
-                    "X-OA": True,
-                    "X-FirstAuthor": paper.authors[0].name if paper.authors else "",
-                    "X-Country-First-Author": "",
-                    "X-Country-First-affiliation": "",
-                    "X-FirstAuthor-ORCID": "",
-                    "X-FirstAuthor-OpenAlex": "",
-                    "X-IsReferencedByCount": "",
-                    "X-subject": "",
-                    "X-refcount": "",
-                    "X-abstract": paper.summary.value,
-                    "X-authors": ", ".join([a.name for a in paper.authors]),
-                    "X-authors-list": authors_list,
-                    "X-OA-URL": paper.links[0].href if paper.links else "",
-                    "source_provider": "arxiv",
-                })
+            bucket.append(build_arxiv_entry(paper))
         except Exception as exc:
             logger.exception("Failed to enrich arXiv entry", exc_info=exc)
         return ("arxiv", bucket)
