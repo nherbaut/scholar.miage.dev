@@ -121,6 +121,37 @@ def _cached_requests_session():
         allowed_methods=frozenset({"GET"}),
     )
     s.mount("https://", requests.adapters.HTTPAdapter(max_retries=retries))
+    original_request = s.request
+
+    def request_with_timeout(method, url, **kwargs):
+        kwargs.setdefault("timeout", OPENALEX_TIMEOUT_SECONDS)
+        logger.info(
+            "OpenAlex HTTP request start method=%s url=%s timeout=%s",
+            method,
+            url,
+            kwargs.get("timeout"),
+        )
+        started_at = time.monotonic()
+        try:
+            response = original_request(method, url, **kwargs)
+            logger.info(
+                "OpenAlex HTTP request done method=%s url=%s status=%s duration=%.2fs",
+                method,
+                url,
+                getattr(response, "status_code", "unknown"),
+                time.monotonic() - started_at,
+            )
+            return response
+        except Exception:
+            logger.exception(
+                "OpenAlex HTTP request failed method=%s url=%s duration=%.2fs",
+                method,
+                url,
+                time.monotonic() - started_at,
+            )
+            raise
+
+    s.request = request_with_timeout
     return s
 
 
@@ -130,6 +161,7 @@ pyalex._get_requests_session = _cached_requests_session
 logger = logging.getLogger('business')
 
 MAX_RESULTS_QUERY = 1000
+OPENALEX_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_TIMEOUT_SECONDS", "20"))
 
 
 def get_sources():
@@ -604,7 +636,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             #logger.debug("just loading data from scopus")
             return get_scopus_executor().submit(enrich_scopus_entry, payload)
         if provider_name == "arxiv":
-            return get_openalex_executor().submit(enrich_arxiv_entry, payload)
+            return get_arxiv_executor().submit(enrich_arxiv_entry, payload)
         raise ValueError(f"Unknown provider {provider_name}")
 
     wait_cycles = 0
