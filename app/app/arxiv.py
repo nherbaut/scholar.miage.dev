@@ -389,46 +389,59 @@ def _emit_warning(callback: Optional[Callable[[str], None]], message: str) -> No
 
 
 def _cache_get(cache_key: str):
+    logger.info("arXiv cache get start key=%r", cache_key)
     redis_client = get_redis_client()
     redis_cache_key = f"arxiv:query:{cache_key}"
     if redis_client is not None:
         try:
             payload = redis_client.get(redis_cache_key)
             if payload is not None:
+                logger.info("arXiv redis cache hit key=%r bytes=%s", redis_cache_key, len(payload))
                 return payload
+            logger.info("arXiv redis cache miss key=%r", redis_cache_key)
         except Exception:
             logger.exception("Failed redis arXiv cache get key=%r", redis_cache_key)
     now = time.monotonic()
     with _ARXIV_CACHE_LOCK:
         cached = _ARXIV_CACHE.get(cache_key)
         if not cached:
+            logger.info("arXiv memory cache miss key=%r", cache_key)
             return None
         expires_at, payload = cached
         if expires_at <= now:
             _ARXIV_CACHE.pop(cache_key, None)
+            logger.info("arXiv memory cache expired key=%r", cache_key)
             return None
+        logger.info("arXiv memory cache hit key=%r bytes=%s", cache_key, len(payload))
         return payload
 
 
 def _cache_put(cache_key: str, payload: bytes) -> None:
+    logger.info("arXiv cache put start key=%r bytes=%s", cache_key, len(payload))
     redis_client = get_redis_client()
     redis_cache_key = f"arxiv:query:{cache_key}"
     if redis_client is not None:
         try:
             redis_client.setex(redis_cache_key, ARXIV_CACHE_TTL_SECONDS, payload)
+            logger.info("arXiv redis cache put done key=%r ttl=%s", redis_cache_key, ARXIV_CACHE_TTL_SECONDS)
             return
         except Exception:
             logger.exception("Failed redis arXiv cache put key=%r", redis_cache_key)
     with _ARXIV_CACHE_LOCK:
         _ARXIV_CACHE[cache_key] = (time.monotonic() + ARXIV_CACHE_TTL_SECONDS, payload)
+    logger.info("arXiv memory cache put done key=%r ttl=%s", cache_key, ARXIV_CACHE_TTL_SECONDS)
 
 
 def get_arxiv_results(scopus_query: str,
                       on_unsupported: Optional[Callable[[str], None]] = None,
                       on_warning: Optional[Callable[[str], None]] = None):
 
+    total_started_at = time.monotonic()
+    logger.info("arXiv get_results start query_len=%s query=%r", len(scopus_query or ""), scopus_query)
     try:
+        logger.info("arXiv convert start query=%r", scopus_query)
         converted_query = convert_query(scopus_query, on_unsupported=on_unsupported)
+        logger.info("arXiv convert done converted=%r duration=%.2fs", converted_query, time.monotonic() - total_started_at)
         query = quote(converted_query, safe='')
         request_url = f'{ARXIV_API_URL}?search_query={query}&start=0&max_results=1000'
         cached_payload = _cache_get(converted_query)
@@ -440,7 +453,17 @@ def get_arxiv_results(scopus_query: str,
                 len(cached_payload),
                 ARXIV_CACHE_TTL_SECONDS,
             )
-            return atoma.parse_atom_bytes(cached_payload)
+            parse_started_at = time.monotonic()
+            logger.info("arXiv cache parse start bytes=%s converted=%r", len(cached_payload), converted_query)
+            parsed = atoma.parse_atom_bytes(cached_payload)
+            logger.info(
+                "arXiv cache parse done entries=%s parse_duration=%.2fs total_duration=%.2fs converted=%r",
+                len(parsed.entries),
+                time.monotonic() - parse_started_at,
+                time.monotonic() - total_started_at,
+                converted_query,
+            )
+            return parsed
         request = libreq.Request(
             request_url,
             headers={"User-Agent": "miage-scholar/1.0 (+https://scholar.miage.dev)"}
@@ -461,11 +484,26 @@ def get_arxiv_results(scopus_query: str,
         )
         last_429 = None
         for attempt in range(1, ARXIV_MAX_RETRIES + 1):
-            started_at = time.monotonic()
+            attempt_started_at = time.monotonic()
             try:
+                logger.info(
+                    "arXiv urlopen attempt start attempt=%s/%s timeout=%s url=%s",
+                    attempt,
+                    ARXIV_MAX_RETRIES,
+                    ARXIV_TIMEOUT_SECONDS,
+                    request_url,
+                )
                 with libreq.urlopen(request, timeout=ARXIV_TIMEOUT_SECONDS) as url:
+                    logger.info("arXiv urlopen response opened attempt=%s status=%s", attempt, getattr(url, "status", "unknown"))
+                    read_started_at = time.monotonic()
                     payload = url.read()
-                    duration = time.monotonic() - started_at
+                    logger.info(
+                        "arXiv response read done attempt=%s bytes=%s read_duration=%.2fs",
+                        attempt,
+                        len(payload),
+                        time.monotonic() - read_started_at,
+                    )
+                    duration = time.monotonic() - attempt_started_at
                     logger.info(
                         "arXiv request success status=%s bytes=%s duration=%.2fs url=%s attempt=%s",
                         getattr(url, "status", "unknown"),
@@ -475,10 +513,14 @@ def get_arxiv_results(scopus_query: str,
                         attempt,
                     )
                     _cache_put(converted_query, payload)
+                    parse_started_at = time.monotonic()
+                    logger.info("arXiv parse start bytes=%s url=%s attempt=%s", len(payload), request_url, attempt)
                     parsed = atoma.parse_atom_bytes(payload)
                     logger.info(
-                        "arXiv parse success entries=%s url=%s attempt=%s",
+                        "arXiv parse success entries=%s parse_duration=%.2fs total_duration=%.2fs url=%s attempt=%s",
                         len(parsed.entries),
+                        time.monotonic() - parse_started_at,
+                        time.monotonic() - total_started_at,
                         request_url,
                         attempt,
                     )

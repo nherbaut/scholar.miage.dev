@@ -7,7 +7,9 @@ import json
 import logging
 import os
 import re
+import time
 import urllib.parse
+import uuid
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Iterable, List, Set, Tuple
@@ -386,6 +388,18 @@ def _get_ranking_safe(pubtitle: str) -> dict:
 
 def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
                existing_data={}, count_arxiv=0, arxiv_warning=None):
+    run_id = uuid.uuid4().hex[:8]
+    started_at = time.monotonic()
+    logger.info(
+        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s xref=%s arxiv=%s existing=%s query=%r",
+        run_id,
+        count_scopus,
+        count_arxiv,
+        xref,
+        arxiv,
+        len(existing_data or {}),
+        query,
+    )
     context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0, "duplicate": 0})()
     context_lock = Lock()
     client_results_bucket_size = min(max(10, count_scopus / 20), 200)
@@ -395,6 +409,16 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     @copy_current_request_context
     def call_back(success, failure, arxiv=0, duplicate=0):
+        logger.info(
+            "get_papers progress run_id=%s success=%s failure=%s arxiv=%s duplicate=%s total=%s elapsed=%.2fs",
+            run_id,
+            success,
+            failure,
+            arxiv,
+            duplicate,
+            count_scopus + count_arxiv,
+            time.monotonic() - started_at,
+        )
         emitt('doi_update', {"total": count_scopus + count_arxiv,
                              "done": success, "failed": failure, "arxiv": arxiv, "duplicate": duplicate})
 
@@ -420,10 +444,19 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     def emit_results_if_needed():
         nonlocal client_bucket
         if len(client_bucket) > client_results_bucket_size:
+            logger.info(
+                "get_papers emit partial run_id=%s bucket_size=%s threshold=%s elapsed=%.2fs",
+                run_id,
+                len(client_bucket),
+                client_results_bucket_size,
+                time.monotonic() - started_at,
+            )
             emitt('doi_results', client_bucket)
             client_bucket = []
 
     def fetch_scopus_batch(offset):
+        batch_started_at = time.monotonic()
+        logger.info("scopus batch start run_id=%s offset=%s query=%r", run_id, offset, query)
         try:
             #print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, 25, escape_query(query))}")
             partial_results = session_scpus.get(
@@ -434,26 +467,40 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
             entries = [entry for entry in entries if (entry.get(
                 'prism:doi') and f"https://doi.org/{entry.get('prism:doi').lower()}" not in existing_data.keys()) or not entry.get('prism:doi')]
+            logger.info(
+                "scopus batch done run_id=%s offset=%s entries=%s duration=%.2fs",
+                run_id,
+                offset,
+                len(entries),
+                time.monotonic() - batch_started_at,
+            )
             return ("scopus", entries)
         except Exception as exc:
-            logger.exception("Failed to fetch scopus batch at offset %s", offset, exc_info=exc)
+            logger.exception("Failed to fetch scopus batch run_id=%s offset=%s", run_id, offset, exc_info=exc)
             return ("scopus", [])
 
     def fetch_arxiv_entries():
+        arxiv_started_at = time.monotonic()
         try:
-            logger.info("Fetching arXiv entries for query=%r", query)
+            logger.info("arxiv fetch start run_id=%s query=%r", run_id, query)
             entries = get_arxiv_results(
                 query,
                 on_unsupported=arxiv_warning,
                 on_warning=arxiv_warning,
             ).entries
-            logger.info("Fetched arXiv entries for query=%r count=%s", query, len(entries))
+            logger.info(
+                "arxiv fetch done run_id=%s count=%s duration=%.2fs query=%r",
+                run_id,
+                len(entries),
+                time.monotonic() - arxiv_started_at,
+                query,
+            )
             return ("arxiv", entries)
         except ValueError as exc:
-            logger.warning("Skipping arXiv fetch for unsupported query=%r error=%s", query, exc)
+            logger.warning("Skipping arXiv fetch run_id=%s unsupported query=%r error=%s", run_id, query, exc)
             return ("arxiv", [])
         except Exception as exc:
-            logger.exception("Failed to fetch arXiv entries for query=%r", query, exc_info=exc)
+            logger.exception("Failed to fetch arXiv entries run_id=%s query=%r", run_id, query, exc_info=exc)
             return ("arxiv", [])
 
     def build_arxiv_entry(paper):
@@ -489,8 +536,12 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         }
 
     def enrich_scopus_entry(entry):
+        item_started_at = time.monotonic()
         bucket = []
         try:
+            doi = entry.get("prism:doi", "")
+            title = entry.get("dc:title", "")
+            logger.info("scopus enrich start run_id=%s doi=%r title=%r xref=%s", run_id, doi, title, xref)
             if xref:
                 logger.info("enriching from openalex")
                 extract_data_openalex_from_scopus(bucket, entry, context, call_back)
@@ -498,26 +549,52 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 logger.info("not enriching from openalex")
                 extract_data_scopus(bucket, entry, context, call_back)
         except Exception as exc:
-            logger.exception("Failed to enrich scopus entry", exc_info=exc)
+            logger.exception("Failed to enrich scopus entry run_id=%s", run_id, exc_info=exc)
+        logger.info(
+            "scopus enrich done run_id=%s bucket=%s duration=%.2fs",
+            run_id,
+            len(bucket),
+            time.monotonic() - item_started_at,
+        )
         return ("scopus", bucket)
 
     def enrich_arxiv_entry(paper):
+        item_started_at = time.monotonic()
         bucket = []
         try:
+            logger.info(
+                "arxiv enrich start run_id=%s arxiv_id=%r title=%r",
+                run_id,
+                getattr(paper, "id_", ""),
+                getattr(getattr(paper, "title", None), "value", ""),
+            )
             bucket.append(build_arxiv_entry(paper))
         except Exception as exc:
-            logger.exception("Failed to enrich arXiv entry", exc_info=exc)
+            logger.exception("Failed to enrich arXiv entry run_id=%s", run_id, exc_info=exc)
+        logger.info(
+            "arxiv enrich done run_id=%s bucket=%s duration=%.2fs",
+            run_id,
+            len(bucket),
+            time.monotonic() - item_started_at,
+        )
         return ("arxiv", bucket)
 
     provider_futures = set()
     enrichment_futures = set()
+    future_labels = {}
 
     batch_offsets = list(range(0, min(MAX_RESULTS_QUERY, count_scopus), 25))
     for offset in batch_offsets:
-        provider_futures.add(get_scopus_executor().submit(fetch_scopus_batch, offset))
+        fut = get_scopus_executor().submit(fetch_scopus_batch, offset)
+        provider_futures.add(fut)
+        future_labels[fut] = f"provider:scopus:{offset}"
+        logger.info("submitted provider future run_id=%s label=%s", run_id, future_labels[fut])
 
     if arxiv:
-        provider_futures.add(get_arxiv_executor().submit(fetch_arxiv_entries))
+        fut = get_arxiv_executor().submit(fetch_arxiv_entries)
+        provider_futures.add(fut)
+        future_labels[fut] = "provider:arxiv"
+        logger.info("submitted provider future run_id=%s label=%s", run_id, future_labels[fut])
 
     def submit_enrichment(provider_name, payload):
         if provider_name == "scopus":
@@ -530,18 +607,62 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             return get_openalex_executor().submit(enrich_arxiv_entry, payload)
         raise ValueError(f"Unknown provider {provider_name}")
 
+    wait_cycles = 0
     while provider_futures or enrichment_futures:
-        done, _ = wait(provider_futures | enrichment_futures, return_when=FIRST_COMPLETED)
+        wait_cycles += 1
+        pending = provider_futures | enrichment_futures
+        logger.info(
+            "get_papers wait run_id=%s cycle=%s provider_pending=%s enrichment_pending=%s elapsed=%.2fs",
+            run_id,
+            wait_cycles,
+            len(provider_futures),
+            len(enrichment_futures),
+            time.monotonic() - started_at,
+        )
+        done, _ = wait(pending, timeout=5, return_when=FIRST_COMPLETED)
+        if not done:
+            labels = [future_labels.get(fut, "unknown") for fut in pending]
+            logger.warning(
+                "get_papers wait heartbeat run_id=%s no_future_done provider_pending=%s enrichment_pending=%s labels=%s elapsed=%.2fs",
+                run_id,
+                len(provider_futures),
+                len(enrichment_futures),
+                labels[:30],
+                time.monotonic() - started_at,
+            )
+            continue
         for fut in done:
+            label = future_labels.pop(fut, "unknown")
+            logger.info("get_papers future done run_id=%s label=%s elapsed=%.2fs", run_id, label, time.monotonic() - started_at)
             if fut in provider_futures:
                 provider_futures.remove(fut)
                 provider_name, payloads = fut.result()
+                logger.info(
+                    "get_papers provider payloads run_id=%s provider=%s payload_count=%s",
+                    run_id,
+                    provider_name,
+                    len(payloads),
+                )
                 for payload in payloads:
                     logger.info(f"enrichment request submitted for {provider_name}")
-                    enrichment_futures.add(submit_enrichment(provider_name, payload))
+                    enrich_future = submit_enrichment(provider_name, payload)
+                    enrichment_futures.add(enrich_future)
+                    title = ""
+                    if provider_name == "arxiv":
+                        title = getattr(getattr(payload, "title", None), "value", "")
+                    elif isinstance(payload, dict):
+                        title = payload.get("dc:title", "")
+                    future_labels[enrich_future] = f"enrich:{provider_name}:{title[:80]}"
+                    logger.info("submitted enrichment future run_id=%s label=%s", run_id, future_labels[enrich_future])
             else:
                 enrichment_futures.remove(fut)
                 provider_name, bucket = fut.result()
+                logger.info(
+                    "get_papers enrichment payload done run_id=%s provider=%s bucket=%s",
+                    run_id,
+                    provider_name,
+                    len(bucket),
+                )
                 if not bucket:
                     continue
                 for paper in bucket:
@@ -557,9 +678,25 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 emit_results_if_needed()
 
     if client_bucket:
+        logger.info(
+            "get_papers emit final partial run_id=%s bucket_size=%s elapsed=%.2fs",
+            run_id,
+            len(client_bucket),
+            time.monotonic() - started_at,
+        )
         emitt('doi_results', client_bucket)
 
     dois = list(title_index.values())
+    logger.info(
+        "get_papers done run_id=%s papers=%s success=%s failed=%s arxiv=%s duplicate=%s elapsed=%.2fs",
+        run_id,
+        len(dois),
+        context.success,
+        context.failed,
+        context.arxiv,
+        context.duplicate,
+        time.monotonic() - started_at,
+    )
     emitt('doi_export_done', dois)
     return dois
 
@@ -1093,29 +1230,60 @@ def escape_query(query):
 
 def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
     # print(f"query with {API_KEY} API_KEY")
+    started_at = time.monotonic()
+    logger.info(
+        "count_results start include_arxiv=%s query_len=%s query=%r",
+        include_arxiv,
+        len(query or ""),
+        query,
+    )
+    logger.info("count_results scopus request start query=%r", query)
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
+    logger.info(
+        "count_results scopus request done keys=%s duration=%.2fs query=%r",
+        list(response.keys()) if isinstance(response, dict) else type(response).__name__,
+        time.monotonic() - started_at,
+        query,
+    )
 
     if "search-results" in response:
 
         count = int(response["search-results"]["opensearch:totalResults"])
+        logger.info("count_results scopus count=%s query=%r", count, query)
         arxiv_count = 0
         if include_arxiv:
             try:
+                arxiv_started_at = time.monotonic()
+                logger.info("count_results arxiv start query=%r", query)
                 arxiv_results = get_arxiv_results(
                     query,
                     on_unsupported=arxiv_warning,
                     on_warning=arxiv_warning,
                 )
                 arxiv_count = len(arxiv_results.entries)
-                logger.info("arXiv count success query=%r entries=%s", query, arxiv_count)
+                logger.info(
+                    "count_results arxiv success query=%r entries=%s duration=%.2fs",
+                    query,
+                    arxiv_count,
+                    time.monotonic() - arxiv_started_at,
+                )
             except ValueError as exc:
                 logger.warning("arXiv count skipped for unsupported query=%r error=%s", query, exc)
             except Exception as exc:
                 logger.exception("arXiv count failed query=%r", query, exc_info=exc)
+        logger.info(
+            "count_results done scopus=%s arxiv=%s total=%s duration=%.2fs query=%r",
+            count,
+            arxiv_count,
+            count + arxiv_count,
+            time.monotonic() - started_at,
+            query,
+        )
         return count, arxiv_count
     else:
 
+        logger.warning("count_results no search-results response=%r duration=%.2fs query=%r", response, time.monotonic() - started_at, query)
         return 0, 0
 
 

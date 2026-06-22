@@ -1,9 +1,16 @@
 from flask import Flask
 import os
+import logging
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from app.config import Config
 
+
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    force=True,
+)
 
 print("creating flask application")
 app = Flask(__name__)
