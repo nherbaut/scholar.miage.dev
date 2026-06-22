@@ -126,8 +126,17 @@
             color: #5c2d00;
         }
 
+        tr.hal-row {
+            background-color: #e3f2fd !important;
+            color: #0d3b66;
+        }
+
         .progress-bar.bg-arxiv {
             background-color: #ffd54f;
+        }
+
+        .progress-bar.bg-hal {
+            background-color: #7dd3fc;
         }
 
         .progress-bar.bg-nodoi {
@@ -379,6 +388,7 @@
                         {% if count %}
                             <textarea id="querybox" name="query" readonly>{{ query }}</textarea>
                             <div id="arxivWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
+                            <div id="halWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
                             </fieldset>
                             <div class="mt-3 d-flex flex-wrap align-items-center">
                                 <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
@@ -428,6 +438,13 @@
                                                 <input type="checkbox" class="form-check-input" id="arxiv" name="arxiv"
                                                        onchange="arxiv_changed()">
                                                 <label class="form-check-label" for="arxiv">Include arXiv
+                                                    results<span
+                                                        class="badge bg-warning">beta</span></label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input type="checkbox" class="form-check-input" id="hal" name="hal"
+                                                       onchange="hal_changed()">
+                                                <label class="form-check-label" for="hal">Include HAL
                                                     results<span
                                                         class="badge bg-warning">beta</span></label>
                                             </div>
@@ -501,6 +518,7 @@
 
                             <textarea id="querybox" name="query" onkeyup="textAreaChange()">{{ query }}</textarea>
                             <div id="arxivWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
+                            <div id="halWarning" class="alert alert-warning mt-2 d-none" role="alert"></div>
 
                             <div class="mt-3 d-flex flex-wrap align-items-center">
                                 <input class="btn btn-secondary" type="button" value="Reset" onclick="resetAll()"/>
@@ -612,9 +630,15 @@
                                     <span id="pb_arxiv_count"></span>
                                 </div>
                                 <div role="progressbar" style="width: 0%"
+                                     class="progress-bar progress-bar-animated bg-hal"
+                                     id="pb_hal" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0"
+                                     title="Papers from HAL">
+                                    <span id="pb_hal_count"></span>
+                                </div>
+                                <div role="progressbar" style="width: 0%"
                                      class="progress-bar progress-bar-animated bg-danger"
                                      id="pb_duplicate" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0"
-                                     title="Papers appearing in both Scopus and arXiv">
+                                     title="Papers appearing in multiple providers">
                                     <span id="pb_duplicate_count"></span>
                                 </div>
                                 <div role="progressbar" style="width: 0%"
@@ -663,13 +687,21 @@
 
 <!-- Fetch/count behavior (xref based solely on checkbox state) -->
 <script>
-    function showArxivWarning(message) {
-        const el = document.getElementById("arxivWarning");
+    function showProviderWarning(elementId, message, fallback) {
+        const el = document.getElementById(elementId);
         if (!el) {
             return;
         }
-        el.textContent = message || "arXiv results are unavailable for this query.";
+        el.textContent = message || fallback;
         el.classList.remove("d-none");
+    }
+
+    function showArxivWarning(message) {
+        showProviderWarning("arxivWarning", message, "arXiv results are unavailable for this query.");
+    }
+
+    function showHalWarning(message) {
+        showProviderWarning("halWarning", message, "HAL results are unavailable for this query.");
     }
 
     function clearArxivWarning() {
@@ -681,15 +713,29 @@
         el.classList.add("d-none");
     }
 
+    function clearHalWarning() {
+        const el = document.getElementById("halWarning");
+        if (!el) {
+            return;
+        }
+        el.textContent = "";
+        el.classList.add("d-none");
+    }
+
     function sendDoisRequest(evt) {
         const btn = document.getElementById("main_button");
         document.getElementById("xref").disabled = true;
         const arxivCheckbox = document.getElementById("arxiv");
+        const halCheckbox = document.getElementById("hal");
         if (arxivCheckbox) {
             arxivCheckbox.disabled = true;
         }
+        if (halCheckbox) {
+            halCheckbox.disabled = true;
+        }
         btn.disabled = true;
         clearArxivWarning();
+        clearHalWarning();
 
         btn.textContent = "Fetching…";
         btn.classList.remove('btn-primary', 'btn-warning');
@@ -698,22 +744,26 @@
         socket.emit('get_dois', {
             query: document.getElementById("querybox").value,
             xref: document.getElementById("xref").checked,
-            arxiv: arxivCheckbox ? arxivCheckbox.checked : false
+            arxiv: arxivCheckbox ? arxivCheckbox.checked : false,
+            hal: halCheckbox ? halCheckbox.checked : false
         });
     }
 
     function sendCountRequest(evt) {
         const btn = document.getElementById("main_button");
         const arxivCheckbox = document.getElementById("arxiv");
+        const halCheckbox = document.getElementById("hal");
         document.getElementById("querybox").disabled = true;
         btn.disabled = true;
         btn.textContent = "Counting…";
         btn.classList.remove('btn-success', 'btn-warning');
         btn.classList.add('btn-primary');
         clearArxivWarning();
+        clearHalWarning();
         socket.emit('count', {
             query: document.getElementById("querybox").value,
-            arxiv: arxivCheckbox ? arxivCheckbox.checked : false
+            arxiv: arxivCheckbox ? arxivCheckbox.checked : false,
+            hal: halCheckbox ? halCheckbox.checked : false
         });
     }
 
@@ -1018,6 +1068,7 @@ journal = { { ${content["pubtitle"]} } },
         document.getElementById("cite_bib").checked = window.localStorage.getItem("cite_bib") === 'true';
         document.getElementById("oa").checked = window.localStorage.getItem("oa") === 'true';
         document.getElementById("arxiv").checked = window.localStorage.getItem("arxiv") === 'true';
+        document.getElementById("hal").checked = window.localStorage.getItem("hal") === 'true';
         // completion preference (default: true)
         try {
             const compPref = window.localStorage.getItem("completion");
@@ -1042,6 +1093,7 @@ journal = { { ${content["pubtitle"]} } },
         // Persist query
         updateQueryStorage(document.getElementById("querybox").value);
         clearArxivWarning();
+        clearHalWarning();
         // If user edits the query, reset UI to the "Count" state
         try {
             const btn = document.getElementById('main_button');
@@ -1073,6 +1125,11 @@ journal = { { ${content["pubtitle"]} } },
     socket.on('arxiv_warning', (payload) => {
         const msg = (payload && payload.message) ? payload.message : "arXiv results are unavailable for this query.";
         showArxivWarning(msg);
+    });
+
+    socket.on('hal_warning', (payload) => {
+        const msg = (payload && payload.message) ? payload.message : "HAL results are unavailable for this query.";
+        showHalWarning(msg);
     });
 
     // Count handler: update main button label with actual number and switch to fetch
@@ -1121,6 +1178,10 @@ journal = { { ${content["pubtitle"]} } },
         if (pbArxiv) {
             pbArxiv.classList.remove("progress-bar-striped");
         }
+        const pbHal = document.getElementById("pb_hal");
+        if (pbHal) {
+            pbHal.classList.remove("progress-bar-striped");
+        }
         const pbDuplicate = document.getElementById("pb_duplicate");
         if (pbDuplicate) {
             pbDuplicate.classList.remove("progress-bar-striped");
@@ -1159,12 +1220,14 @@ journal = { { ${content["pubtitle"]} } },
         const done = data["done"] || 0;
         const failed = data["failed"] || 0;
         const arxiv = data["arxiv"] || 0;
+        const hal = data["hal"] || 0;
         const duplicate = data["duplicate"] || 0;
         const successNonArxiv = Math.max(0, done);
         const denominator = total > 0 ? total : 1;
 
         const pbSuccess = document.getElementById("pb_success");
         const pbArxiv = document.getElementById("pb_arxiv");
+        const pbHal = document.getElementById("pb_hal");
         const pbDuplicate = document.getElementById("pb_duplicate");
         const pbFailure = document.getElementById("pb_failure");
 
@@ -1180,6 +1243,14 @@ journal = { { ${content["pubtitle"]} } },
             pbArxiv.setAttribute("aria-valuenow", arxiv);
             pbArxiv.style.width = (100 * arxiv / denominator) + "%";
             document.getElementById("pb_arxiv_count").innerHTML = arxiv;
+        }
+
+        if (pbHal) {
+            pbHal.classList.add("progress-bar-striped");
+            pbHal.setAttribute("aria-valuemax", total);
+            pbHal.setAttribute("aria-valuenow", hal);
+            pbHal.style.width = (100 * hal / denominator) + "%";
+            document.getElementById("pb_hal_count").innerHTML = hal;
         }
 
         if (pbDuplicate) {
@@ -1246,7 +1317,9 @@ journal = { { ${content["pubtitle"]} } },
             authorsNamesAndLinks.push(author);
         }
         const doiValue = doi_item["doi"] || "";
-        const isArxiv = /^https?:\/\/arxiv\.org/.test(doiValue) || (doi_item["pubtitle"] || "").toLowerCase().includes("arxiv");
+        const provider = doi_item["source_provider"] || (/^https?:\/\/arxiv\.org/.test(doiValue) || (doi_item["pubtitle"] || "").toLowerCase().includes("arxiv") ? "arxiv" : "scopus");
+        const isArxiv = provider === "arxiv";
+        const isHal = provider === "hal";
         const full_doi = doiValue.split("_")[0];
         const isOpenAccess = !!get(doi_item, "X-OA", false);
         const oaLink = doi_item["X-OA-URL"] || full_doi || doiValue;
@@ -1257,8 +1330,8 @@ journal = { { ${content["pubtitle"]} } },
             success: doi_item["doi"] != "" ? true : false,
             openaccess: isOpenAccess,
             is_arxiv: isArxiv,
-            peer_reviewed: !isArxiv,
-            uncertain_review: isArxiv,
+            is_hal: isHal,
+            is_scopus: provider === "scopus",
             is_oa: isOpenAccess,
             doi: doi_item["doi"],
             issn: doi_item["issn"],
@@ -1362,6 +1435,7 @@ journal = { { ${content["pubtitle"]} } },
             yearlyChart = null;
         }
         clearArxivWarning();
+        clearHalWarning();
         // Reset UI
         const btn = document.getElementById("main_button");
         btn.textContent = "Count Results";
@@ -1386,6 +1460,14 @@ journal = { { ${content["pubtitle"]} } },
             pbArxiv.setAttribute("value", 0);
             pbArxiv.style.width = "0%";
             document.getElementById("pb_arxiv_count").innerHTML = "";
+        }
+        const pbHal = document.getElementById("pb_hal");
+        if (pbHal) {
+            pbHal.classList.remove("progress-bar-striped");
+            pbHal.setAttribute("max", 0);
+            pbHal.setAttribute("value", 0);
+            pbHal.style.width = "0%";
+            document.getElementById("pb_hal_count").innerHTML = "";
         }
         const pbDuplicate = document.getElementById("pb_duplicate");
         if (pbDuplicate) {
@@ -1543,6 +1625,13 @@ journal = { { ${content["pubtitle"]} } },
     function arxiv_changed() {
         try {
             window.localStorage.setItem("arxiv", document.getElementById("arxiv").checked ? 'true' : 'false');
+        } catch (_) {
+        }
+    }
+
+    function hal_changed() {
+        try {
+            window.localStorage.setItem("hal", document.getElementById("hal").checked ? 'true' : 'false');
         } catch (_) {
         }
     }

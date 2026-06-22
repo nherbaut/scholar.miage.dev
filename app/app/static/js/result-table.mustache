@@ -2,13 +2,18 @@
     {{#is_arxiv}}
     class="table-warning arxiv-row"
     {{/is_arxiv}}
+    {{#is_hal}}
+    class="table-light hal-row"
+    {{/is_hal}}
     {{^is_arxiv}}
+    {{^is_hal}}
     {{#openaccess}}
     class="table-success openaccess"
     {{/openaccess}}
     {{^openaccess}}
     class="table-info paywall"
     {{/openaccess}}
+    {{/is_hal}}
     {{/is_arxiv}}
     data-doi="{{doi}}"
 >
@@ -23,14 +28,18 @@
 
     
         <th scope="row">
-          {{#peer_reviewed}}
+          {{#is_scopus}}
           <img src="https://cdn.simpleicons.org/scopus/009639" alt="Scopus" title="Peer-reviewed (indexed)"
                style="width:18px;height:18px;vertical-align:middle;margin-right:6px;">
-          {{/peer_reviewed}}
-          {{#uncertain_review}}
+          {{/is_scopus}}
+          {{#is_arxiv}}
           <img src="https://cdn.simpleicons.org/arxiv/B31B1B" alt="arXiv" title="Preprint / not peer-reviewed (arXiv)"
                style="width:18px;height:18px;vertical-align:middle;margin-right:6px;">
-          {{/uncertain_review}}
+          {{/is_arxiv}}
+          {{#is_hal}}
+          <span class="badge bg-info text-dark" title="HAL repository result"
+                style="vertical-align:middle;margin-right:6px;">HAL</span>
+          {{/is_hal}}
           <a target="_blank" href="{{doi}}">{{doi}}</a>
         </th>
     

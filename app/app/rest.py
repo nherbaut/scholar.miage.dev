@@ -130,6 +130,23 @@ def add_journal():
 @app.route("/feeds")
 def list_feeds():
     feeds = db.session.query(ScpusFeed).all()
+    accepts = request.headers.get("Accept", "")
+    if "application/json" in accepts:
+        payload = []
+        for feed in feeds:
+            payload.append({
+                "id": feed.id,
+                "count": feed.count,
+                "query": feed.query,
+                "lastBuildDate": feed.lastBuildDate.isoformat() if feed.lastBuildDate else None,
+                "hit": feed.hit,
+                "rss_url": url_for("get_feed", id=feed.id, _external=True),
+            })
+        return app.response_class(
+            response=json.dumps(payload),
+            status=200,
+            mimetype='application/json'
+        )
     return render_template('feeds.html', feeds=feeds, active_page="feeds")
 
 
@@ -166,38 +183,55 @@ def get_feed(id):
     except db.orm.exc.NoResultFound as e:
         return abort(404, description="No feed with this id")
 
-    count_scopus, count_arxiv = count_results_for_query(
-        feed.query, include_arxiv=True)
-    cached_rss = _get_cached_rss(feed.id)
+    feed_id = feed.id
+    feed_query = feed.query
+    feed_count = feed.count
+    feed_content = pickle.loads(feed.feed_content) if feed.feed_content is not None else {}
+
+    # Release the DB connection before slow external API calls. Otherwise a
+    # burst of RSS refreshes can exhaust the SQLAlchemy pool.
+    db.session.remove()
+
+    count_scopus, count_arxiv, _ = count_results_for_query(
+        feed_query, include_arxiv=True)
+    cached_rss = _get_cached_rss(feed_id)
     current_total = count_scopus + count_arxiv
-    if current_total == feed.count and cached_rss is not None:
+    if current_total == feed_count and cached_rss is not None:
+        try:
+            feed = db.session.query(ScpusFeed).filter(ScpusFeed.id == id).one()
+        except db.orm.exc.NoResultFound as e:
+            return abort(404, description="No feed with this id")
         feed.lastBuildDate = datetime.datetime.now(datetime.timezone.utc)
-        feed.hit += 1
+        feed.hit = (feed.hit or 0) + 1
         db.session.commit()
         return Response(cached_rss, mimetype='application/atom+xml')
 
-    if current_total != feed.count:
-        dois = get_papers(count_scopus, feed.query, arxiv=True, xref=True,
-                          existing_data=pickle.loads(feed.feed_content), count_arxiv=count_arxiv)
+    if current_total != feed_count:
+        dois = get_papers(count_scopus, feed_query, arxiv=True, xref=True,
+                          existing_data=feed_content, count_arxiv=count_arxiv)
     else:
         dois = []
+
+    try:
+        feed = db.session.query(ScpusFeed).filter(ScpusFeed.id == id).one()
+    except db.orm.exc.NoResultFound as e:
+        return abort(404, description="No feed with this id")
+
     if feed.feed_content is not None:
         feed_content = pickle.loads(feed.feed_content)
-    else:
-        feed_content = {}
 
     update_feed(dois, feed_content)
     feed.count = current_total
     feed.feed_content = pickle.dumps(feed_content)
     feed.lastBuildDate = datetime.datetime.now(datetime.timezone.utc)
-    feed.hit += 1
+    feed.hit = (feed.hit or 0) + 1
     db.session.commit()
 
     feed_items = sorted(feed_content.values(),
                         key=lambda x: x["pubdate"], reverse=True)
 
-    rss = generate_rss(feed_items, feed.id, feed.query)
-    _set_cached_rss(feed.id, rss)
+    rss = generate_rss(feed_items, feed_id, feed_query)
+    _set_cached_rss(feed_id, rss)
 
     return Response(rss, mimetype='application/atom+xml')
 
@@ -250,7 +284,7 @@ def get_info_for_doi(doi1, doi2):
 def get_doi_for_title():
     title = request.args.get('title')
     query = f"TITLE({title})"
-    count_scopus, _ = count_results_for_query(query)
+    count_scopus, _, _ = count_results_for_query(query)
     dois = get_papers(count_scopus, query, False)
     if (len(dois) == 0):
         abort(404)
@@ -354,8 +388,8 @@ def snowball():
     if "application/json" in accepts:
         title = request.args.get('title')
         query = f"REFTITLE(\"{title}\")"
-        count = count_results_for_query(query)
-        dois = get_papers(count, query, False)
+        count_scopus, _, _ = count_results_for_query(query)
+        dois = get_papers(count_scopus, query, False)
         return app.response_class(
             response=json.dumps([doi["doi"] for doi in dois]),
             status=200,

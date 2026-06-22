@@ -25,7 +25,7 @@ import pytz
 import requests
 from Levenshtein.StringMatcher import distance
 from feedgen.feed import FeedGenerator
-from flask import copy_current_request_context
+from flask import copy_current_request_context, has_app_context
 from requests_cache import CachedSession, FileCache, RedisCache
 import networkx as nx
 from sqlalchemy.orm.exc import NoResultFound
@@ -39,12 +39,14 @@ from pyalex import Authors, Funders, Institutions, Publishers, Sources, Topics, 
 
 # Local application
 from app.cache import session_scpus, session_xref
+from app.hal import get_hal_count, get_hal_results
 from app.main import (
     API_KEY,
     ROOT_URL,
     SCPUS_ABTRACT_BACKEND,
     SCPUS_BACKEND,
     SHLINK_API_KEY,
+    app,
     db,
 )
 from app.model import PublicationSource, Ranking, NetworkData
@@ -82,6 +84,10 @@ def get_scopus_executor() -> ThreadPoolExecutor:
 
 def get_arxiv_executor() -> ThreadPoolExecutor:
     return _get_executor("arxiv", 1)
+
+
+def get_hal_executor() -> ThreadPoolExecutor:
+    return _get_executor("hal", 1)
 
 _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
@@ -338,7 +344,7 @@ def _build_ref_response_from_openalex(work: dict) -> dict:
 
     first_author = authors_list[0] if authors_list else {}
     pubtitle = primary_source.get("display_name") or ""
-    ranking = get_ranking(pubtitle) if pubtitle else get_blank_ranking()
+    ranking = _get_ranking_safe(pubtitle)
 
     return {
         "doi": work.get("doi") or doi_url,
@@ -373,9 +379,18 @@ def _build_ref_response_from_openalex(work: dict) -> dict:
     }
 
 
-def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
-               existing_data={}, count_arxiv=0, arxiv_warning=None):
-    context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0, "duplicate": 0})()
+def _get_ranking_safe(pubtitle: str) -> dict:
+    if not pubtitle:
+        return get_blank_ranking()
+    if has_app_context():
+        return get_ranking(pubtitle)
+    with app.app_context():
+        return get_ranking(pubtitle)
+
+
+def get_papers(count_scopus, query, xref, arxiv=False, hal=False, emitt=lambda *args, **kwargs: None,
+               existing_data={}, count_arxiv=0, count_hal=0, arxiv_warning=None, hal_warning=None):
+    context = type('', (object,), {"success": 0, "failed": 0, "arxiv": 0, "hal": 0, "duplicate": 0})()
     context_lock = Lock()
     client_results_bucket_size = min(max(10, count_scopus / 20), 200)
     client_bucket = []
@@ -383,9 +398,9 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     title_index: Dict[str, Dict] = {}
 
     @copy_current_request_context
-    def call_back(success, failure, arxiv=0, duplicate=0):
-        emitt('doi_update', {"total": count_scopus + count_arxiv,
-                             "done": success, "failed": failure, "arxiv": arxiv, "duplicate": duplicate})
+    def call_back(success, failure, arxiv=0, hal=0, duplicate=0):
+        emitt('doi_update', {"total": count_scopus + count_arxiv + count_hal,
+                             "done": success, "failed": failure, "arxiv": arxiv, "hal": hal, "duplicate": duplicate})
 
     def upsert_paper(paper: Dict, priority: str):
         title = paper.get("title", "")
@@ -444,6 +459,23 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         except Exception as exc:
             logger.exception("Failed to fetch arXiv entries for query=%r", query, exc_info=exc)
             return ("arxiv", [])
+
+    def fetch_hal_entries():
+        try:
+            logger.info("Fetching HAL entries for query=%r", query)
+            entries = get_hal_results(
+                query,
+                on_unsupported=hal_warning,
+                on_warning=hal_warning,
+            ).entries
+            logger.info("Fetched HAL entries for query=%r count=%s", query, len(entries))
+            return ("hal", entries)
+        except ValueError as exc:
+            logger.warning("Skipping HAL fetch for unsupported query=%r error=%s", query, exc)
+            return ("hal", [])
+        except Exception as exc:
+            logger.exception("Failed to fetch HAL entries for query=%r", query, exc_info=exc)
+            return ("hal", [])
 
     def enrich_scopus_entry(entry):
         bucket = []
@@ -504,10 +536,93 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                     "X-authors": ", ".join([a.name for a in paper.authors]),
                     "X-authors-list": authors_list,
                     "X-OA-URL": paper.links[0].href if paper.links else "",
+                    "source_provider": "arxiv",
                 })
         except Exception as exc:
             logger.exception("Failed to enrich arXiv entry", exc_info=exc)
         return ("arxiv", bucket)
+
+    def enrich_hal_entry(entry):
+        bucket = []
+        try:
+            def first_value(*values):
+                for value in values:
+                    if isinstance(value, list):
+                        if value:
+                            return value[0]
+                    elif value not in ("", None):
+                        return value
+                return ""
+
+            def hal_abstract_value():
+                return first_value(
+                    entry.get("abstract_s"),
+                    entry.get("abstract_t"),
+                    entry.get("en_abstract_s"),
+                    entry.get("fr_abstract_s"),
+                )
+
+            doi = (entry.get("doiId_s") or "").strip()
+            uri = (entry.get("uri_s") or "").strip()
+            hal_id = (entry.get("halId_s") or "").strip()
+            hal_abstract = hal_abstract_value()
+
+            if xref and doi:
+                try:
+                    oa_response = Works()[f"https://doi.org/{doi}"]
+                    enriched = _build_ref_response_from_openalex(oa_response)
+                    enriched["source_provider"] = "hal"
+                    if uri and not enriched.get("X-OA-URL"):
+                        enriched["X-OA-URL"] = uri
+                    if hal_abstract and not enriched.get("X-abstract"):
+                        enriched["X-abstract"] = hal_abstract
+                    bucket.append(enriched)
+                    return ("hal", bucket)
+                except Exception as exc:
+                    logger.warning("OpenAlex HAL DOI lookup failed for %s", doi, exc_info=exc)
+
+            title = first_value(entry.get("title_s"), entry.get("title_t"))
+            abstract = hal_abstract
+            authors = entry.get("authFullName_s") or []
+            if isinstance(authors, str):
+                authors = [authors]
+            keywords = entry.get("keyword_s") or []
+            if isinstance(keywords, str):
+                keywords = [keywords]
+
+            pubtitle = first_value(entry.get("journalTitle_s"), entry.get("conferenceTitle_s"), entry.get("bookTitle_s")) or "HAL"
+            ranking = _get_ranking_safe(pubtitle)
+            identifier = f"https://doi.org/{doi}" if doi else (uri or (f"https://hal.science/{hal_id}" if hal_id else ""))
+            oa_url = uri or (f"https://hal.science/{hal_id}" if hal_id else "")
+            authors_list = [{"display_name": name, "orcid": "", "openalex": ""} for name in authors]
+
+            bucket.append({
+                "doi": identifier,
+                "title": title,
+                "year": entry.get("producedDateY_i", ""),
+                "x-precise-date": entry.get("producedDate_tdate", ""),
+                "pubtitle": pubtitle,
+                "pub_rank": ranking.get("rank", ""),
+                "rank_source": ranking.get("source", ""),
+                "hindex": ranking.get("hindex", ""),
+                "X-OA": True,
+                "X-FirstAuthor": authors[0] if authors else "",
+                "X-Country-First-Author": "",
+                "X-Country-First-affiliation": "",
+                "X-FirstAuthor-ORCID": "",
+                "X-FirstAuthor-OpenAlex": "",
+                "X-IsReferencedByCount": "",
+                "X-subject": ", ".join(keywords),
+                "X-refcount": "",
+                "X-abstract": abstract,
+                "X-authors": ", ".join(authors),
+                "X-authors-list": authors_list,
+                "X-OA-URL": oa_url,
+                "source_provider": "hal",
+            })
+        except Exception as exc:
+            logger.exception("Failed to enrich HAL entry", exc_info=exc)
+        return ("hal", bucket)
 
     provider_futures = set()
     enrichment_futures = set()
@@ -518,6 +633,8 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     if arxiv:
         provider_futures.add(get_arxiv_executor().submit(fetch_arxiv_entries))
+    if hal:
+        provider_futures.add(get_hal_executor().submit(fetch_hal_entries))
 
     def submit_enrichment(provider_name, payload):
         if provider_name == "scopus":
@@ -528,6 +645,8 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             return get_scopus_executor().submit(enrich_scopus_entry, payload)
         if provider_name == "arxiv":
             return get_openalex_executor().submit(enrich_arxiv_entry, payload)
+        if provider_name == "hal":
+            return get_openalex_executor().submit(enrich_hal_entry, payload)
         raise ValueError(f"Unknown provider {provider_name}")
 
     while provider_futures or enrichment_futures:
@@ -547,13 +666,16 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 for paper in bucket:
                     stored, merged = upsert_paper(paper, provider_name)
                     client_bucket.append(stored)
-                    if provider_name == "arxiv":
+                    if provider_name in {"arxiv", "hal"}:
                         with context_lock:
                             if merged:
                                 context.duplicate += 1
                             else:
-                                context.arxiv += 1
-                            call_back(context.success, context.failed, context.arxiv, context.duplicate)
+                                if provider_name == "arxiv":
+                                    context.arxiv += 1
+                                else:
+                                    context.hal += 1
+                            call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
                 emit_results_if_needed()
 
     if client_bucket:
@@ -605,7 +727,7 @@ def extract_data_openalex_from_scopus(bucket, entry, context, call_back):
         load_response_from_scpus(bucket, entry)
 
     try:
-        call_back(context.success, context.failed, context.arxiv, context.duplicate)
+        call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
     except:
         pass
 
@@ -619,7 +741,7 @@ def extract_data_scopus(bucket, entry, context, call_back):
     load_response_from_scpus(bucket, entry)
 
     try:
-        call_back(context.success, context.failed, context.arxiv, context.duplicate)
+        call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
     except:
         pass
 
@@ -703,14 +825,14 @@ def extract_data_arxiv(dois, bucket, arxiv_results, context, call_back,
                 context.arxiv += added
                 if context.arxiv % 25 == 0:
                     logger.debug("Sending DOI update (arXiv count=%s)", context.arxiv)
-                    call_back(context.success, context.failed, context.arxiv, context.duplicate)
+                    call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
         if dup_added:
             with context_lock:
                 context.duplicate += dup_added
-                call_back(context.success, context.failed, context.arxiv, context.duplicate)
+                call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
 
     if add_arxiv_results and arxiv_results:
-        call_back(context.success, context.failed, context.arxiv, context.duplicate)
+        call_back(context.success, context.failed, context.arxiv, context.hal, context.duplicate)
 
 
 def load_response_from_scpus(bucket, entry):
@@ -1032,7 +1154,8 @@ def load_response_from_openAlex_arxiv(bucket, work, paper, resolved_id):
         "X-abstract": abstract,
         "X-authors": ", ".join(a["display_name"] for a in authors_list) if authors_list else ", ".join([a.name for a in getattr(paper, "authors", [])]),
         "X-authors-list": authors_list if authors_list else [{"display_name": a.name, "orcid": "", "openalex": ""} for a in getattr(paper, "authors", [])],
-        "X-OA-URL": oa_url or (paper.links[0].href if getattr(paper, "links", []) else "")
+        "X-OA-URL": oa_url or (paper.links[0].href if getattr(paper, "links", []) else ""),
+        "source_provider": "arxiv",
     })
 
 def load_response_from_xref(bucket, xref_json_resp, entry):
@@ -1090,7 +1213,7 @@ def escape_query(query):
     return urllib.parse.quote(query)
 
 
-def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
+def count_results_for_query(query, include_arxiv=False, include_hal=False, arxiv_warning=None, hal_warning=None):
     # print(f"query with {API_KEY} API_KEY")
     response = session_scpus.get(SCPUS_BACKEND %
                                  (0, 1, escape_query(query))).json()
@@ -1098,6 +1221,8 @@ def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
     if "search-results" in response:
 
         count = int(response["search-results"]["opensearch:totalResults"])
+        arxiv_count = 0
+        hal_count = 0
         if include_arxiv:
             try:
                 arxiv_results = get_arxiv_results(
@@ -1107,19 +1232,26 @@ def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
                 )
                 arxiv_count = len(arxiv_results.entries)
                 logger.info("arXiv count success query=%r entries=%s", query, arxiv_count)
-                return count, arxiv_count
             except ValueError as exc:
                 logger.warning("arXiv count skipped for unsupported query=%r error=%s", query, exc)
-                return count, 0
             except Exception as exc:
                 logger.exception("arXiv count failed query=%r", query, exc_info=exc)
-                return count, 0
-            
-        else:
-            return count, 0
+        if include_hal:
+            try:
+                hal_count = get_hal_count(
+                    query,
+                    on_unsupported=hal_warning,
+                    on_warning=hal_warning,
+                )
+                logger.info("HAL count success query=%r entries=%s", query, hal_count)
+            except ValueError as exc:
+                logger.warning("HAL count skipped for unsupported query=%r error=%s", query, exc)
+            except Exception as exc:
+                logger.exception("HAL count failed query=%r", query, exc_info=exc)
+        return count, arxiv_count, hal_count
     else:
 
-        return 0, 0
+        return 0, 0, 0
 
 
 # NETWORK (BETA)
