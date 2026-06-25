@@ -472,6 +472,46 @@ def opensearch():
     return render_template('index.html', query=f"TITLE(\"{query}\")", sources=get_sources())
 
 
+@app.route('/opensearch.json', methods=["GET"])
+def opensearch_json():
+    query = request.args.get('query')
+    if not query:
+        return abort(400, description="Missing query")
+
+    scopus_query = f'TITLE("{query}")'
+    count_scopus, count_arxiv = count_results_for_query(
+        scopus_query,
+        include_arxiv=True,
+    )
+    results = get_papers(
+        count_scopus,
+        scopus_query,
+        arxiv=True,
+        xref=True,
+        count_arxiv=count_arxiv,
+    )
+
+    response = {
+        "query": scopus_query,
+        "options": {
+            "arxiv": True,
+            "metadata": True,
+        },
+        "counts": {
+            "scopus": count_scopus,
+            "arxiv": count_arxiv,
+            "total": count_scopus + count_arxiv,
+            "returned": len(results),
+        },
+        "results": results,
+    }
+    return app.response_class(
+        response=json.dumps(response),
+        status=200,
+        mimetype='application/json'
+    )
+
+
 @app.route("/network/compute/<id>", methods=["GET"])
 def get_network_data(id):
     return app.response_class(
