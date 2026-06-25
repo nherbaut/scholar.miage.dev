@@ -9,6 +9,7 @@ from pyalex import (Authors, Funders, Institutions, Publishers, Sources,
 
 
 pyalex.config.email = os.getenv("PYALEX_EMAIL","nico@scholar.miage.dev")
+pyalex.config.api_key = os.getenv("OPENALEX_API_KEY")
 from app.cache import session_doi, session_orcid, session_xref
 
 def lookup_doi_data(doi):

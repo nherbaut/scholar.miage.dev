@@ -54,6 +54,7 @@ from app.model import PublicationSource, Ranking, NetworkData
 from app.arxiv import get_arxiv_results
 
 pyalex_config.email = os.getenv("PYALEX_EMAIL", "nico@scholar.miage.dev")
+pyalex_config.api_key = os.getenv("OPENALEX_API_KEY")
 pyalex_config.max_retries = 3
 pyalex_config.retry_backoff_factor = 0.2
 pyalex_config.retry_http_codes = [429, 500, 503]
@@ -792,7 +793,11 @@ def get_openalex_work_for_doi(doi: str) -> dict:
     doi_url = f"https://doi.org/{doi}"
     encoded_id = urllib.parse.quote(doi_url, safe="")
     url = f"{OPENALEX_API_URL}/{encoded_id}"
-    params = {"mailto": pyalex_config.email} if pyalex_config.email else {}
+    params = {}
+    if pyalex_config.email:
+        params["mailto"] = pyalex_config.email
+    if pyalex_config.api_key:
+        params["api_key"] = pyalex_config.api_key
     timeout = (OPENALEX_CONNECT_TIMEOUT_SECONDS, OPENALEX_TIMEOUT_SECONDS)
     session = get_openalex_http_session()
     started_at = time.monotonic()

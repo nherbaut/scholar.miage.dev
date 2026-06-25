@@ -1,4 +1,4 @@
-pyalex==0.18
+pyalex==0.21
 psycopg2-binary==2.9.10
 dateparser==1.1.8
 feedgen==1.0.0
