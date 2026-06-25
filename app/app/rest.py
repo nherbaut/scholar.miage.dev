@@ -478,21 +478,20 @@ def opensearch_json():
     if not query:
         return abort(400, description="Missing query")
 
-    scopus_query = f'TITLE("{query}")'
     count_scopus, count_arxiv = count_results_for_query(
-        scopus_query,
+        query,
         include_arxiv=True,
     )
     results = get_papers(
         count_scopus,
-        scopus_query,
+        query,
         arxiv=True,
         xref=True,
         count_arxiv=count_arxiv,
     )
 
     response = {
-        "query": scopus_query,
+        "query": query,
         "options": {
             "arxiv": True,
             "metadata": True,
