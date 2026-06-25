@@ -53,8 +53,9 @@ from app.main import (
 from app.model import PublicationSource, Ranking, NetworkData
 from app.arxiv import get_arxiv_results
 
+OPENALEX_API_KEY = (os.getenv("OPENALEX_API_KEY") or "").strip() or None
 pyalex_config.email = os.getenv("PYALEX_EMAIL", "nico@scholar.miage.dev")
-pyalex_config.api_key = os.getenv("OPENALEX_API_KEY")
+pyalex_config.api_key = OPENALEX_API_KEY
 pyalex_config.max_retries = 3
 pyalex_config.retry_backoff_factor = 0.2
 pyalex_config.retry_http_codes = [429, 500, 503]
@@ -175,7 +176,35 @@ MAX_RESULTS_QUERY = 1000
 OPENALEX_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_TIMEOUT_SECONDS", "20"))
 OPENALEX_CONNECT_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_CONNECT_TIMEOUT_SECONDS", "5"))
 OPENALEX_API_URL = "https://api.openalex.org/works"
-ENABLE_OPENALEX_ENRICHMENT = os.environ.get("ENABLE_OPENALEX_ENRICHMENT", "false").lower() in {"1", "true", "yes", "on"}
+_openalex_enrichment_env = os.environ.get("ENABLE_OPENALEX_ENRICHMENT")
+ENABLE_OPENALEX_ENRICHMENT = (
+    bool(OPENALEX_API_KEY)
+    if _openalex_enrichment_env is None
+    else _openalex_enrichment_env.lower() in {"1", "true", "yes", "on"}
+)
+
+
+def _is_openalex_enrichment_explicitly_disabled():
+    return (_openalex_enrichment_env or "").strip().lower() in {"0", "false", "no", "off"}
+
+
+def should_use_openalex_enrichment(xref, openalex_enrichment=None):
+    if openalex_enrichment is not None:
+        return bool(openalex_enrichment), "call_override"
+    if _is_openalex_enrichment_explicitly_disabled():
+        return False, "env_disabled"
+    if _openalex_enrichment_env is not None:
+        return ENABLE_OPENALEX_ENRICHMENT, "env_enabled" if ENABLE_OPENALEX_ENRICHMENT else "env_disabled"
+    return bool(xref), "xref_requested"
+
+
+logger.info(
+    "OpenAlex config email_set=%s api_key_set=%s enrichment_env=%r enrichment_default=%s",
+    bool(pyalex_config.email),
+    bool(OPENALEX_API_KEY),
+    _openalex_enrichment_env,
+    ENABLE_OPENALEX_ENRICHMENT,
+)
 
 
 def get_sources():
@@ -440,9 +469,12 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     effective_limit = MAX_RESULTS_QUERY if limit is None else max(0, int(limit))
     effective_scopus_count = min(effective_limit, count_scopus)
     effective_arxiv_count = min(max(0, effective_limit - effective_scopus_count), count_arxiv)
-    use_openalex_enrichment = ENABLE_OPENALEX_ENRICHMENT if openalex_enrichment is None else openalex_enrichment
+    use_openalex_enrichment, openalex_enrichment_reason = should_use_openalex_enrichment(
+        xref,
+        openalex_enrichment,
+    )
     logger.info(
-        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s effective_scopus=%s effective_arxiv=%s limit=%s xref=%s arxiv=%s openalex_enrichment=%s existing=%s query=%r",
+        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s effective_scopus=%s effective_arxiv=%s limit=%s xref=%s arxiv=%s openalex_enrichment=%s openalex_reason=%s openalex_api_key_set=%s existing=%s query=%r",
         run_id,
         count_scopus,
         count_arxiv,
@@ -452,6 +484,8 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         xref,
         arxiv,
         use_openalex_enrichment,
+        openalex_enrichment_reason,
+        bool(OPENALEX_API_KEY),
         len(existing_data or {}),
         query,
     )
@@ -597,23 +631,27 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             doi = entry.get("prism:doi", "")
             title = entry.get("dc:title", "")
             logger.info(
-                "scopus enrich start run_id=%s doi=%r title=%r xref=%s openalex_enabled=%s",
+                "scopus enrich start run_id=%s doi=%r title=%r xref=%s openalex_enabled=%s openalex_reason=%s",
                 run_id,
                 doi,
                 title,
                 xref,
                 use_openalex_enrichment,
+                openalex_enrichment_reason,
             )
             if xref and use_openalex_enrichment:
-                logger.info("enriching from openalex")
+                logger.info("enriching from openalex run_id=%s doi=%r api_key_set=%s", run_id, doi, bool(OPENALEX_API_KEY))
                 extract_data_openalex_from_scopus(bucket, entry, context, call_back)
             else:
                 if xref:
                     logger.warning(
-                        "OpenAlex enrichment disabled; using Scopus data only run_id=%s doi=%r title=%r",
+                        "OpenAlex enrichment disabled; using Scopus data only run_id=%s doi=%r title=%r reason=%s env=%r api_key_set=%s",
                         run_id,
                         doi,
                         title,
+                        openalex_enrichment_reason,
+                        _openalex_enrichment_env,
+                        bool(OPENALEX_API_KEY),
                     )
                 else:
                     logger.info("not enriching from openalex")
@@ -796,8 +834,8 @@ def get_openalex_work_for_doi(doi: str) -> dict:
     params = {}
     if pyalex_config.email:
         params["mailto"] = pyalex_config.email
-    if pyalex_config.api_key:
-        params["api_key"] = pyalex_config.api_key
+    if OPENALEX_API_KEY:
+        params["api_key"] = OPENALEX_API_KEY
     timeout = (OPENALEX_CONNECT_TIMEOUT_SECONDS, OPENALEX_TIMEOUT_SECONDS)
     session = get_openalex_http_session()
     started_at = time.monotonic()
@@ -817,7 +855,11 @@ def get_openalex_work_for_doi(doi: str) -> dict:
         getattr(response, "from_cache", False),
         duration,
     )
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise requests.HTTPError(
+            f"OpenAlex DOI lookup failed status={response.status_code} doi={doi}",
+            response=response,
+        )
     return response.json()
 
 
