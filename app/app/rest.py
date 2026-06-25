@@ -498,6 +498,7 @@ def opensearch_json():
         xref=True,
         count_arxiv=count_arxiv,
         limit=limit,
+        openalex_enrichment=True,
     )
 
     response = {
@@ -506,6 +507,7 @@ def opensearch_json():
         "options": {
             "arxiv": True,
             "metadata": True,
+            "openalex": True,
         },
         "counts": {
             "scopus": count_scopus,

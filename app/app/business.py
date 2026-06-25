@@ -422,14 +422,16 @@ def _get_ranking_safe(pubtitle: str) -> dict:
 
 
 def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
-               existing_data={}, count_arxiv=0, arxiv_warning=None, limit=None):
+               existing_data={}, count_arxiv=0, arxiv_warning=None, limit=None,
+               openalex_enrichment=None):
     run_id = uuid.uuid4().hex[:8]
     started_at = time.monotonic()
     effective_limit = MAX_RESULTS_QUERY if limit is None else max(0, int(limit))
     effective_scopus_count = min(effective_limit, count_scopus)
     effective_arxiv_count = min(max(0, effective_limit - effective_scopus_count), count_arxiv)
+    use_openalex_enrichment = ENABLE_OPENALEX_ENRICHMENT if openalex_enrichment is None else openalex_enrichment
     logger.info(
-        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s effective_scopus=%s effective_arxiv=%s limit=%s xref=%s arxiv=%s existing=%s query=%r",
+        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s effective_scopus=%s effective_arxiv=%s limit=%s xref=%s arxiv=%s openalex_enrichment=%s existing=%s query=%r",
         run_id,
         count_scopus,
         count_arxiv,
@@ -438,6 +440,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
         effective_limit,
         xref,
         arxiv,
+        use_openalex_enrichment,
         len(existing_data or {}),
         query,
     )
@@ -588,9 +591,9 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 doi,
                 title,
                 xref,
-                ENABLE_OPENALEX_ENRICHMENT,
+                use_openalex_enrichment,
             )
-            if xref and ENABLE_OPENALEX_ENRICHMENT:
+            if xref and use_openalex_enrichment:
                 logger.info("enriching from openalex")
                 extract_data_openalex_from_scopus(bucket, entry, context, call_back)
             else:
@@ -655,7 +658,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
 
     def submit_enrichment(provider_name, payload):
         if provider_name == "scopus":
-            if xref and ENABLE_OPENALEX_ENRICHMENT:
+            if xref and use_openalex_enrichment:
                 #logger.debug("sumitting enrichment from openalex")
                 return get_openalex_executor().submit(enrich_scopus_entry, payload)
             #logger.debug("just loading data from scopus")
