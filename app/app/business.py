@@ -422,14 +422,20 @@ def _get_ranking_safe(pubtitle: str) -> dict:
 
 
 def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwargs: None,
-               existing_data={}, count_arxiv=0, arxiv_warning=None):
+               existing_data={}, count_arxiv=0, arxiv_warning=None, limit=None):
     run_id = uuid.uuid4().hex[:8]
     started_at = time.monotonic()
+    effective_limit = MAX_RESULTS_QUERY if limit is None else max(0, int(limit))
+    effective_scopus_count = min(effective_limit, count_scopus)
+    effective_arxiv_count = min(max(0, effective_limit - effective_scopus_count), count_arxiv)
     logger.info(
-        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s xref=%s arxiv=%s existing=%s query=%r",
+        "get_papers start run_id=%s count_scopus=%s count_arxiv=%s effective_scopus=%s effective_arxiv=%s limit=%s xref=%s arxiv=%s existing=%s query=%r",
         run_id,
         count_scopus,
         count_arxiv,
+        effective_scopus_count,
+        effective_arxiv_count,
+        effective_limit,
         xref,
         arxiv,
         len(existing_data or {}),
@@ -451,10 +457,10 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             failure,
             arxiv,
             duplicate,
-            count_scopus + count_arxiv,
+            effective_scopus_count + effective_arxiv_count,
             time.monotonic() - started_at,
         )
-        emitt('doi_update', {"total": count_scopus + count_arxiv,
+        emitt('doi_update', {"total": effective_scopus_count + effective_arxiv_count,
                              "done": success, "failed": failure, "arxiv": arxiv, "duplicate": duplicate})
 
     def upsert_paper(paper: Dict, priority: str):
@@ -489,13 +495,13 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
             emitt('doi_results', client_bucket)
             client_bucket = []
 
-    def fetch_scopus_batch(offset):
+    def fetch_scopus_batch(offset, batch_size):
         batch_started_at = time.monotonic()
-        logger.info("scopus batch start run_id=%s offset=%s query=%r", run_id, offset, query)
+        logger.info("scopus batch start run_id=%s offset=%s batch_size=%s query=%r", run_id, offset, batch_size, query)
         try:
-            #print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, 25, escape_query(query))}")
+            #print(f"SCPUS_BACKEND {SCPUS_BACKEND % (offset, batch_size, escape_query(query))}")
             partial_results = session_scpus.get(
-                SCPUS_BACKEND % (offset, 25, escape_query(query))).json()
+                SCPUS_BACKEND % (offset, batch_size, escape_query(query))).json()
 
             #print(f'{partial_results["search-results"]}')
             entries = partial_results["search-results"]["entry"]
@@ -530,7 +536,7 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
                 time.monotonic() - arxiv_started_at,
                 query,
             )
-            return ("arxiv", entries)
+            return ("arxiv", entries[:effective_arxiv_count])
         except ValueError as exc:
             logger.warning("Skipping arXiv fetch run_id=%s unsupported query=%r error=%s", run_id, query, exc)
             return ("arxiv", [])
@@ -633,14 +639,15 @@ def get_papers(count_scopus, query, xref, arxiv=False, emitt=lambda *args, **kwa
     enrichment_futures = set()
     future_labels = {}
 
-    batch_offsets = list(range(0, min(MAX_RESULTS_QUERY, count_scopus), 25))
+    batch_offsets = list(range(0, effective_scopus_count, 25))
     for offset in batch_offsets:
-        fut = get_scopus_executor().submit(fetch_scopus_batch, offset)
+        batch_size = min(25, effective_scopus_count - offset)
+        fut = get_scopus_executor().submit(fetch_scopus_batch, offset, batch_size)
         provider_futures.add(fut)
         future_labels[fut] = f"provider:scopus:{offset}"
         logger.info("submitted provider future run_id=%s label=%s", run_id, future_labels[fut])
 
-    if arxiv:
+    if arxiv and effective_arxiv_count > 0:
         fut = get_arxiv_executor().submit(fetch_arxiv_entries)
         provider_futures.add(fut)
         future_labels[fut] = "provider:arxiv"

@@ -477,6 +477,15 @@ def opensearch_json():
     query = request.args.get('query')
     if not query:
         return abort(400, description="Missing query")
+    raw_limit = request.args.get('limit')
+    limit = None
+    if raw_limit is not None:
+        try:
+            limit = int(raw_limit)
+        except ValueError:
+            return abort(400, description="limit must be an integer")
+    if limit is not None and limit < 0:
+        return abort(400, description="limit must be a non-negative integer")
 
     count_scopus, count_arxiv = count_results_for_query(
         query,
@@ -488,10 +497,12 @@ def opensearch_json():
         arxiv=True,
         xref=True,
         count_arxiv=count_arxiv,
+        limit=limit,
     )
 
     response = {
         "query": query,
+        "limit": limit,
         "options": {
             "arxiv": True,
             "metadata": True,
