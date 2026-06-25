@@ -60,6 +60,8 @@ pyalex_config.retry_http_codes = [429, 500, 503]
 
 _executor_pool: Dict[str, ThreadPoolExecutor] = {}
 _executor_lock = Lock()
+_openalex_session_lock = Lock()
+_openalex_http_session = None
 
 
 def _get_executor(name: str, max_workers: int) -> ThreadPoolExecutor:
@@ -153,6 +155,14 @@ def _cached_requests_session():
 
     s.request = request_with_timeout
     return s
+
+
+def get_openalex_http_session():
+    global _openalex_http_session
+    with _openalex_session_lock:
+        if _openalex_http_session is None:
+            _openalex_http_session = _cached_requests_session()
+        return _openalex_http_session
 
 
 pyalex._get_requests_session = _cached_requests_session
@@ -784,6 +794,7 @@ def get_openalex_work_for_doi(doi: str) -> dict:
     url = f"{OPENALEX_API_URL}/{encoded_id}"
     params = {"mailto": pyalex_config.email} if pyalex_config.email else {}
     timeout = (OPENALEX_CONNECT_TIMEOUT_SECONDS, OPENALEX_TIMEOUT_SECONDS)
+    session = get_openalex_http_session()
     started_at = time.monotonic()
     logger.info(
         "OpenAlex direct DOI lookup start doi=%s url=%s timeout=%s",
@@ -791,13 +802,14 @@ def get_openalex_work_for_doi(doi: str) -> dict:
         url,
         timeout,
     )
-    response = requests.get(url, params=params, timeout=timeout)
+    response = session.get(url, params=params, timeout=timeout)
     duration = time.monotonic() - started_at
     logger.info(
-        "OpenAlex direct DOI lookup done doi=%s status=%s bytes=%s duration=%.2fs",
+        "OpenAlex direct DOI lookup done doi=%s status=%s bytes=%s cached=%s duration=%.2fs",
         doi,
         response.status_code,
         len(response.content or b""),
+        getattr(response, "from_cache", False),
         duration,
     )
     response.raise_for_status()
