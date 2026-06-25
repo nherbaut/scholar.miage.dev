@@ -491,6 +491,21 @@ def opensearch_json():
         query,
         include_arxiv=True,
     )
+    query_log = ScpusRequest(
+        query=query,
+        ip=request.headers.get("X-Forwarded-For", request.remote_addr or "0.0.0.0").split(",")[0].strip(),
+        count=count_scopus + count_arxiv,
+        fetched=True,
+    )
+    db.session.add(query_log)
+    db.session.commit()
+    logger.info(
+        "opensearch json query saved query_id=%s count=%s limit=%s query=%r",
+        query_log.id,
+        count_scopus + count_arxiv,
+        limit,
+        query,
+    )
     results = get_papers(
         count_scopus,
         query,
@@ -501,6 +516,7 @@ def opensearch_json():
     )
 
     response = {
+        "query_id": query_log.id,
         "query": query,
         "limit": limit,
         "options": {
