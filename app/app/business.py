@@ -93,6 +93,7 @@ def get_arxiv_executor() -> ThreadPoolExecutor:
 
 _DOI_PREFIX_RE = re.compile(r"^https?://(?:dx\.)?doi\\.org/", flags=re.I)
 _OA_PREFIX_RE = re.compile(r"^https?://openalex\\.org/", flags=re.I)
+_SIMPLE_TITLE_QUERY_RE = re.compile(r'^\s*TITLE\s*\(\s*"?(.+?)"?\s*\)\s*$', flags=re.I)
 
 
 
@@ -176,6 +177,7 @@ MAX_RESULTS_QUERY = 1000
 OPENALEX_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_TIMEOUT_SECONDS", "20"))
 OPENALEX_CONNECT_TIMEOUT_SECONDS = int(os.environ.get("OPENALEX_CONNECT_TIMEOUT_SECONDS", "5"))
 OPENALEX_API_URL = "https://api.openalex.org/works"
+OPENALEX_TITLE_SEARCH_DEFAULT_LIMIT = int(os.environ.get("OPENALEX_TITLE_SEARCH_DEFAULT_LIMIT", "10"))
 _openalex_enrichment_env = os.environ.get("ENABLE_OPENALEX_ENRICHMENT")
 ENABLE_OPENALEX_ENRICHMENT = (
     bool(OPENALEX_API_KEY)
@@ -420,7 +422,7 @@ def _build_ref_response_from_openalex(work: dict) -> dict:
     ranking = _get_ranking_safe(pubtitle)
 
     return {
-        "doi": work.get("doi") or doi_url,
+        "doi": work.get("doi") or work.get("id") or "",
         "openalex": work.get("id") or "",
         "title": _strip_markup(work.get("title", "")),
         "year": work.get("publication_year"),
@@ -861,6 +863,103 @@ def get_openalex_work_for_doi(doi: str) -> dict:
             response=response,
         )
     return response.json()
+
+
+def normalize_openalex_title_query(query: str) -> str:
+    query = (query or "").strip()
+    match = _SIMPLE_TITLE_QUERY_RE.match(query)
+    if match:
+        return match.group(1).strip()
+    return query
+
+
+def search_openalex_works_by_title(query: str, limit=None) -> tuple[list[dict], int]:
+    title = normalize_openalex_title_query(query)
+    if not title:
+        return [], 0
+
+    effective_limit = (
+        OPENALEX_TITLE_SEARCH_DEFAULT_LIMIT
+        if limit is None
+        else max(0, min(int(limit), MAX_RESULTS_QUERY))
+    )
+    session = get_openalex_http_session()
+    timeout = (OPENALEX_CONNECT_TIMEOUT_SECONDS, OPENALEX_TIMEOUT_SECONDS)
+    records = []
+    total_count = 0
+    page = 1
+    started_at = time.monotonic()
+
+    logger.info(
+        "OpenAlex title lookup start title=%r limit=%s timeout=%s",
+        title,
+        effective_limit,
+        timeout,
+    )
+
+    while len(records) < effective_limit or (effective_limit == 0 and page == 1):
+        per_page = 1 if effective_limit == 0 else min(200, effective_limit - len(records))
+        params = {
+            "search": title,
+            "per-page": per_page,
+            "page": page,
+        }
+        if pyalex_config.email:
+            params["mailto"] = pyalex_config.email
+        if OPENALEX_API_KEY:
+            params["api_key"] = OPENALEX_API_KEY
+
+        page_started_at = time.monotonic()
+        logger.info(
+            "OpenAlex title lookup page start title=%r page=%s per_page=%s",
+            title,
+            page,
+            per_page,
+        )
+        response = session.get(OPENALEX_API_URL, params=params, timeout=timeout)
+        logger.info(
+            "OpenAlex title lookup page done title=%r page=%s status=%s bytes=%s cached=%s duration=%.2fs",
+            title,
+            page,
+            response.status_code,
+            len(response.content or b""),
+            getattr(response, "from_cache", False),
+            time.monotonic() - page_started_at,
+        )
+        if response.status_code >= 400:
+            raise requests.HTTPError(
+                f"OpenAlex title lookup failed status={response.status_code} title={title!r}",
+                response=response,
+            )
+
+        payload = response.json()
+        if page == 1:
+            total_count = int((payload.get("meta") or {}).get("count") or 0)
+        works = payload.get("results") or []
+        if not works:
+            break
+        if effective_limit == 0:
+            break
+
+        for work in works:
+            record = _build_ref_response_from_openalex(work)
+            record["source_provider"] = "openalex"
+            records.append(record)
+            if len(records) >= effective_limit:
+                break
+
+        if len(works) < per_page:
+            break
+        page += 1
+
+    logger.info(
+        "OpenAlex title lookup done title=%r total=%s returned=%s duration=%.2fs",
+        title,
+        total_count,
+        len(records),
+        time.monotonic() - started_at,
+    )
+    return records, total_count
 
 
 def extract_data_openalex_from_scopus(bucket, entry, context, call_back):

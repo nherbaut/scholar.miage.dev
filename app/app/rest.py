@@ -3,7 +3,8 @@ import requests
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
 from app.business import count_results_for_query, get_papers, update_feed, generate_rss, get_sources, \
-    get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data, net_detect_communities
+    get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data, net_detect_communities, \
+    search_openalex_works_by_title, normalize_openalex_title_query
 from app.query_analyzer import get_json_analyzed_query
 from flask import abort, Response, render_template, request, session, redirect, url_for, send_from_directory
 # from mendeley import Mendeley
@@ -477,6 +478,9 @@ def opensearch_json():
     query = request.args.get('query')
     if not query:
         return abort(400, description="Missing query")
+    openalex_only = (request.args.get('open_alex') or request.args.get('openalex') or "").lower() in {
+        "1", "true", "yes", "on"
+    }
     raw_limit = request.args.get('limit')
     limit = None
     if raw_limit is not None:
@@ -486,6 +490,56 @@ def opensearch_json():
             return abort(400, description="limit must be an integer")
     if limit is not None and limit < 0:
         return abort(400, description="limit must be a non-negative integer")
+
+    if openalex_only:
+        try:
+            results, openalex_count = search_openalex_works_by_title(query, limit=limit)
+        except Exception as exc:
+            logger.exception("opensearch json OpenAlex-only lookup failed query=%r", query, exc_info=exc)
+            return abort(502, description="OpenAlex lookup failed")
+
+        query_log = ScpusRequest(
+            query=query,
+            ip=request.headers.get("X-Forwarded-For", request.remote_addr or "0.0.0.0").split(",")[0].strip(),
+            count=openalex_count,
+            fetched=True,
+        )
+        db.session.add(query_log)
+        db.session.commit()
+        logger.info(
+            "opensearch json OpenAlex-only query saved query_id=%s count=%s returned=%s limit=%s title=%r query=%r",
+            query_log.id,
+            openalex_count,
+            len(results),
+            limit,
+            normalize_openalex_title_query(query),
+            query,
+        )
+
+        response = {
+            "query_id": query_log.id,
+            "query": query,
+            "limit": limit,
+            "options": {
+                "arxiv": False,
+                "metadata": True,
+                "openalex_only": True,
+                "title_query": normalize_openalex_title_query(query),
+            },
+            "counts": {
+                "scopus": 0,
+                "arxiv": 0,
+                "openalex": openalex_count,
+                "total": openalex_count,
+                "returned": len(results),
+            },
+            "results": results,
+        }
+        return app.response_class(
+            response=json.dumps(response),
+            status=200,
+            mimetype='application/json'
+        )
 
     count_scopus, count_arxiv = count_results_for_query(
         query,
