@@ -24,7 +24,7 @@
             <td><a href="/feed/{{ feed.id }}.rss">{{ feed.id }}</a></td>
             <td>{{ feed.count }}</td>
             <td>{{ feed.query }}</td>
-            <td>{{ feed.lastBuildDate }}</td>
+            <td>{{ feed.lastBuildDate.strftime('%y-%m-%d %H:%M') if feed.lastBuildDate else '' }}</td>
             <td>{{ feed.hit }}</td>
             <td>
                 <a

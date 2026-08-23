@@ -78,6 +78,54 @@ def _delete_cached_rss(feed_id):
         logger.exception("Failed to delete RSS cache feed_id=%s", feed_id)
 
 
+def _json_response(payload, status=200):
+    return app.response_class(
+        response=json.dumps(payload),
+        status=status,
+        mimetype='application/json'
+    )
+
+
+def _wants_json():
+    return (
+        request.path.endswith(".json")
+        or (request.args.get("format") or "").lower() == "json"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
+
+def _get_or_create_feed_for_query(query):
+    feed = db.session.query(ScpusFeed).filter(
+        ScpusFeed.query == query
+    ).order_by(ScpusFeed.id.desc()).first()
+    if feed:
+        return feed, False
+
+    feed = ScpusFeed(query=query)
+    db.session.add(feed)
+    db.session.commit()
+    logger.info("Created RSS feed from query log feed_id=%s query=%r", feed.id, query)
+    return feed, True
+
+
+def _query_log_json(query_log, feed_id=None):
+    payload = {
+        "id": query_log.id,
+        "query": query_log.query,
+        "ip": query_log.ip,
+        "count": query_log.count,
+        "timestamp": query_log.timestamp.isoformat() if query_log.timestamp else None,
+        "fetched": query_log.fetched,
+        "permalink_url": url_for("permalink", query_id=query_log.id, _external=True),
+        "rss_url": url_for("history_query_rss", query_id=query_log.id, _external=True),
+        "feed_create_url": url_for("history_query_feed", query_id=query_log.id, _external=True),
+    }
+    if feed_id is not None:
+        payload["feed_id"] = feed_id
+        payload["feed_url"] = url_for("get_feed", id=feed_id, _external=True)
+    return payload
+
+
 @app.route('/favicon.ico')
 def favicon():
     return send_from_directory(os.path.join(app.root_path, 'static/img'),
@@ -130,7 +178,7 @@ def add_journal():
 
 @app.route("/feeds")
 def list_feeds():
-    feeds = db.session.query(ScpusFeed).all()
+    feeds = db.session.query(ScpusFeed).order_by(ScpusFeed.id.desc()).all()
     accepts = request.headers.get("Accept", "")
     if "application/json" in accepts:
         payload = []
@@ -322,22 +370,68 @@ def cite():
 
 
 @app.route('/history', methods=["GET"])
+@app.route('/history.json', methods=["GET"])
 def history():
-    limit = request.args.get('limit')
-    if limit is None:
+    raw_limit = request.args.get('limit')
+    if raw_limit is None:
         limit = 100
+    else:
+        try:
+            limit = int(raw_limit)
+        except ValueError:
+            return abort(400, description="limit must be an integer")
+    if limit < 0:
+        return abort(400, description="limit must be a non-negative integer")
+
     queries = db.session.query(ScpusRequest).order_by(
         ScpusRequest.id.desc()).limit(limit).all()
-    accepts = request.headers["Accept"].split(",")
-    if "application/json" in accepts:
-        return app.response_class(
-            response=json.dumps([q.query for q in queries]),
-            status=200,
-            mimetype='application/json'
-        )
+    if _wants_json():
+        query_values = list({q.query for q in queries if q.query})
+        feed_by_query = {}
+        if query_values:
+            feed_rows = db.session.query(ScpusFeed.query, ScpusFeed.id).filter(
+                ScpusFeed.query.in_(query_values)
+            ).order_by(ScpusFeed.id.desc()).all()
+            for query, feed_id in feed_rows:
+                feed_by_query.setdefault(query, feed_id)
+        payload = [_query_log_json(q, feed_by_query.get(q.query)) for q in queries]
+        return _json_response(payload)
 
     else:
         return render_template('history.html', queries=queries, active_page="history")
+
+
+@app.route('/history/<int:query_id>/feed', methods=["GET", "POST"])
+def history_query_feed(query_id: int):
+    query_log = db.session.query(ScpusRequest).filter(
+        ScpusRequest.id == query_id
+    ).one_or_none()
+    if query_log is None:
+        return abort(404, description="No query log with this id")
+
+    feed, created = _get_or_create_feed_for_query(query_log.query)
+    payload = {
+        "query_id": query_log.id,
+        "feed_id": feed.id,
+        "created": created,
+        "query": feed.query,
+        "rss_url": url_for("get_feed", id=feed.id, _external=True),
+    }
+    if _wants_json():
+        return _json_response(payload, status=201 if created else 200)
+    return redirect(url_for("get_feed", id=feed.id), code=302)
+
+
+@app.route('/history/<int:query_id>.rss', methods=["GET"])
+def history_query_rss(query_id: int):
+    query_log = db.session.query(ScpusRequest).filter(
+        ScpusRequest.id == query_id
+    ).one_or_none()
+    if query_log is None:
+        return abort(404, description="No query log with this id")
+
+    feed, _ = _get_or_create_feed_for_query(query_log.query)
+    return get_feed(str(feed.id))
 
 
 @app.route("/refresh_ranking", methods=["GET"])

@@ -162,6 +162,7 @@
               <th data-sort-key="date">Date <span class="sort-indicator">↕</span></th>
               <th data-sort-key="query">Query <span class="sort-indicator">↕</span></th>
               <th data-sort-key="results" class="text-right pr-4">Results <span class="sort-indicator">↕</span></th>
+              <th>RSS</th>
             </tr>
           </thead>
           <tbody>
@@ -175,6 +176,9 @@
                 </td>
                 <td data-col="results" class="text-right pr-4">
                   <span class="badge-soft">{{ query.count }}</span>
+                </td>
+                <td>
+                  <a href="/history/{{ query.id }}.rss" class="btn btn-sm btn-outline-primary">RSS</a>
                 </td>
               </tr>
             {% endfor %}
@@ -238,9 +242,10 @@
 
       // Header sort handlers
       HEADERS.forEach(th=>{
+        const key = th.getAttribute('data-sort-key');
+        if(!key) return;
         let asc = true;
         th.addEventListener('click', ()=>{
-          const key = th.getAttribute('data-sort-key');
           sortBy(key, asc);
           asc = !asc;
         });
