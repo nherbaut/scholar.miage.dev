@@ -111,6 +111,7 @@ def _get_or_create_feed_for_query(query):
 def _query_log_json(query_log, feed_id=None):
     payload = {
         "id": query_log.id,
+        "query_id": query_log.id,
         "query": query_log.query,
         "ip": query_log.ip,
         "count": query_log.count,
