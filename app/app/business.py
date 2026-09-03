@@ -242,6 +242,54 @@ def generate_rss(feed_items, id="id", query="query"):
     return fg.rss_str()
 
 
+def _feed_pubdate(item):
+    value = item.get("x-precise-date")
+    original_value = value
+    parsed = None
+
+    if isinstance(value, datetime.datetime):
+        parsed = value
+    elif isinstance(value, datetime.date):
+        parsed = datetime.datetime.combine(value, datetime.time.min)
+    else:
+        if isinstance(value, (list, tuple)):
+            value = "-".join(str(part) for part in value)
+        elif value is not None and not isinstance(value, str):
+            value = str(value)
+
+        if isinstance(value, str) and value.strip():
+            try:
+                parsed = dateparser.parse(value.strip())
+            except (TypeError, ValueError, OverflowError):
+                logger.warning(
+                    "Could not parse publication date for RSS item doi=%r value=%r",
+                    item.get("doi"),
+                    original_value,
+                    exc_info=True,
+                )
+
+    if parsed is None:
+        year_match = re.search(r"\b(\d{4})\b", str(item.get("year", "")))
+        if year_match:
+            year = int(year_match.group(1))
+            if 1 <= year <= 9999:
+                parsed = datetime.datetime(year, 1, 1)
+
+    if parsed is None:
+        parsed = datetime.datetime.now(timezone.utc)
+        logger.warning(
+            "Invalid publication date for RSS item; using current time doi=%r title=%r value=%r type=%s",
+            item.get("doi"),
+            item.get("title"),
+            original_value,
+            type(original_value).__name__,
+        )
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def update_feed(dois, feed_content):
     for item in dois:
         if item["doi"] != "" and item["doi"] not in feed_content:
@@ -267,7 +315,7 @@ def update_feed(dois, feed_content):
                                                    "title": "Google Scholar link"}
                                                   ],
                                          "title": (" [PDF] " if item["X-OA"] else "") + item["title"],
-                                         "pubdate": dateparser.parse(item["x-precise-date"]).replace(tzinfo=timezone.utc),
+                                         "pubdate": _feed_pubdate(item),
                                          "author": {"email": item["pubtitle"], "name": item["X-authors"]},
                                          "x-added-on": datetime.datetime.now(),
                                          "description": description}
