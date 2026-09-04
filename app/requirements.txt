@@ -17,3 +17,4 @@ gunicorn>=21.2
 redis>=5.0
 networkx
 atoma
+prometheus-client>=0.20,<1

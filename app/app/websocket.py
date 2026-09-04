@@ -4,6 +4,7 @@ from app.main import socketio, db
 from app.business import count_results_for_query, get_papers, net_build_graph
 from app.model import ScpusFeed, ScpusRequest, NetworkData
 from app.researchers import get_venue_for_orcid, get_venue_for_openalex
+from app.metrics import monitor_socketio_event
 import json
 import pickle
 import logging
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @socketio.on('create_network_graph_data')
+@monitor_socketio_event('create_network_graph_data')
 def net_create_graph_data(json_data):
 
     def network_emit(nework_report):
@@ -29,6 +31,7 @@ def net_create_graph_data(json_data):
 
 
 @socketio.on('create_feed')
+@monitor_socketio_event('create_feed')
 def create_feed(json_data):
     feed = ScpusFeed(query=json_data["query"])
 
@@ -39,6 +42,7 @@ def create_feed(json_data):
 
 
 @socketio.on('count')
+@monitor_socketio_event('count')
 def handle_count(json_data, log_query=False):
     started_at = time.monotonic()
     include_arxiv = json_data["arxiv"]
@@ -85,6 +89,7 @@ def handle_count(json_data, log_query=False):
 
 
 @socketio.on("get_venue_openalex")
+@monitor_socketio_event('get_venue_openalex')
 def get_venue_openalex(openalex_id):
     def venue_emit(venue):
         emit("venue_update",  venue)
@@ -97,6 +102,7 @@ def get_venue_openalex(openalex_id):
 
 
 @socketio.on("get_venue")
+@monitor_socketio_event('get_venue')
 def handle_get_venues(orcid):
     def venue_emit(venue):
         emit("venue_update",  venue)
@@ -108,6 +114,7 @@ def handle_get_venues(orcid):
 
 
 @socketio.on('get_dois')
+@monitor_socketio_event('get_dois')
 def handle_get_dois(json_data):
     started_at = time.monotonic()
     the_query = json_data["query"]

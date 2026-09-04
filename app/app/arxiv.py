@@ -11,6 +11,12 @@ import xml.dom.minidom
 import atoma
 import shlex
 from app.cache import get_redis_client
+from app.metrics import (
+    record_provider_cache_lookup,
+    record_provider_query,
+    record_provider_query_failure,
+    record_provider_uncached_results,
+)
 
 logger = logging.getLogger(__name__)
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
@@ -437,15 +443,19 @@ def get_arxiv_results(scopus_query: str,
                       on_warning: Optional[Callable[[str], None]] = None):
 
     total_started_at = time.monotonic()
+    provider_query_started = False
     logger.info("arXiv get_results start query_len=%s query=%r", len(scopus_query or ""), scopus_query)
     try:
         logger.info("arXiv convert start query=%r", scopus_query)
         converted_query = convert_query(scopus_query, on_unsupported=on_unsupported)
         logger.info("arXiv convert done converted=%r duration=%.2fs", converted_query, time.monotonic() - total_started_at)
+        record_provider_query("arxiv")
+        provider_query_started = True
         query = quote(converted_query, safe='')
         request_url = f'{ARXIV_API_URL}?search_query={query}&start=0&max_results=1000'
         cached_payload = _cache_get(converted_query)
         if cached_payload is not None:
+            record_provider_cache_lookup("arxiv", True)
             logger.info(
                 "arXiv cache hit query=%r converted=%r bytes=%s ttl=%ss",
                 scopus_query,
@@ -464,6 +474,7 @@ def get_arxiv_results(scopus_query: str,
                 converted_query,
             )
             return parsed
+        record_provider_cache_lookup("arxiv", False)
         request = libreq.Request(
             request_url,
             headers={"User-Agent": "miage-scholar/1.0 (+https://scholar.miage.dev)"}
@@ -524,6 +535,7 @@ def get_arxiv_results(scopus_query: str,
                         request_url,
                         attempt,
                     )
+                    record_provider_uncached_results("arxiv", len(parsed.entries))
                     return parsed
             except HTTPError as exc:
                 if exc.code == 429:
@@ -546,8 +558,11 @@ def get_arxiv_results(scopus_query: str,
                         continue
                 raise
     except ValueError:
+        if provider_query_started:
+            record_provider_query_failure("arxiv")
         raise
     except HTTPError as exc:
+        record_provider_query_failure("arxiv")
         if exc.code == 429:
             _emit_warning(
                 on_warning,
@@ -560,10 +575,13 @@ def get_arxiv_results(scopus_query: str,
             scopus_query,
         )
     except URLError as exc:
+        record_provider_query_failure("arxiv")
         logger.exception("arXiv request URL error reason=%r query=%r", exc.reason, scopus_query)
     except socket.timeout:
+        record_provider_query_failure("arxiv")
         logger.exception("arXiv request timeout after %ss query=%r", ARXIV_TIMEOUT_SECONDS, scopus_query)
     except Exception:
+        record_provider_query_failure("arxiv")
         logger.exception("arXiv request unexpected failure query=%r", scopus_query)
     return atoma.parse_atom_bytes(ARXIV_EMPTY_FEED)
 

@@ -12,3 +12,4 @@ Requests==2.32.4
 requests_cache==1.2.1
 SQLAlchemy==2.0.42
 networkx
+prometheus-client>=0.20,<1

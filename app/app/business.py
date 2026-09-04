@@ -41,6 +41,7 @@ from pyalex import Authors, Funders, Institutions, Publishers, Sources, Topics, 
 
 # Local application
 from app.cache import session_scpus, session_xref
+from app.metrics import instrument_cached_provider_session
 from app.main import (
     API_KEY,
     ROOT_URL,
@@ -157,7 +158,7 @@ def _cached_requests_session():
             raise
 
     s.request = request_with_timeout
-    return s
+    return instrument_cached_provider_session(s, "openalex")
 
 
 def get_openalex_http_session():

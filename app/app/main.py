@@ -4,6 +4,7 @@ import logging
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
 from app.config import Config
+from app.metrics import register_http_metrics
 
 
 logging.basicConfig(
@@ -35,6 +36,7 @@ with app.app_context():
 
 # SocketIO (initialized outside app_context as recommended)
 socketio = SocketIO(app, cors_allowed_origins="*")
+register_http_metrics(app)
 
 # Register routes and Socket.IO events
 from app import rest as _rest  # noqa: F401

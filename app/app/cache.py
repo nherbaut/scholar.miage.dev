@@ -6,6 +6,7 @@ import os
 import logging
 from threading import Lock
 import redis
+from app.metrics import instrument_cached_provider_session
 
 logger = logging.getLogger('cache')
 _redis_client = None
@@ -21,13 +22,13 @@ def setup_fs_cache():
         allowable_methods=['GET'],
         stale_if_error=True,
     )
-    session_scpus = CachedSession(
+    session_scpus = instrument_cached_provider_session(CachedSession(
         'scpusCache',
         backend='filesystem',
         use_cache_dir=True,
         expire_after=timedelta(days=1),
         stale_if_error=True,
-    )
+    ), "scopus")
     
     session_orcid = CachedSession(
         'orcid_session',
@@ -59,7 +60,7 @@ def setup_redis_cache(redis_host, redis_port):
         allowable_methods=['GET'],
         stale_if_error=True,
     )
-    session_scpus = CachedSession(
+    session_scpus = instrument_cached_provider_session(CachedSession(
         'scpusCache',
         host=redis_host,
         port=redis_port,
@@ -67,7 +68,7 @@ def setup_redis_cache(redis_host, redis_port):
         use_cache_dir=True,
         expire_after=timedelta(days=1),
         stale_if_error=True,
-    )
+    ), "scopus")
     
     
     session_orcid = CachedSession(
