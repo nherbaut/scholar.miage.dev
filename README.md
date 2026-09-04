@@ -8,6 +8,10 @@ Application metrics include normalized Flask route traffic and Socket.IO event
 traffic. Query text, feed IDs, DOI values, and other user-controlled values are
 never used as metric labels.
 
+An import-ready Grafana dashboard is available in
+`miage-scholar-grafana-dashboard.json`. During import, select the Prometheus
+datasource that scrapes this application's `/metrics` endpoint.
+
 Useful PromQL queries:
 
 ```promql
@@ -51,6 +55,11 @@ sum(rate(miage_scholar_provider_queries_total[5m])) by (provider)
 sum(rate(miage_scholar_provider_uncached_results_total[5m])) by (provider)
 ```
 
+```promql
+# Papers returned by each provider, including cached responses
+sum(rate(miage_scholar_provider_papers_retrieved_total[5m])) by (provider)
+```
+
 Cache hit ratio by provider:
 
 ```promql
@@ -63,6 +72,8 @@ clamp_min(
 ```
 
 `provider_queries_total` counts logical API operations, including cache hits.
+`provider_papers_retrieved_total` counts papers returned from successful cached
+and uncached provider responses.
 `provider_uncached_results_total` counts records in successful responses obtained
 after cache misses. Provider retries remain part of the same logical operation.
 

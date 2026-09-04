@@ -15,6 +15,7 @@ from app.metrics import (
     record_provider_cache_lookup,
     record_provider_query,
     record_provider_query_failure,
+    record_provider_papers_retrieved,
     record_provider_uncached_results,
 )
 
@@ -473,6 +474,7 @@ def get_arxiv_results(scopus_query: str,
                 time.monotonic() - total_started_at,
                 converted_query,
             )
+            record_provider_papers_retrieved("arxiv", len(parsed.entries))
             return parsed
         record_provider_cache_lookup("arxiv", False)
         request = libreq.Request(
@@ -535,6 +537,7 @@ def get_arxiv_results(scopus_query: str,
                         request_url,
                         attempt,
                     )
+                    record_provider_papers_retrieved("arxiv", len(parsed.entries))
                     record_provider_uncached_results("arxiv", len(parsed.entries))
                     return parsed
             except HTTPError as exc:

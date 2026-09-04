@@ -78,11 +78,17 @@ PROVIDER_UNCACHED_RESULTS = Counter(
     "Results retrieved from an external provider after a cache miss.",
     ("provider",),
 )
+PROVIDER_PAPERS_RETRIEVED = Counter(
+    "miage_scholar_provider_papers_retrieved_total",
+    "Papers returned by an external scholarly data provider.",
+    ("provider",),
+)
 
 for _provider in ("openalex", "scopus", "arxiv"):
     PROVIDER_QUERIES.labels(_provider)
     PROVIDER_QUERY_FAILURES.labels(_provider)
     PROVIDER_UNCACHED_RESULTS.labels(_provider)
+    PROVIDER_PAPERS_RETRIEVED.labels(_provider)
     for _outcome in ("hit", "miss"):
         PROVIDER_CACHE_LOOKUPS.labels(_provider, _outcome)
 
@@ -185,6 +191,11 @@ def record_provider_uncached_results(provider, result_count):
         PROVIDER_UNCACHED_RESULTS.labels(provider).inc(result_count)
 
 
+def record_provider_papers_retrieved(provider, paper_count):
+    if paper_count > 0:
+        PROVIDER_PAPERS_RETRIEVED.labels(provider).inc(paper_count)
+
+
 def _provider_response_result_count(response):
     try:
         payload = response.json()
@@ -231,11 +242,11 @@ def instrument_cached_provider_session(session, provider):
         status_code = getattr(response, "status_code", 0)
         if status_code >= 400:
             record_provider_query_failure(provider)
-        elif not cache_hit:
-            record_provider_uncached_results(
-                provider,
-                _provider_response_result_count(response),
-            )
+        else:
+            result_count = _provider_response_result_count(response)
+            record_provider_papers_retrieved(provider, result_count)
+            if not cache_hit:
+                record_provider_uncached_results(provider, result_count)
         return response
 
     session.request = instrumented_request
