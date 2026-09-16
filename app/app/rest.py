@@ -1,8 +1,9 @@
+import hashlib
 import requests
 
 from app.main import app, db
 from app.model import ScpusFeed, ScpusRequest, PublicationSource, NetworkData
-from app.business import count_results_for_query, get_papers, update_feed, generate_rss, get_sources, \
+from app.business import count_results_for_query, get_papers, get_scopus_query_papers, update_feed, generate_rss, get_sources, \
     get_ref_for_doi, get_ranking, refresh_ranking, net_get_graph_data, net_detect_communities, \
     search_openalex_works_by_title, normalize_openalex_title_query
 from app.query_analyzer import get_json_analyzed_query
@@ -27,6 +28,9 @@ logger = logging.getLogger(__name__)
 RSS_CACHE_TTL_SECONDS = 86400
 _RSS_MEMORY_CACHE = {}
 _RSS_MEMORY_CACHE_LOCK = Lock()
+QUERY_ANALYSIS_CACHE_TTL_SECONDS = 86400
+_QUERY_ANALYSIS_MEMORY_CACHE = {}
+_QUERY_ANALYSIS_MEMORY_CACHE_LOCK = Lock()
 
 
 def _rss_cache_key(feed_id):
@@ -84,6 +88,50 @@ def _json_response(payload, status=200):
         status=status,
         mimetype='application/json'
     )
+
+
+def _query_analysis_cache_key(kind, query, node_id=None):
+    digest = hashlib.sha256(query.encode("utf-8")).hexdigest()
+    suffix = f":{node_id}" if node_id is not None else ""
+    return f"query-analysis:{kind}:{digest}{suffix}"
+
+
+def _get_cached_query_analysis(cache_key):
+    client = get_redis_client()
+    if client is not None:
+        try:
+            payload = client.get(cache_key)
+            if payload is not None:
+                return json.loads(payload)
+        except Exception:
+            logger.exception("Failed to read query analysis Redis cache key=%s", cache_key)
+
+    now = time.monotonic()
+    with _QUERY_ANALYSIS_MEMORY_CACHE_LOCK:
+        cached = _QUERY_ANALYSIS_MEMORY_CACHE.get(cache_key)
+        if cached is None:
+            return None
+        expires_at, payload = cached
+        if expires_at <= now:
+            _QUERY_ANALYSIS_MEMORY_CACHE.pop(cache_key, None)
+            return None
+    return json.loads(payload)
+
+
+def _set_cached_query_analysis(cache_key, payload):
+    serialized = json.dumps(payload).encode("utf-8")
+    with _QUERY_ANALYSIS_MEMORY_CACHE_LOCK:
+        _QUERY_ANALYSIS_MEMORY_CACHE[cache_key] = (
+            time.monotonic() + QUERY_ANALYSIS_CACHE_TTL_SECONDS,
+            serialized,
+        )
+
+    client = get_redis_client()
+    if client is not None:
+        try:
+            client.setex(cache_key, QUERY_ANALYSIS_CACHE_TTL_SECONDS, serialized)
+        except Exception:
+            logger.exception("Failed to write query analysis Redis cache key=%s", cache_key)
 
 
 def _wants_json():
@@ -751,17 +799,70 @@ def query_analysis_saved(query_id: int):
 @app.route('/query/analysis', methods=["POST"])
 def analyze_query():
     payload = request.get_json() or {}
-    query = payload.get("query")
+    query = (payload.get("query") or "").strip()
     if not query:
         return abort(400, description="Missing query")
+
+    cache_key = _query_analysis_cache_key("graph", query)
+    cached_graph = _get_cached_query_analysis(cache_key)
+    if cached_graph is not None:
+        return _json_response(cached_graph)
+
     def count_results_for_query_sum(query):
         return sum(count_results_for_query(query))
-    data = get_json_analyzed_query(query, count_results_for_query_sum)
-    return app.response_class(
-        response=data,
-        status=200,
-        mimetype='application/json'
+    graph = json.loads(get_json_analyzed_query(query, count_results_for_query_sum))
+    _set_cached_query_analysis(cache_key, graph)
+    return _json_response(graph)
+
+
+@app.route('/query/analysis/papers', methods=["POST"])
+def query_analysis_papers():
+    payload = request.get_json() or {}
+    query = (payload.get("query") or "").strip()
+    node_id = payload.get("node_id")
+    if not query or node_id is None:
+        return abort(400, description="Missing query or node_id")
+
+    graph = _get_cached_query_analysis(_query_analysis_cache_key("graph", query))
+    if graph is None:
+        return abort(409, description="Analyze the query before requesting node papers")
+
+    node = next(
+        (item for item in graph.get("nodes", []) if str(item.get("id")) == str(node_id)),
+        None,
     )
+    if node is None or not node.get("subquery_without"):
+        return abort(400, description="The selected root node cannot be compared")
+
+    incoming_edge = next(
+        (edge.get("label") for edge in graph.get("edges", [])
+         if str(edge.get("target")) == str(node_id)),
+        None,
+    )
+    if incoming_edge not in ("+", "-"):
+        return abort(400, description="The selected node has no supported boolean operation")
+
+    detail_cache_key = _query_analysis_cache_key("papers", query, node_id)
+    cached_details = _get_cached_query_analysis(detail_cache_key)
+    if cached_details is not None:
+        return _json_response(cached_details)
+
+    without_node = node["subquery_without"]
+    if incoming_edge == "+":
+        effect = "added"
+        delta_query = f"({query}) AND NOT ({without_node})"
+    else:
+        effect = "removed"
+        delta_query = f"({without_node}) AND NOT ({query})"
+
+    total, papers = get_scopus_query_papers(delta_query, limit=20)
+    details = {
+        "effect": effect,
+        "total": total,
+        "papers": papers,
+    }
+    _set_cached_query_analysis(detail_cache_key, details)
+    return _json_response(details)
 
 
 @app.route('/permalink/<query_id>', methods=["GET"])

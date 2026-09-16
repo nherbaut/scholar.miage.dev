@@ -24,8 +24,18 @@
     button:hover{box-shadow:0 10px 25px rgba(37,99,235,.25);transform:translateY(-1px);}
     button:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
     .status{margin-top:10px;font-size:13px;color:var(--muted);}
-    #graph-wrapper{height:calc(100vh - 190px);padding:0 12px 16px;}
+    #graph-wrapper{height:calc(100vh - 190px);padding:0 12px 16px;position:relative;}
     #graph{width:100%;height:100%;background:linear-gradient(180deg,rgba(255,255,255,.02) 0%,rgba(255,255,255,0) 45%);border-top:1px solid #1f2937;}
+    .node-details{position:absolute;right:28px;top:14px;width:min(360px,calc(100% - 56px));max-height:calc(100% - 30px);overflow:auto;background:rgba(12,18,32,.96);border:1px solid #22344a;border-radius:10px;padding:14px;box-shadow:0 18px 36px rgba(0,0,0,.24);z-index:2;}
+    .node-details[hidden]{display:none;}
+    .node-details h2{margin:0 0 5px;font-size:14px;color:var(--fg);}
+    .node-details .summary{margin:0 0 10px;color:var(--muted);font-size:12px;line-height:1.45;}
+    .node-details ol{margin:0;padding-left:20px;color:var(--fg);font-size:13px;}
+    .node-details li{margin:0 0 8px;line-height:1.35;}
+    .node-details a{color:var(--accent);text-decoration:none;}
+    .node-details a:hover{text-decoration:underline;}
+    .node-details .year{color:var(--muted);font-size:12px;}
+    @media (max-width: 700px){.node-details{left:20px;right:20px;width:auto;max-height:42%;}}
     .edge{stroke:var(--edge);stroke-width:1.3;fill:none;opacity:.65;}
     .edge-label{fill:var(--muted);font-size:11px;pointer-events:none;}
     .node circle{stroke:var(--node-outline);stroke-width:2px;}
@@ -51,7 +61,7 @@
   </header>
   <div id="graph-wrapper">
     <svg id="graph" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid meet"></svg>
-  
+    <aside id="nodeDetails" class="node-details" hidden aria-live="polite"></aside>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -78,6 +88,8 @@
     const runBtn = document.getElementById('runBtn');
     const queryInput = document.getElementById('queryInput');
     const statusEl = document.getElementById('status');
+    const nodeDetailsEl = document.getElementById('nodeDetails');
+    let analyzedQuery = '';
 
     const zoom = d3.zoom().scaleExtent([0.4, 2.5]).on('zoom', (ev) => {
       gRoot.attr('transform', ev.transform);
@@ -113,6 +125,7 @@
           throw new Error(text || resp.statusText);
         }
         const data = await resp.json();
+        analyzedQuery = query;
         renderGraph(data);
         statusEl.textContent = 'Graph updated.';
       }catch(err){
@@ -120,6 +133,77 @@
         statusEl.textContent = 'Error: ' + err.message;
       }finally{
         if(runBtn){ runBtn.disabled = false; }
+      }
+    }
+
+    function showNodeDetailsMessage(title, message){
+      nodeDetailsEl.replaceChildren();
+      const heading = document.createElement('h2');
+      heading.textContent = title;
+      const summary = document.createElement('p');
+      summary.className = 'summary';
+      summary.textContent = message;
+      nodeDetailsEl.append(heading, summary);
+      nodeDetailsEl.hidden = false;
+    }
+
+    function renderNodePapers(node, details){
+      nodeDetailsEl.replaceChildren();
+      const heading = document.createElement('h2');
+      heading.textContent = `Papers ${details.effect} by this node`;
+      const summary = document.createElement('p');
+      summary.className = 'summary';
+      const totalLabel = `${details.total} paper${details.total === 1 ? '' : 's'}`;
+      summary.textContent = `Showing the first ${details.papers.length} of ${totalLabel} for “${node.data.term_label || node.data.label}”.`;
+      nodeDetailsEl.append(heading, summary);
+      if(!details.papers.length){
+        const empty = document.createElement('p');
+        empty.className = 'summary';
+        empty.textContent = 'No affected papers were returned by Scopus.';
+        nodeDetailsEl.append(empty);
+        return;
+      }
+      const list = document.createElement('ol');
+      details.papers.forEach(paper => {
+        const item = document.createElement('li');
+        const title = paper.doi ? document.createElement('a') : document.createElement('span');
+        title.textContent = paper.title || 'Untitled';
+        if(paper.doi){
+          title.href = paper.doi;
+          title.target = '_blank';
+          title.rel = 'noopener noreferrer';
+        }
+        item.append(title);
+        if(paper.year){
+          const year = document.createElement('span');
+          year.className = 'year';
+          year.textContent = ` (${paper.year})`;
+          item.append(year);
+        }
+        list.append(item);
+      });
+      nodeDetailsEl.append(list);
+    }
+
+    async function loadNodeDetails(node){
+      if(!node.data.subquery_without){
+        showNodeDetailsMessage('Query root', 'The root represents the complete query and cannot be compared with a query without itself.');
+        return;
+      }
+      showNodeDetailsMessage('Loading affected papers', 'Scopus is retrieving up to 20 papers for this node.');
+      try{
+        const resp = await fetch('/query/analysis/papers', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: analyzedQuery, node_id: node.data.id})
+        });
+        if(!resp.ok){
+          throw new Error((await resp.text()) || resp.statusText);
+        }
+        renderNodePapers(node, await resp.json());
+      }catch(err){
+        console.error(err);
+        showNodeDetailsMessage('Unable to load affected papers', err.message);
       }
     }
 
@@ -151,6 +235,7 @@
     }
 
     function renderGraph(data){
+      nodeDetailsEl.hidden = true;
       const {root, edgeLabelMap} = buildHierarchy(data);
       if(!root){
         statusEl.textContent = 'No graph to display.';
@@ -353,6 +438,9 @@
         });
 
       nodeMerge
+        .on('click', (ev, d) => {
+          loadNodeDetails(d);
+        })
         .on('contextmenu', (ev, d) => {
           ev.preventDefault();
           const val = d.data.subquery_without;

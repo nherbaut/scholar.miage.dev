@@ -1521,6 +1521,51 @@ def escape_query(query):
     return urllib.parse.quote(query)
 
 
+def get_scopus_query_papers(query, limit=20):
+    """Return a small, unenriched Scopus result sample for a query.
+
+    Query analysis uses this to display affected papers without scheduling the
+    OpenAlex/Crossref enrichment pipeline used by the main result table.
+    """
+    effective_limit = max(1, min(int(limit), 20))
+    started_at = time.monotonic()
+    logger.info(
+        "query analysis Scopus sample start limit=%s query=%r",
+        effective_limit,
+        query,
+    )
+    response = session_scpus.get(
+        SCPUS_BACKEND % (0, effective_limit, escape_query(query))
+    ).json()
+    search_results = response.get("search-results", {})
+    entries = search_results.get("entry", [])
+    if isinstance(entries, dict):
+        entries = [entries]
+
+    papers = []
+    for entry in entries:
+        cover_date = entry.get("prism:coverDate", "")
+        year_match = re.search(r"\b\d{4}\b", cover_date) or re.search(
+            r"\b\d{4}\b", entry.get("prism:coverDisplayDate", "")
+        )
+        doi = entry.get("prism:doi", "").strip()
+        papers.append({
+            "title": entry.get("dc:title", "Untitled"),
+            "year": year_match.group(0) if year_match else "",
+            "doi": f"https://doi.org/{doi}" if doi else "",
+        })
+
+    total = int(search_results.get("opensearch:totalResults", len(papers)))
+    logger.info(
+        "query analysis Scopus sample done total=%s papers=%s duration=%.2fs query=%r",
+        total,
+        len(papers),
+        time.monotonic() - started_at,
+        query,
+    )
+    return total, papers
+
+
 def count_results_for_query(query, include_arxiv=False, arxiv_warning=None):
     # print(f"query with {API_KEY} API_KEY")
     started_at = time.monotonic()
